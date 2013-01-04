@@ -54,6 +54,11 @@ def message(bot, id, target, msg):
     yield sign(event, bot, id, target, match.group('body'), msg)
     yield sign((event, target), bot, id, match.group('body'), msg)
 
+
+@link('COMMAND_LIST')
+def list_help(bot, reply):
+    reply('help | commands', 'Shows this list.')
+
 @link('!help')
 @link('!commands')
 def help(bot, id, target, args, full_msg):
@@ -61,7 +66,7 @@ def help(bot, id, target, args, full_msg):
     reply(
         'Commands are issued by saying "!COMMAND" or "%s: COMMAND" or, by PM,'
         ' just "COMMAND". The following commands are available:' % bot.nick)
-    def command_list(head, body):
-        reply(head)
-        reply('    ' + body)
+    def command_list(head=None, body=None):
+        if head: reply(head)
+        if body: reply('    ' + body)
     yield sign('COMMAND_LIST', bot, command_list)

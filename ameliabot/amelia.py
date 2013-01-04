@@ -40,6 +40,7 @@ class AmeliaBot(Mac):
         xirclib.install(self)
         self.link('433', self.err_nicknameinuse)
         self.link('001', self.registered)
+        self.link('NICK', self.nick_change)
         
         # Load plugins
         def plugins():
@@ -62,6 +63,10 @@ class AmeliaBot(Mac):
     def registered(self, *args):
         for channel in self.conf['channels']:
             self.send_cmd('JOIN %s' % channel)
+
+    def nick_change(self, bot, source, new_nick, *args):
+        nick, user, host = source
+        if (nick == self.nick): self.nick = new_nick
 
     def mainloop(self):
         return gear.mainloop()
