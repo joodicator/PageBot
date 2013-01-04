@@ -11,7 +11,7 @@ conf = {
     'user':     'Page',
     'name':     'Page',
     'channels': ['#page'],
-    'plugins':  ['message', 'nickserv', 'control']
+    'plugins':  ['message', 'nickserv', 'control', 'tell']
 }
 execfile('conf/bot.py', conf)
 
