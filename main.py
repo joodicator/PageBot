@@ -1,4 +1,4 @@
-#!/usr/bin/python2.7
+#!/usr/bin/env python2
 
 import sys, os, os.path
 os.chdir(os.path.dirname(sys.argv[0]))
