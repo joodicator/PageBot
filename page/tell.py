@@ -57,28 +57,25 @@ def reply(bot, id, target, msg, prefix=True):
 
 @link('COMMAND_LIST')
 def list_tell(bot, reply):
-    reply('tell #CHAN NICK MESSAGE',
-    'When NICK is next seen in #CHAN, MESSAGE will be delivered to them.'
-    ' When issued within a channel, #CHAN is optional.')
+    reply('tell NICK MESSAGE',
+    'When NICK is next seen in this channel,'
+    ' MESSAGE will be delivered to them.')
 
 @link('!tell')
 def h_tell(bot, id, target, args, full_msg):
-    match = re.match(r'(#\S+)\s+(.*)', args)
-    if match:
-        chan, args = match.groups()
-    elif target:
-        chan = target
-    else:
+    if not target:
         reply(bot, id, target,
-            'Error: you must specify a channel when using "tell" by PM.')
+            'Error: the "tell" command may only be used in a channel.')
+        return
+
     state = get_state()
     to_nick, msg = re.match(r'(\S+)\s+(.*)', args).groups()
     record = Message(
         time_sent   = datetime.datetime.utcnow(),
-        channel     = chan,
+        channel     = target,
         from_id     = id,
         to_nick     = to_nick,
-        message     = '<%s> %s' % (id.nick, full_msg))
+        message     = msg)
     state.msgs.append(record)
     put_state(state)
     reply(bot, id, target, 'Yes.')
@@ -140,8 +137,8 @@ def report_msg(bot, id, chan, msg):
     d_mins, d_secs = divmod(delta.seconds, 60)
     d_hours, d_mins = divmod(d_mins, 60)
     bot.send_msg(chan, '%s said on %s UTC (%s ago):' % (
-        '%s@%s' % (msg.from_id.user, msg.from_id.host),
+        '%s!%s@%s' % tuple(msg.from_id),
         msg.time_sent.strftime('%d %b %Y, %H:%M'),
         '%s days, %02d:%02d' % (delta.days, d_hours, d_mins)))
-    bot.send_msg(chan, msg.message)
+    bot.send_msg(chan, "%s: %s" % (msg.to_nick, msg.message))
     return True

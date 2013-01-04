@@ -9,7 +9,7 @@ conf = {
     'port':     6667,
     'nick':     'Page',
     'user':     'Page',
-    'name':     'Page',
+    'name':     'https://github.com/JosephCrowe/page-ircbot',
     'channels': ['#page'],
     'plugins':  ['message', 'nickserv', 'control', 'tell']
 }
