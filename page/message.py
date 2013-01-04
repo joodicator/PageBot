@@ -41,8 +41,8 @@ def notice(bot, source, target, msg, *args):
 def message(bot, id, target, msg):
     while True:
         # !CMD [ARGS...]
-#        match = re.match(r'!(?P<head>\S+)\s*(?P<body>.*)', msg)
-#        if match: break
+        match = re.match(r'!(?P<head>\S+)\s*(?P<body>.*)', msg)
+        if match: break
         # NICK: CMD [ARGS...]
         match = re.match(r'(?P<addr>\S+):\s+(?P<head>\S+)\s*(?P<body>.*)', msg)
         if match and match.group('addr').lower() == bot.nick.lower(): break
@@ -51,5 +51,17 @@ def message(bot, id, target, msg):
         if match and target == None: break
         return
     event = '!' + match.group('head').lower()
-    yield sign(event, bot, id, target, match.group('body'))
-    yield sign((event, target), bot, id, match.group('body'))
+    yield sign(event, bot, id, target, match.group('body'), msg)
+    yield sign((event, target), bot, id, match.group('body'), msg)
+
+@link('!help')
+@link('!commands')
+def help(bot, id, target, args, full_msg):
+    reply = lambda msg: bot.send_msg(target or id.nick, msg)
+    reply(
+        'Commands are issued by saying "!COMMAND" or "%s: COMMAND" or, by PM,'
+        ' just "COMMAND". The following commands are available:' % bot.nick)
+    def command_list(head, body):
+        reply(head)
+        reply('    ' + body)
+    yield sign('COMMAND_LIST', bot, command_list)
