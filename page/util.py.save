@@ -150,10 +150,25 @@ def aync(callee):
 def compose(after, before):
     return lambda *a, **k: after(before(*a, **k))
 
+# Attempts to reload the given module, as well as any modules it references.
+def deep_reload(mod, seen=None):
+    if seen is None: seen = set()
+    if not islocalmodule(mod): return
+    if mod in seen: return
+    seen.add(mod)
+    for key, child in mod.__dict__.iteritems():
+        if not inspect.ismodule(child):
+            child = inspect.getmodule(child)
+            if not child: continue
+        elif hasattr(child, 'install'): continue
+        deep_reload(child, seen)
+    print '! reloading: %s' % mod
+    reload(mod)
+
 # Returns True if the given module was loaded from a file in or under the
 # directory containing the module containing this function, or otherwise False.
 def module_is_local(mod):
-    if not hasattr(mod, '__file__'): return
+    if not hasattr(mod, '__file__'): return False
     root = os.path.dirname(__file__)
     return os.path.commonprefix([mod.__file__, root]) == root
 

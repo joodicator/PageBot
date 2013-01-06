@@ -1,5 +1,6 @@
 from importlib import import_module
-from util import LinkSet, deep_reload
+from util import LinkSet
+import util
 from auth import admin
 import sys
 import re
@@ -7,8 +8,10 @@ import re
 link, install, uninstall = LinkSet().triple()
 
 def echo(bot, id, target, args):
-    if target is None: target = id.nick
-    bot.send_msg(target, args)
+    if target:
+        bot.send_msg(target, '%s: %s' % (id.nick, args))
+    else:
+        bot.send_msg(id.nick, args)
 
 @link('!echo')
 @admin
@@ -70,6 +73,7 @@ def _unload(bot, id, target, args, full_msg):
     try:
         mod = sys.modules[args]
         if hasattr(mod, 'uninstall'): mod.uninstall(bot)
+        del sys.modules[args]
     except KeyError as e:
         echo(bot, id, target, repr(e))
     echo(bot, id, target, 'Done.')
@@ -77,14 +81,31 @@ def _unload(bot, id, target, args, full_msg):
 @link('!reload')
 @admin
 def _reload(bot, id, target, args, full_msg):
-    try:
-        mod = sys.modules[args]
-        if hasattr(mod, 'uninstall'):
-            # uninstall may raise a KeyError if the module is not installed.
-            try: mod.uninstall(bot)
-            except KeyError: pass
-        deep_reload(mod)
-        if hasattr(mod, 'install'): mod.install(bot)
-        echo(bot, id, target, 'Done.')
-    except KeyError as e:
-        echo(bot, id, target, repr(e))
+    expns = dict()
+    local = filter(util.module_is_local, sys.modules.values())
+    names = [m.__name__ for m in local]
+    echo(bot, id, target, 'Reloading: ' + repr(names))
+    
+    # Uninstall all local modules (see util.module_is_local for definition).
+    for module in local:
+        if hasattr(module, 'uninstall'):
+            try:
+                module.uninstall(bot)
+            except Exception as e:
+                expns[module.__name__] = e
+        del sys.modules[module.__name__]
+    if expns:
+        echo(bot, id, target, 'Errors during uninstall: ' + repr(expns))
+        expns.clear()
+    
+    # Reinstall all uninstalled modules.
+    for name in names:
+        try:
+            module = import_module(name)
+            if hasattr(module, 'install'): module.install(bot)
+        except Exception as e:
+            expns[name] = e
+    if expns:
+        echo(bot, id, target, 'Errors during reinstall: ' + repr(expns))
+
+    echo(bot, id, target, 'Reload complete.')
