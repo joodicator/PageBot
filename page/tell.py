@@ -144,6 +144,6 @@ def report_msg(bot, id, chan, msg):
         id.nick,
         '%s!%s@%s' % tuple(msg.from_id),
         msg.time_sent.strftime('%d %b %Y, %H:%M'),
-        '%s days, %02d:%02d' % (delta.days, d_hours, d_mins)))
+        '%sd, %02d:%02d:%02d' % (delta.days, d_hours, d_mins, d_secs)))
     bot.send_msg(chan, "<%s> %s" % (msg.from_id.nick, msg.message))
     return True
