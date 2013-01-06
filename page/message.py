@@ -57,7 +57,7 @@ def message(bot, id, target, msg):
 
 @link('COMMAND_LIST')
 def list_help(bot, reply):
-    reply('help | commands', 'Shows this list.')
+    reply('help OR commands', 'Shows this list.')
 
 @link('!help')
 @link('!commands')
@@ -65,7 +65,9 @@ def help(bot, id, target, args, full_msg):
     reply = lambda msg: bot.send_msg(target or id.nick, msg)
     reply(
         'Commands are issued by saying "!COMMAND" or "%s: COMMAND" or, by PM,'
-        ' just "COMMAND". The following commands are available:' % bot.nick)
+        ' just "COMMAND", where COMMAND is the name of the command follow by'
+        ' zero or more parameters.  The following commands are available:'
+        % bot.nick)
     def command_list(head=None, body=None):
         if head: reply(head)
         if body: reply('    ' + body)

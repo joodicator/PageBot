@@ -1,7 +1,9 @@
 # Possible future changes:
 #   - Require messages given upon joining a channel to be explicitly dismissed.
-#   - Add an !untell command to cancel a previous !tell command.
-#   - Fix the Pickle bug occuring when issuing !tell after !reload.
+#   - Allow messages to be deleted with something like: <SENDER> !tell_cancel RECIPIENT.
+#   - Allow each USER@HOST sender to leave at most 1 message for each RECIPIENT.
+#   - Allow a USER@HOST sender to edit their last message to any RECIPIENT.
+#   - Display only 3 messages at once, delivering further messages by PM.
 
 from util import LinkSet
 from auth import admin
@@ -41,12 +43,14 @@ def put_state(state):
 class State(object):
     def __init__(self):
         self.msgs = []
+    def __getinitargs__(self):
+        return ()
 
 # A saved message kept by the system.
 Message = namedtuple('Message',
     ('time_sent', 'channel', 'from_id', 'to_nick', 'message'))
 
-# Reply (in the same channel or by PM, as appropraite) to a message by `id'
+# Reply (in the same channel or by PM, as appropriate) to a message by `id'
 # sent to `target' with the message `msg', possibly prefixing the message with
 # their nick, unless `prefix' is given as False.
 def reply(bot, id, target, msg, prefix=True):
@@ -136,9 +140,10 @@ def report_msg(bot, id, chan, msg):
     if delta.total_seconds() < 1: return False
     d_mins, d_secs = divmod(delta.seconds, 60)
     d_hours, d_mins = divmod(d_mins, 60)
-    bot.send_msg(chan, '%s said on %s UTC (%s ago):' % (
+    bot.send_msg(chan, '%s: %s said on %s UTC (%s ago):' % (
+        id.nick,
         '%s!%s@%s' % tuple(msg.from_id),
         msg.time_sent.strftime('%d %b %Y, %H:%M'),
         '%s days, %02d:%02d' % (delta.days, d_hours, d_mins)))
-    bot.send_msg(chan, "%s: %s" % (msg.to_nick, msg.message))
+    bot.send_msg(chan, "<%s> %s" % (msg.from_id.nick, msg.message))
     return True
