@@ -57,7 +57,7 @@ def message(bot, id, target, msg):
 
 @link('COMMAND_LIST')
 def list_help(bot, reply):
-    reply('help | commands', 'Shows this list.')
+    reply('help OR commands', 'Shows this list.')
 
 @link('!help')
 @link('!commands')
