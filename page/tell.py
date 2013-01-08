@@ -20,17 +20,23 @@ link, install, uninstall = LinkSet().triple()
 # The file where the plugin's persistent state is stored.
 STATE_FILE = 'state/tell.pickle'
 
+# An in-memory copy of the last loaded persistent state.
+STATE = None
+
 # Load the plugin's persistent state object.
 def get_state():
-    if not os.path.exists(STATE_FILE):
-        return State()
-    try:
-        with open(STATE_FILE, 'r') as state_file:
-            return pickle.load(state_file)
-    except pickle.UnpicklingError:
-        return State()
-    except EOFError:
-        return State()
+    # We use the in-memory state if it exists, to avoid excessive file IO.
+    global STATE
+    if STATE: return STATE
+    
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, 'r') as state_file:
+                STATE = pickle.load(state_file)
+        except pickle.UnpicklingError: pass
+        except EOFError: pass
+    if not STATE: STATE = State()
+    return STATE
 
 # Save the plugin's persistent state object.
 def put_state(state):
