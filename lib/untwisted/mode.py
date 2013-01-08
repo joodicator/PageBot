@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from traceback import print_exc as debug
 from usual import *
 
@@ -5,7 +6,7 @@ class Mode(object):
     def __init__(self, default=void):
         """ Constructor for Mode """
 
-        self.base = dict()
+        self.base = OrderedDict()
         self.default = default
     
     def drive(self, event, *args):

@@ -6,7 +6,10 @@
 #   - Display only 3 messages at once, delivering further messages by PM.
 
 from util import LinkSet
+import util
 from auth import admin
+from message import reply
+
 from collections import namedtuple
 from itertools import *
 import pickle as pickle
@@ -56,25 +59,21 @@ class State(object):
 Message = namedtuple('Message',
     ('time_sent', 'channel', 'from_id', 'to_nick', 'message'))
 
-# Reply (in the same channel or by PM, as appropriate) to a message by `id'
-# sent to `target' with the message `msg', possibly prefixing the message with
-# their nick, unless `prefix' is given as False.
-def reply(bot, id, target, msg, prefix=True):
-    if prefix and target != None:
-        msg = '%s: %s' % (id.nick, msg)
-    bot.send_msg(target or id.nick, msg)
-
-
-@link('COMMAND_LIST')
-def list_tell(bot, reply):
+@link('HELP')
+def h_help(bot, reply, args):
     reply('tell NICK MESSAGE',
-    'When NICK is next seen in this channel, MESSAGE will be delivered to them.'
-    ' NICK is matched case-insensitively against the nick of anybody appearing'
+    'When NICK is next seen in this channel, MESSAGE will be delivered to them.')
+
+@link(('HELP', 'tell'))
+def h_help_tell(bot, reply, args):
+    h_help(bot, reply, args)
+    reply('',
+    'NICK is matched case-insensitively against the nick of anybody appearing'
     ' in the channel.')
-    reply(None,
+    reply('',
     'If NICK contains the characters * or ?, these will match any sequence of'
     ' of zero or more characters, or exactly 1 character, respectively.')
-    reply(None,
+    reply('',
     'If NICK contains any occurrence of ! or @, it will be matched against the'
     ' full NICK!USER@HOST of the recipient, instead of just their nick.')
 
@@ -116,14 +115,10 @@ def h_tell_list(bot, id, target, args, full_msg):
             msg.channel,
             msg.time_sent.strftime('%Y-%m-%d %H:%M'),
             msg.message))
-    widths = reduce(
-        lambda l, m: tuple(max(i, j) for (i, j) in izip(l, m)),
-        (map(len, l) for l in lines))
-    for line in lines:
-        line = tuple(s+' '*(w-len(s)) for (s, w) in izip(line, widths))
-        output('  '.join(line).strip())
-    output('End of tell_list')
-
+    lines = util.align_table(lines)
+    output('\2' + lines[0])
+    map(output, lines[1:])
+    output('\2End of tell_list')
 
 @link('!tell_reset')
 @admin
@@ -172,7 +167,6 @@ def report_msg(bot, id, chan, msg):
 def msg_matches_id(msg, id):
     str = '%s!%s@%s' % tuple(id) if re.search(r'!|@', msg.to_nick) else id.nick
     pat = wc_to_re(msg.to_nick)
-    print 'DEBUG: str=%s; pat=%s' % (str, pat)
     return re.match(pat, str, re.I) != None
 
 # Returns a Python regular expression pattern string equivalent to the given

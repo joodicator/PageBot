@@ -160,3 +160,18 @@ def module_is_local(mod):
 # Returns the sum of `throws' PRNG-simulated rolls of a `sides'-sided die.
 def dice(throws, sides):
     return sum(random.randint(1, sides) for n in xrange(throws))
+
+# Returns the string of length at least `n' resulting from the concatenation of
+# the smallest necessary number of spaces to `str'.
+def pad_left(str, n):
+    return str + ' '*(n - len(str))
+
+# Given a sequence of sequences of strings, representing the rows of a table, each
+# row of which contains a number of cells, returns a list of strings representing
+# the rows of the table where spaces have been added so that all columns in the
+# table are left-aligned and separated by two spaces.
+def align_table(lines):
+    widths = (imap(len, r) for r in lines)
+    widths = [max(t) for t in izip_longest(*widths, fillvalue=0)]
+    lines = ((pad_left(*t) for t in izip(l, widths)) for l in lines)
+    return ['  '.join(l).strip() for l in lines]
