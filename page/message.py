@@ -1,8 +1,19 @@
 from untwisted.magic import sign
 from util import LinkSet, ID
+import util
+from itertools import *
 import re
 
 link, install, uninstall = LinkSet().triple()
+
+# Reply (in the same channel or by PM, as appropriate) to a message by `id'
+# sent to `target' with the message `msg', possibly prefixing the message with
+# their nick, unless `prefix' is given as False.
+def reply(bot, id, target, msg, prefix=True):
+    if prefix and target != None:
+        msg = '%s: %s' % (id.nick, msg)
+    bot.send_msg(target or id.nick, msg)
+
 
 @link('JOIN')
 def join(bot, source, chans, *args):
@@ -55,20 +66,40 @@ def message(bot, id, target, msg):
     yield sign((event, target), bot, id, match.group('body'), msg)
 
 
-@link('COMMAND_LIST')
-def list_help(bot, reply):
-    reply('help OR commands', 'Shows this list.')
+@link('HELP')
+@link(('HELP', 'help'))
+@link(('HELP', 'commands'))
+def h_help_help(bot, reply, args):
+    reply('help',           'Shows a summary of all available commands.')
+    reply('help COMMAND',   'Gives detailed information about COMMAND.')
+    reply('commands',       'A synonym for "help".')
 
 @link('!help')
 @link('!commands')
-def help(bot, id, target, args, full_msg):
-    reply = lambda msg: bot.send_msg(target or id.nick, msg)
-    reply(
-        'Commands are issued by saying "!COMMAND" or "%s: COMMAND" or, by PM,'
-        ' just "COMMAND", where COMMAND is the name of the command follow by'
-        ' zero or more parameters.  The following commands are available:'
-        % bot.nick)
-    def command_list(head=None, body=None):
-        if head: reply(head)
-        if body: reply('    ' + body)
-    yield sign('COMMAND_LIST', bot, command_list)
+def h_help(bot, id, target, args, full_msg):
+    lines = []
+    callback = lambda *args: lines.append(args)
+    output = lambda msg: bot.send_msg(target or id.nick, msg)
+
+    if args:
+        # Display help for a particular command.
+        cmd, args = re.match(r'(\S+)\s*(.*)', args).groups()
+        yield sign(('HELP', cmd.lower()), bot, callback, args)
+        if not lines:
+            reply(bot, id, target,
+                'Error: no help is available for "%s".' % cmd)
+            return
+        for line in lines:
+            print('DEBUG: ' + repr(line))
+            if line[0]: output('\2' + line[0] + '\2')
+            for para in line[1:]:
+                if para: output('    ' + para)
+    else:
+        # Display general help and a summary of all commands.
+        output(
+            'Commands are issued by saying "!COMMAND" or "%s: COMMAND" or,'
+            ' by PM, just "COMMAND", where COMMAND is the command and its'
+            ' parameters. The following commands are available:' % bot.nick)
+        yield sign('HELP', bot, callback, args)
+        lines = map(lambda l: ('\2' + l[0] + '\2',) + l[1:], lines)
+        map(output, util.align_table(lines))
