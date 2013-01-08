@@ -1,9 +1,10 @@
 # Possible future changes:
 #   - Require messages given upon joining a channel to be explicitly dismissed.
-#   - Allow messages to be deleted with something like: <SENDER> !tell_cancel RECIPIENT.
-#   - Allow each USER@HOST sender to leave at most 1 message for each RECIPIENT.
-#   - Allow a USER@HOST sender to edit their last message to any RECIPIENT.
+#     OR only notify users of the presence of messages, requiring them to
+#     retrieve their messages manually.
 #   - Display only 3 messages at once, delivering further messages by PM.
+#   - Allow each USER@HOST sender to leave at most 1 message for each RECIPIENT.
+#   - Allow a USER@HOST sender to edit or delete their last message to any RECIPIENT.
 
 from util import LinkSet
 import util
@@ -23,7 +24,7 @@ link, install, uninstall = LinkSet().triple()
 # The file where the plugin's persistent state is stored.
 STATE_FILE = 'state/tell.pickle'
 
-# An in-memory copy of the last loaded persistent state.
+# The memory-cached persisten global state.
 STATE = None
 
 # Load the plugin's persistent state object.
@@ -43,6 +44,9 @@ def get_state():
 
 # Save the plugin's persistent state object.
 def put_state(state):
+    global STATE
+    STATE = state
+
     with open(STATE_FILE, 'w') as state_file:
         pickler = pickle.Pickler(state_file)
         pickler.clear_memo()
@@ -126,30 +130,38 @@ def h_tell_reset(bot, id, target, args, full_msg):
     put_state(State())
     reply(bot, id, target, 'Done.')
 
-'''
 @link('OTHER_JOIN')
 def h_other_join(bot, id, chan):
-    report(bot, id, chan)
-'''
+    notify_msgs(bot, id, chan)
 
 @link('MESSAGE')
 def h_message(bot, id, target, msg):
-    if target: report(bot, id, target)
+    if target: deliver_msgs(bot, id, target)
 
-# Handle an action by `id' on `chan', possibly resulting in `id' being notified
-# of messages left for them.
-def report(bot, id, chan):
+# Notify `id' of messages left for them in `chan', if any.
+def notify_msgs(bot, id, chan):
     state = get_state()
-    state.msgs = list(ifilterfalse(
-        lambda m: report_msg(bot, id, chan, m), state.msgs))
+    msgs = filter(lambda m: would_deliver(id, chan, m), state.msgs)
+    if len(msgs) > 1:
+        reply(bot, id, chan,
+            'You have %s messages; say anything to read them.' % len(msgs))
+    elif len(msgs):
+        reply(bot, id, chan,
+            'You have a message; say anything to read it.')
+
+# Deliver to `id' any messages left for them in `chan'.
+def deliver_msgs(bot, id, chan):
+    state = get_state()
+    msgs = groupby(state.msgs, lambda m: would_deliver(id, chan, m))
+    msgs = { b : list(i) for (b, i) in msgs }
+    if True not in msgs: return
+    for msg in msgs[True]:
+        deliver_msg(bot, id, chan, msg)
+    state.msgs = msgs[False] if False in msgs else []
     put_state(state)
 
-# Handles an action by `id' on `chan' in the context of the Message instance
-# `msg', possibly notifying `id' of this message, in which case returns True;
-# otherwise returns False.
-def report_msg(bot, id, chan, msg):
-    if msg.channel != chan: return False
-    if not msg_matches_id(msg, id): return False
+# Unconditionally deliver `msg' to `id' in `chan'.
+def deliver_msg(bot, id, chan, msg):
     delta = datetime.datetime.utcnow() - msg.time_sent
     if delta.total_seconds() < 1: return False
     d_mins, d_secs = divmod(delta.seconds, 60)
@@ -162,12 +174,19 @@ def report_msg(bot, id, chan, msg):
     bot.send_msg(chan, "<%s> %s" % (msg.from_id.nick, msg.message))
     return True
 
-# Returns True if the given message matches the given user ID as a recipient,
+# Returns True if `msg' would be delivered at this time to `id' in `chan',
 # or otherwise returns False.
-def msg_matches_id(msg, id):
+def would_deliver(id, chan, msg):
+    if msg.channel != chan: return False
+    
     str = '%s!%s@%s' % tuple(id) if re.search(r'!|@', msg.to_nick) else id.nick
     pat = wc_to_re(msg.to_nick)
-    return re.match(pat, str, re.I) != None
+    if re.match(pat, str, re.I) == None: return False
+
+    delta = datetime.datetime.utcnow() - msg.time_sent
+    if delta.total_seconds() < 1: return False    
+    
+    return True
 
 # Returns a Python regular expression pattern string equivalent to the given
 # wildcard pattern (which accepts only the entire input, not part of it).
