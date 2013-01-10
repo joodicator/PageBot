@@ -103,7 +103,7 @@ def h_tell(bot, id, target, args, full_msg):
         message     = msg)
     state.msgs.append(record)
     put_state(state)
-    reply(bot, id, target, 'Yes.')
+    reply(bot, id, target, 'It shall be done.')
 
 
 @link('!tell_list')
