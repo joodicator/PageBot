@@ -17,5 +17,5 @@ execfile('conf/bot.py', conf)
 
 if '--debug' in sys.argv: conf['plugins'].insert(0, 'debug')
 
-from amelia import AmeliaBot
-AmeliaBot(conf).mainloop()
+import amelia
+amelia.AmeliaBot(conf).mainloop()
