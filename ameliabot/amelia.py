@@ -5,6 +5,8 @@ import sys
 from plugins.standard import head
 from untwisted.core import gear
 from untwisted.network import Mac
+from untwisted.event import CLOSE
+from untwisted.usual import Kill
 import utils.misc
 import stdlog as std
 import xirclib
@@ -28,19 +30,20 @@ class AmeliaBot(Mac):
         # Load configuration
         self.conf = default_conf.copy()
         if conf: self.conf.update(conf)
-        
+
         # Initialise socket
         sock = socket(AF_INET, SOCK_STREAM)
+        Mac.__init__(self, sock)
         address = gethostbyname(self.conf['server'])
         sock.connect((address, self.conf['port']))
-        Mac.__init__(self, sock)
-        
+
         # Initialise events
         std.install(self)
         xirclib.install(self)
         self.link('433', self.err_nicknameinuse)
         self.link('001', self.registered)
         self.link('NICK', self.nick_change)
+        self.link(CLOSE, self.h_close)
         
         # Load plugins
         def plugins():
@@ -50,12 +53,16 @@ class AmeliaBot(Mac):
                 yield import_module(name)
         for plugin in plugins():
             plugin.install(self)
-        
+
         # Start registration
         self.nick = self.conf['nick']
         self.send_cmd('NICK %s' % self.nick)
         self.send_cmd('USER %(user)s %(host)s %(server)s :%(name)s' % self.conf) 
-    
+
+    def h_close(self, bot):
+        print '! disconnected'
+        sys.exit(0)
+ 
     def err_nicknameinuse(self, bot, *args):
         self.nick += "_"
         self.send_cmd('NICK %s' % self.nick)
