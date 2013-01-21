@@ -1,8 +1,6 @@
 #!/bin/sh
 while true; do
-    if ! `dirname $0`/main.py; then
-        exit
-    fi
+    `dirname $0`/main.py
     echo '! reconnecting in 10 seconds'
     sleep 10
 done
