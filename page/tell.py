@@ -132,8 +132,8 @@ def h_untell(bot, id, target, args, full_msg):
     msgs_keep = [m for (b, m) in msgs if not b]
     if not msgs_cancel:
         return reply(bot, id, target,
-        'There were no messages to "%s" from %s.'
-        % (args, '%s@%s' % (id.user, id.host)))
+        'There were no messages to "%s" from %s in %s.'
+        % (args, '%s@%s!%s' % tuple(id), target))
     state.msgs = msgs_keep
     count = len(msgs_cancel)
     put_state(state)
