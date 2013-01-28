@@ -30,7 +30,9 @@ class hold(object):
                     break
                 else:
                     point(self.mod, self.seq)
-        except Exception as e:
+        except StopIteration:
+            pass
+        finally:
             for ind in self.event_list:
                 ymap(self.obj, ind, self.back)
-            raise
+

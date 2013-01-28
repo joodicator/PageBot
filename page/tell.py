@@ -6,8 +6,9 @@
 #   - Allow each USER@HOST sender to leave at most 1 message for each RECIPIENT.
 #   - Allow a USER@HOST sender to edit or delete their last message to any RECIPIENT.
 
-from util import LinkSet
 import util
+import auth
+from util import LinkSet
 from auth import admin
 from message import reply
 
@@ -83,21 +84,29 @@ def h_help_tell(bot, reply, args):
 
 @link('!tell')
 def h_tell(bot, id, target, args, full_msg):
-    if not target:
+    # Secretly, admins may prepend the arguments with the target channel.
+    match = re.match(r'(#\S+)\s+(.*)', args)
+    if match:
+        is_admin = yield auth.check(bot, id)
+        if is_admin:
+            channel, args = match.groups()
+        else:
+            reply(bot, id, target,
+            'Error: "%s" is not a valid nick or hostmask.' % match.group(1))
+            return
+    elif target:
+        channel = target
+    else:
         reply(bot, id, target,
-            'Error: the "tell" command may only be used in a channel.')
+        'Error: the "tell" command may only be used in a channel.')
         return
 
     to_nick, msg = re.match(r'(\S+)\s+(.*)', args).groups()
-    if to_nick.startswith('#'):
-        reply(bot, id, target,
-            'Error: "%s" is not a valid nick or hostmask.' % to_nick)
-        return
 
     state = get_state()
     record = Message(
         time_sent   = datetime.datetime.utcnow(),
-        channel     = target,
+        channel     = channel,
         from_id     = id,
         to_nick     = to_nick,
         message     = msg)
@@ -118,22 +127,38 @@ def h_help_untell(bot, reply, args):
 
 @link('!untell')
 def h_untell(bot, id, target, args, full_msg):
-    if not target:
-        return reply(bot, id, target,
+    # Secrely, arguments may prepend the arguments the target channel.
+    match = re.match(r'(#\S+)\s+(.*)', args)
+    if match:
+        is_admin = yield auth.check(bot, id)
+        if is_admin:
+            channel, args = match.groups()
+        else:
+            reply(bot, id, target,
+            'Error: "%s" is not a valid nick or hostmask.' % match.group(1))
+            return
+    elif target:
+        channel = target
+    else:
+        reply(bot, id, target,
         'Error: the "untell" command may only be used in a channel.')
-    state = get_state()
+        return
+
     def will_cancel(msg):
-        if msg.channel != target: return False
+        if msg.channel != channel: return False
         if msg.to_nick != args: return False
         if msg.from_id != id: return False
         return True
+
+    state = get_state()
     msgs = [(will_cancel(m), m) for m in state.msgs]
     msgs_cancel = [m for (b, m) in msgs if b]
     msgs_keep = [m for (b, m) in msgs if not b]
     if not msgs_cancel:
-        return reply(bot, id, target,
-        'There were no messages to "%s" from %s in %s.'
-        % (args, '%s@%s!%s' % tuple(id), target))
+        reply(bot, id, target,
+            'There were no messages to "%s" from %s in %s.'
+            % (args, '%s!%s@%s' % tuple(id), channel))
+        return
     state.msgs = msgs_keep
     count = len(msgs_cancel)
     put_state(state)

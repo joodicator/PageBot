@@ -3,6 +3,7 @@ import sys
 import re
 
 import util
+import auth
 from util import LinkSet
 from message import reply as echo
 from auth import admin
