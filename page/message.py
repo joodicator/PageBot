@@ -90,7 +90,6 @@ def h_help(bot, id, target, args, full_msg):
                 'Error: no help is available for "%s".' % cmd)
             return
         for line in lines:
-            print('DEBUG: ' + repr(line))
             if line[0]: output('\2' + line[0] + '\2')
             for para in line[1:]:
                 if para: output('    ' + para)

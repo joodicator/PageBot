@@ -64,7 +64,7 @@ Message = namedtuple('Message',
     ('time_sent', 'channel', 'from_id', 'to_nick', 'message'))
 
 @link('HELP')
-def h_help(bot, reply, args):
+def h_help_tell_short(bot, reply, args):
     reply('tell NICK MESSAGE',
     'When NICK is next seen in this channel, MESSAGE will be delivered to them.')
 
@@ -105,15 +105,51 @@ def h_tell(bot, id, target, args, full_msg):
     put_state(state)
     reply(bot, id, target, 'It shall be done.')
 
+@link('HELP')
+def h_help_untell_short(bot, reply, args):
+    reply('untell NICK',
+    'Cancels a message left using "tell".')
+
+@link(('HELP', 'untell'))
+def h_help_untell(bot, reply, args):
+    reply('untell NICK',
+    'Cancels all undelivered messages issued using the "tell" command'
+    ' with the same NICK, by any user with your hostmask.')
+
+@link('!untell')
+def h_untell(bot, id, target, args, full_msg):
+    if not target:
+        return reply(bot, id, target,
+        'Error: the "untell" command may only be used in a channel.')
+    state = get_state()
+    def will_cancel(msg):
+        if msg.channel != target: return False
+        if msg.to_nick != args: return False
+        if msg.from_id != id: return False
+        return True
+    msgs = [(will_cancel(m), m) for m in state.msgs]
+    msgs_cancel = [m for (b, m) in msgs if b]
+    msgs_keep = [m for (b, m) in msgs if not b]
+    if not msgs_cancel:
+        return reply(bot, id, target,
+        'There were no messages to "%s" from %s.'
+        % (args, '%s@%s' % (id.user, id.host)))
+    state.msgs = msgs_keep
+    count = len(msgs_cancel)
+    put_state(state)
+    reply(bot, id, target, '%s %s deleted.' %
+        (count, 'message' if count == 1 else 'messages'))
+
 
 @link('!tell_list')
 @admin
 def h_tell_list(bot, id, target, args, full_msg):
     output = lambda msg: reply(bot, id, target, msg, prefix=False)
     state = get_state()
-    lines = [('From', 'To', 'Channel', 'Time', 'Message')]
-    for msg in state.msgs:
+    lines = [('#', 'From', 'To', 'Channel', 'Time', 'Message')]
+    for (num, msg) in izip(count(1), state.msgs):
         lines.append((
+            str(num),
             '%s!%s@%s' % tuple(msg.from_id),
             msg.to_nick,
             msg.channel,
@@ -152,12 +188,13 @@ def notify_msgs(bot, id, chan):
 # Deliver to `id' any messages left for them in `chan'.
 def deliver_msgs(bot, id, chan):
     state = get_state()
-    msgs = groupby(state.msgs, lambda m: would_deliver(id, chan, m))
-    msgs = { b : list(i) for (b, i) in msgs }
-    if True not in msgs: return
-    for msg in msgs[True]:
+    msgs = [(would_deliver(id, chan, m), m) for m in state.msgs]
+    msgs_deliver = [m for (b, m) in msgs if b]
+    msgs_keep = [m for (b, m) in msgs if not b]
+    if not msgs_deliver: return
+    for msg in msgs_deliver:
         deliver_msg(bot, id, chan, msg)
-    state.msgs = msgs[False] if False in msgs else []
+    state.msgs = msgs_keep
     put_state(state)
 
 # Unconditionally deliver `msg' to `id' in `chan'.

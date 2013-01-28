@@ -1,22 +1,18 @@
 from importlib import import_module
-from util import LinkSet
-import util
-from auth import admin
 import sys
 import re
 
-link, install, uninstall = LinkSet().triple()
+import util
+from util import LinkSet
+from message import reply as echo
+from auth import admin
 
-def echo(bot, id, target, args):
-    if target:
-        bot.send_msg(target, '%s: %s' % (id.nick, args))
-    else:
-        bot.send_msg(id.nick, args)
+link, install, uninstall = LinkSet().triple()
 
 @link('!echo')
 @admin
 def _echo(bot, id, target, args, full_msg):
-    echo(bot, id, target, args)
+    echo(bot, id, target, args, False)
 
 @link('!raw')
 @admin
