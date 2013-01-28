@@ -46,10 +46,15 @@ def nickserv_notice(bot, id, msg):
         nick, code = match.groups()
         yield sign(('NICKSERV_STATUS', nick), bot, id, int(code))
 
-# Returns an object which may be yielded in an untwisted event handler to obtain
-# `(('NICKSERV_STATUS', nick), [bot, id, code])`, where `code` is the result of a
-# NickServ STATUS query. See NickServ's response to `HELP STATUS` for its meaning.
-def status(bot, nick):
-    bot.send_msg(conf('nickserv').nick, 'STATUS %s' % nick)
-    return hold(bot, ('NICKSERV_STATUS', nick))
 
+# Returns an object that may be yielded in an untwisted event handler to obtain
+# the integer returned by NickServ's STATUS command for the given nick.
+def status(bot, nick):
+    return util.mcall('nickserv.status', bot, nick)
+
+@link('nickserv.status')
+def h_nickserv_status(bot, nick):
+    ret = lambda a: sign(('nickserv.status', bot, nick), a)
+    bot.send_msg(conf('nickserv').nick, 'STATUS %s' % nick)
+    (_, [_, _, code]) = yield hold(bot, ('NICKSERV_STATUS', nick))
+    yield ret(code)
