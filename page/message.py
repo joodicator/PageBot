@@ -62,8 +62,9 @@ def message(bot, id, target, msg):
         if match and target == None: break
         return
     event = '!' + match.group('head').lower()
-    yield sign(event, bot, id, target, match.group('body'), msg)
-    yield sign((event, target), bot, id, match.group('body'), msg)
+    body = match.group('body').strip()
+    yield sign(event, bot, id, target, body, msg)
+    yield sign((event, target), bot, id, body, msg)
 
 
 @link('HELP')
