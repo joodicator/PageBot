@@ -1,13 +1,19 @@
 #!/usr/bin/env python2
 
-from __future__ import print_function
 from war_state import *
 
 game = State()
 game.begin()
 
+posn = 0
+def reply(str):
+    global posn
+    posn += 1
+    print str
+
 while True:
-    print('\33[2J\33[1;1H', end='')
-    game.show_update(print)
-    raw_input()
+    game.show_update(reply)
     game.pass_move()
+    raw_input()
+    print '\33[%sA' % (posn + 2)
+    posn = 0
