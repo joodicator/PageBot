@@ -88,15 +88,20 @@ def dice(throws, sides):
 def pad_left(str, n):
     return str + ' '*(n - len(str))
 
+# As pad_left, but prepends spaces instead of appending.
+def pad_right(str, n):
+    return ' '*(n - len(str)) + str
+
 # Given a sequence of sequences of strings, representing the rows of a table, each
 # row of which contains a number of cells, returns a list of strings representing
 # the rows of the table where spaces have been added so that all columns in the
-# table are left-aligned and separated by two spaces.
-def align_table(lines):
+# table are left-aligned and separated by two spaces, or the given separator.
+def align_table(lines, sep='  ', align='l'):
+    pad = {'l': pad_left, 'r': pad_right}[align]
     widths = (imap(len, r) for r in lines)
     widths = [max(t) for t in izip_longest(*widths, fillvalue=0)]
-    lines = ((pad_left(*t) for t in izip(l, widths)) for l in lines)
-    return ['  '.join(l).strip() for l in lines]
+    lines = ((pad(*t) for t in izip(l, widths)) for l in lines)
+    return [sep.join(l).rstrip() for l in lines]
 
 
 # Returns an object which may be yielded in an untwisted event handler to obtain
