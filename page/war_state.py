@@ -103,8 +103,8 @@ class State(object):
             if y == -1: return chr(ord('a') + x)
             return [
                 ['.', 'X', 'O'],
-                ['_', 'x', '1'],
-                ['_', '2', 'o']
+                ['_', 'x', 'O'],
+                ['_', 'X', 'o']
             ][self.prev_board[x][y]][self.board[x][y]]
         lines = [[showc(x, y) for x in xrange(-1, self.width)]
                  for y in xrange(-1, self.height)]
