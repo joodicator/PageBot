@@ -66,9 +66,9 @@ def _load(bot, id, target, args, full_msg):
     try:
         mod = import_module(args)
         if hasattr(mod, 'install'): mod.install(bot)
-    except ImportError as e:
+        echo(bot, id, target, 'Done.')
+    except Exception as e:
         echo(bot, id, target, repr(e))
-    echo(bot, id, target, 'Done.')
 
 @link('!unload')
 @admin
