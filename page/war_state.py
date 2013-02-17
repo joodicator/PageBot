@@ -98,16 +98,17 @@ class State(object):
     
     def show_update(self, reply):
         def showc(x, y):
-            if x == -1 and y == -1: return ''
-            if x == -1: return str(y + 1)
-            if y == -1: return chr(ord('a') + x)
+            outx, outy = not 0 <= x < self.width, not 0 <= y < self.height
+            if outx and outy: return ''
+            if outx: return str(y + 1)
+            if outy: return chr(ord('a') + x)
             return [
                 ['.', 'X', 'O'],
                 ['_', 'x', 'O'],
                 ['_', 'X', 'o']
             ][self.prev_board[x][y]][self.board[x][y]]
-        lines = [[showc(x, y) for x in xrange(-1, self.width)]
-                 for y in xrange(-1, self.height)]
+        lines = [[showc(x, y) for x in xrange(-1, self.width + 1)]
+                 for y in xrange(-1, self.height + 1)]
         for line in util.align_table(lines, sep=' ', align='r'):
             reply(line)
         reply('It is PLAYER %s\'s turn.' % self.turn)
