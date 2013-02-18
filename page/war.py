@@ -49,6 +49,19 @@ def h_war_reset(bot, id, target, args, full_msg):
     save_state(init_state())
     message.reply(bot, id, target, 'Done.')
 
+
+@link('!war_print')
+def h_war(bot, id, target, args, full_msg):
+    try:
+        game = get_state(target or id)
+        if not game.active: return
+        reply = lambda msg: message.reply(bot, id, target, msg, prefix=False)
+        game.show_update(reply)
+    except Exception as e:
+        reply(str(e) or repr(e))
+        raise
+
+
 @link(('HELP', 'war'))
 def h_help_war(bot, reply, args):
     reply('war [WIDTH [HEIGHT]]',
