@@ -42,10 +42,8 @@ class State(object):
             'Error: %s is not a PLAYER %s piece.' % (p1, self.turn))
         if self.board[x2][y2] != 0: raise Exception(
             'Error: %s is not an empty cell.' % p2)
-        self.prev_board = self.copy_board(self.board)
         self.board[x1][y1], self.board[x2][y2] = 0, self.turn
-        self.crank_board()
-        self.end_turn()
+        self.pass_move()
 
     def pass_move(self):
         self.prev_board = self.copy_board(self.board)
