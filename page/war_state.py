@@ -97,7 +97,7 @@ class State(object):
     def show_update(self, reply):
         def showc(x, y):
             outx, outy = not 0 <= x < self.width, not 0 <= y < self.height
-            if outx and outy: return '-'
+            if outx and outy: return '+'
             if outx: return str(y + 1)
             if outy: return chr(ord('a') + x)
             return [

@@ -25,7 +25,7 @@ link, install, uninstall = LinkSet().triple()
 # The file where the plugin's persistent state is stored.
 STATE_FILE = 'state/tell.pickle'
 
-# The memory-cached persisten global state.
+# The memory-cached persistent global state.
 STATE = None
 
 # Load the plugin's persistent state object.
@@ -71,7 +71,7 @@ def h_help_tell_short(bot, reply, args):
 
 @link(('HELP', 'tell'))
 def h_help_tell(bot, reply, args):
-    h_help(bot, reply, args)
+    h_help_tell_short(bot, reply, args)
     reply('',
     'NICK is matched case-insensitively against the nick of anybody appearing'
     ' in the channel.')
