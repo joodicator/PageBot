@@ -39,8 +39,8 @@ def put_state(key, val):
 
 @link('HELP')
 def h_help(bot, reply, args):
-    reply('war [WIDTH [HEIGHT]]',   'Starts a new game of WAR OF LIFE.')
-    reply('move [FROM TO]',         'Issues a move in WAR OF LIFE.')
+    reply('war',            'Starts a new game of WAR OF LIFE.')
+    reply('move [FROM TO]', 'Issues a move in WAR OF LIFE.')
 
 
 @link('!war_reset')
@@ -64,9 +64,10 @@ def h_war(bot, id, target, args, full_msg):
 
 @link(('HELP', 'war'))
 def h_help_war(bot, reply, args):
-    reply('war [WIDTH [HEIGHT]]',
+    reply('war [WIDTH [HEIGHT [PIECES]]]',
     'Starts a new game of WAR OF LIFE on a board with the given dimensions,'
-    ' or a square board if only WIDTH is given, or otherwise an 8*8 board.')
+    ' or a square board if only WIDTH is given, or otherwise an 8*8 board.'
+    ' Each side starts with the given number of PIECES, or 12 by default.')
 
 @link('!war')
 def h_war(bot, id, target, args, full_msg):
