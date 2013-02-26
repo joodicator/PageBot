@@ -11,6 +11,8 @@ import auth
 from util import LinkSet
 from auth import admin
 from message import reply
+import channel
+import untwisted.magic
 
 from collections import namedtuple
 from itertools import *
@@ -195,6 +197,12 @@ def h_tell_reset(bot, id, target, args, full_msg):
 def h_other_join(bot, id, chan):
     notify_msgs(bot, id, chan)
 
+@link('NICK')
+def h_nick(bot, id, new_nick, *args):
+    id = util.ID(*id)
+    new_id = util.ID(new_nick, id.user, id.host)
+    yield untwisted.magic.sign('tell.notify_msgs_all', bot, new_id)
+
 @link('MESSAGE')
 def h_message(bot, id, target, msg):
     if target: deliver_msgs(bot, id, target)
@@ -209,6 +217,17 @@ def notify_msgs(bot, id, chan):
     elif len(msgs):
         reply(bot, id, chan,
             'You have a message; say anything to read it.')
+
+# As notify_msgs, but acts on all channels in which id resides.
+@link('tell.notify_msgs_all')
+def h_notify_msgs_all(bot, id):
+    nick = id.nick.lower()
+    state = get_state()
+    for chan in {m.channel for m in state.msgs}:
+        names = yield channel.names(bot, chan)
+        names = map(str.lower, channel.strip_names(names))
+        if nick not in names: continue
+        notify_msgs(bot, id, chan)
 
 # Deliver to `id' any messages left for them in `chan'.
 def deliver_msgs(bot, id, chan):

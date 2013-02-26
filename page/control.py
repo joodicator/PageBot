@@ -60,6 +60,15 @@ def _exec(bot, id, target, args, full_msg):
     except Exception as e:
         echo(bot, id, target, repr(e))
 
+@link('!yield')
+@admin
+def _mcall(bot, id, target, args, full_msg):
+    try:
+        result = yield eval(args)
+    except Exception as e:
+        result = e
+    echo(bot, id, target, repr(result))
+
 @link('!load')
 @admin
 def _load(bot, id, target, args, full_msg):
