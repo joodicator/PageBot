@@ -123,11 +123,14 @@ def msign(target, event, *args, **kwds):
 # raise `event' with the given arguments, waiting for a response event of the
 # form `(event, *args)' with a single argument, and obtaining this argument.
 def mcall(event, *args):
+    import untwisted.usual
     token = (event,) + args
     def act(source, chain):
         def ret(arg):
             source.unlink(token, ret)
-            try: chain.send(arg)(source, chain)
+            try:
+                chain.send(arg)(source, chain)
+                untwisted.usual.chain(source, chain)
             except StopIteration: pass
         source.link(token, ret)
         source.drive(event, *args)
