@@ -9,6 +9,8 @@ class Gear(object):
         self.wlist = []
         self.xlist = []
 
+        self.tick_list = []
+
         self.SIZE = 1024
 
  
@@ -34,6 +36,9 @@ class Gear(object):
         self.process_rsock()
         self.process_wsock()
         self.process_xsock()
+
+        for ind in self.tick_list:
+            ind.poll.drive(TICK, ind)
 
     def process_rsock(self):
         for ind in self.rsock:

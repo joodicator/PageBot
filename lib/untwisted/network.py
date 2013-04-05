@@ -66,6 +66,7 @@ class Work(socket):
         gear.rlist.append(self)
         gear.wlist.append(self)
         gear.xlist.append(self)
+        gear.tick_list.append(self)
 
         self.BLOCK = 1024
         self.SIZE = 1024
@@ -88,6 +89,7 @@ class Work(socket):
         gear.rlist.remove(self)
         gear.wlist.remove(self)
         gear.xlist.remove(self)
+        gear.tick_list.remove(self)
 
 """ These are exotic names for classes.
     Howevr, the intention isn't being meaningful
