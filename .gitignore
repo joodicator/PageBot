@@ -1,2 +1,3 @@
 *.pyc
 conf/nickserv.py
+conf/bot.py
