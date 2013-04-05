@@ -1,5 +1,6 @@
 from untwisted.network import *
 from untwisted.event import *
+import time
 
 def install(obj):
     obj.link(READ, update)
@@ -46,7 +47,7 @@ def ilog(data):
     ibuf += data
     ibuf = ibuf.split(TERM)
     for line in ibuf[:-1]:
-        print '> ' + line
+        print '%s > %s' % (time.strftime('%H:%M:%S'), line)
     ibuf = ibuf[-1]
     
 def olog(data):
@@ -54,5 +55,5 @@ def olog(data):
     obuf += data
     obuf = obuf.split(TERM)
     for line in obuf[:-1]:
-        print '< ' + line
+        print '%s < %s' % (time.strftime('%H:%M:%S'), line)
     obuf = obuf[-1]

@@ -19,6 +19,7 @@ BUFFER = get_event()
 DUMPED = get_event()
 RECV_ERR = get_event()
 SEND_ERR = get_event()
+TICK = get_event()
 
 __all__ = [
             'get_event',
@@ -34,7 +35,6 @@ __all__ = [
             'RECV_ERR',
             'SEND_ERR',
             'ACCEPT',
-            'DUMPED'
+            'DUMPED',
+            'TICK'
           ]
-
-
