@@ -14,14 +14,13 @@ import xirclib
 default_conf = {
     'server':       'irc.freenode.net',
     'port':         6667,
-    'bind_addr':    ('', 0),
     'nick':         'ameliabot',
     'user':         'ameliabot',
     'name':         'ameliabot',
     'host':         '0',
     'channels':     ['#untwisted'],
     'plugins':      [],
-    'timeout':      180, # seconds
+    'timeout':      270, # seconds
 }
 
 class AmeliaBot(Mac):
@@ -36,7 +35,7 @@ class AmeliaBot(Mac):
         # Initialise socket
         sock = socket(AF_INET, SOCK_STREAM)
         Mac.__init__(self, sock, is_read=True, is_write=True)
-        sock.bind(self.conf['bind_addr'])
+        if 'bind_addr' in self.conf: sock.bind(self.conf['bind_addr'])
         address = gethostbyname(self.conf['server'])
         sock.connect((address, self.conf['port']))
 
