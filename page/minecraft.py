@@ -1,4 +1,5 @@
 import socket
+import re
 
 import untwisted.utils.common as u_common
 import untwisted.event as u_event
@@ -6,7 +7,6 @@ import untwisted.network as u_network
 import untwisted.utils.std as u_std
 
 import util
-import debug
 
 conf = util.fdict('conf/minecraft.py')
 ab_link = util.LinkSet()
@@ -16,11 +16,96 @@ bot = None
 
 @ab_link(('MESSAGE', conf['channel']))
 def h_message(bot, id, msg):
-    server.dump('say <%s:%s> %s\n' % (conf['channel'], id.nick, msg))
+    chan = conf['channel']
+    if msg.startswith('!'): return
+    match = re.match(r'\x01ACTION (?P<msg>.*)', msg)
+    if match:
+        msg = match.group('msg')
+        tell_server('%s: * %s %s' % (chan, id.nick, msg))
+    else:
+        tell_server('<%s:%s> %s' % (chan, id.nick, msg))
+
+@ab_link(('OTHER_JOIN', conf['channel']))
+def h_other_join(bot, id):
+    chan = conf['channel']
+    tell_server('%s: %s joined the channel.' % (chan, id.nick))
+
+@ab_link(('OTHER_PART', conf['channel']))
+def h_other_part(bot, id, msg):
+    chan = conf['channel']
+    tell_server('%s: %s left the channel' % (chan, id.nick)
+        + ((' (%s)' % msg) if msg else '') + '.')
+
+@ab_link(('OTHER_KICKED', conf['channel']))
+def h_other_kick(bot, other_nick, op_id, msg):
+    chan = conf['channel']
+    tell_server('%s: %s was kicked by %s' % (chan, other_nick, op_id.nick)
+        + ((' (%s)' % msg) if msg else '') + '.')
+
+@ab_link('OTHER_QUIT')
+def h_other_quit(bot, id, msg):
+    chan = conf['channel']
+    tell_server('%s: %s quit the network' % (chan, id.nick)
+        + ((' (%s)' % msg) if msg else '') + '.')
 
 @mc_link(u_event.FOUND)
 def h_found(server, line):
-    bot.send_msg(conf['channel'], line)
+    s_name = conf['server_name']
+    chan = conf['channel']
+
+    match = re.match(r'\d{4}(-\d\d){2} \d\d(:\d\d){2} '
+                 r'\[INFO\] (?P<info>.*)', line)
+    if not match: return
+    line = match.group('info')
+
+    # Chat
+    match = re.match('<(?P<name>\S+)> (?P<msg>.*)', line)
+    if match:
+        name, msg = match.group('name', 'msg')
+        if msg.startswith('!'): return
+        return bot.send_msg(chan, '<%s:%s> %s' % (s_name, name, msg))
+
+    # Connect
+    match = re.match('(?P<name>\S+)\[[^\]]+\] logged in', line)
+    if match:
+        name = match.group('name')
+        return bot.send_msg(chan, '%s: %s joined the game.' % (s_name, name))
+
+    # Disconnect
+    match = re.match('(?P<name>\S+) lost connection', line)
+    if match:
+        name = match.group('name')
+        return bot.send_msg(chan, '%s: %s left the game.' % (s_name, name))
+
+    # Kick
+    match = re.match(
+        '\[(?P<op>\S+): Kicked (?P<victim>\S+) from the game\]', line)
+    if match:
+        op, victim = match.group('op', 'victim')
+        return bot.send_msg(chan, '%s: %s left the game.' % (s_name, victim))
+
+    # Ban
+    match = re.match(
+        '\[(?P<op>\S+): Banned player (?P<victim>\S+)\]', line)
+    if match:
+        op, victim = match.group('op', 'victim')
+        return bot.send_msg(chan, '%s: %s left the game.' % (s_name, victim))
+
+    # Death
+    if is_death_message(line):
+        return bot.send_msg(chan, '%s: %s' % (s_name, line))
+
+def is_death_message(msg):
+    phrases = ('was squashed', 'was pricked', 'was shot', 'was blown up',
+               'was doomed', 'was slain', 'was killed', 'was pummeled',
+               'was knocked', 'walked into', 'drowned', 'blew up',
+               'hit the ground', 'fell off', 'fell out', 'fell from',
+               'fell into', 'fell out', 'went up','burned', 'got finished',
+               'tried to swim', 'died', 'starved', 'suffocated', 'withered')
+
+    for phrase in phrases:
+        if re.match(r'\S+ (%s)' % re.escape(phrase), msg): return True
+    return False
 
 def install(new_bot):
     global bot
@@ -50,3 +135,6 @@ def kill_server():
     server.shutdown(socket.SHUT_RDWR)
     server.close()
     server = None
+
+def tell_server(msg):
+    server.dump('say %s\n' % msg)

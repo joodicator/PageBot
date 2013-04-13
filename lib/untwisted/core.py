@@ -55,4 +55,4 @@ class Gear(object):
 #it instantiates the reactor
 #this variable is exposed to the
 #other modules
-gear = Gear()
+gear = Gear(1.0)

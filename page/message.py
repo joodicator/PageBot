@@ -26,6 +26,35 @@ def join(bot, source, chans, *args):
             yield sign('OTHER_JOIN', bot, id, chan)
             yield sign(('OTHER_JOIN', chan), bot, id)
 
+@link('PART')
+def part(bot, source, chans, msg=None, *args):
+    id = ID(*source)
+    for chan in chans.split(','):
+        if (id.nick.lower() == bot.nick.lower()):
+            yield sign('SELF_PART', bot, chan, msg)
+            yield sign(('SELF_PART', chan), bot, msg)
+        else:
+            yield sign('OTHER_PART', bot, id, chan, msg)
+            yield sign(('OTHER_PART', chan), bot, id, msg)
+
+@link('KICK')
+def kicked(bot, op_id, chan, other_nick, msg=None, *args):
+    op_id = ID(*op_id)
+    if (other_nick.lower() == bot.nick.lower()):
+        yield sign('SELF_KICKED', bot, chan, msg)
+        yield sign(('SELF_KICKED', chan), bot, msg)
+    else:
+        yield sign('OTHER_KICKED', bot, other_nick, op_id, chan, msg)
+        yield sign(('OTHER_KICKED', chan), bot, other_nick, op_id, msg)
+
+@link('QUIT')
+def quit(bot, source, msg=None, *args):
+    id = ID(*source)
+    if (id.nick.lower() == bot.nick.lower()):
+        yield sign('SELF_QUIT', bot, msg)
+    else:
+        yield sign('OTHER_QUIT', bot, id, msg)
+
 @link('PRIVMSG')
 def privmsg(bot, source, target, msg, *args):
     if target == bot.nick: target = None
