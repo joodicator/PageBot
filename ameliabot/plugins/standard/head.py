@@ -22,5 +22,6 @@ def tick(bot):
         yield sign(CLOSE, bot)
 
 def handle_close(bot):
+    bot.shutdown()
     bot.close()
     bot.destroy()

@@ -46,7 +46,7 @@ def h_auth_check(bot, id):
     else:
         code = yield nickserv.status(bot, id.nick)
         if code >= 3:
-            yield ret(True)
             passed.add(id)
+            yield ret(True)
         else:
             yield ret(False)
