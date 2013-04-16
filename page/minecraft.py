@@ -137,4 +137,6 @@ def kill_server():
     server = None
 
 def tell_server(msg):
-    server.dump('say %s\n' % msg)
+    head, tail = msg[:100], msg[100:]
+    server.dump('say %s\n' % head)
+    if tail: tell_server('... ' + tail)
