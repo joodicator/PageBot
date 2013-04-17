@@ -42,7 +42,7 @@ def h_other_kick(bot, other_nick, op_id, msg):
     tell_server('%s: %s was kicked by %s' % (chan, other_nick, op_id.nick)
         + ((' (%s)' % msg) if msg else '') + '.')
 
-@ab_link('OTHER_QUIT')
+@ab_link(('OTHER_QUIT_CHAN', conf['channel'].lower()))
 def h_other_quit(bot, id, msg):
     chan = conf['channel']
     tell_server('%s: %s quit the network' % (chan, id.nick)
@@ -58,42 +58,47 @@ def h_found(server, line):
     if not match: return
     line = match.group('info')
 
+    name = None
+    p_name = lambda: name
+
     # Chat
     match = re.match('<(?P<name>\S+)> (?P<msg>.*)', line)
     if match:
         name, msg = match.group('name', 'msg')
         if msg.startswith('!'): return
-        return bot.send_msg(chan, '<%s:%s> %s' % (s_name, name, msg))
+        return bot.send_msg(chan, '<%s:%s> %s' % (s_name, p_name(), msg))
 
     # Connect
     match = re.match('(?P<name>\S+)\[[^\]]+\] logged in', line)
     if match:
         name = match.group('name')
-        return bot.send_msg(chan, '%s: %s joined the game.' % (s_name, name))
+        return bot.send_msg(chan, '%s: %s joined the game.' % (s_name, p_name()))
 
     # Disconnect
     match = re.match('(?P<name>\S+) lost connection', line)
     if match:
         name = match.group('name')
-        return bot.send_msg(chan, '%s: %s left the game.' % (s_name, name))
+        return bot.send_msg(chan, '%s: %s left the game.' % (s_name, p_name()))
 
     # Kick
     match = re.match(
         '\[(?P<op>\S+): Kicked (?P<victim>\S+) from the game\]', line)
     if match:
-        op, victim = match.group('op', 'victim')
-        return bot.send_msg(chan, '%s: %s left the game.' % (s_name, victim))
+        op, name = match.group('op', 'victim')
+        return bot.send_msg(chan, '%s: %s left the game.' % (s_name, p_name()))
 
     # Ban
     match = re.match(
         '\[(?P<op>\S+): Banned player (?P<victim>\S+)\]', line)
     if match:
-        op, victim = match.group('op', 'victim')
-        return bot.send_msg(chan, '%s: %s left the game.' % (s_name, victim))
+        op, name = match.group('op', 'victim')
+        return bot.send_msg(chan, '%s: %s left the game.' % (s_name, p_name()))
 
     # Death
     if is_death_message(line):
-        return bot.send_msg(chan, '%s: %s' % (s_name, line))
+        match = re.match(r'(?P<name>\S*)(?P<rest>.*)', line)
+        name, rest = match.group('name', 'rest')
+        return bot.send_msg(chan, '%s: %s%s' % (s_name, p_name(), rest))
 
 def is_death_message(msg):
     phrases = ('was squashed', 'was pricked', 'was shot', 'was blown up',
@@ -137,6 +142,6 @@ def kill_server():
     server = None
 
 def tell_server(msg):
-    head, tail = msg[:100], msg[100:]
-    server.dump('say %s\n' % head)
-    if tail: tell_server('... ' + tail)
+    head, tail = msg[:110], msg[110:]
+    server.dump('say %s%s\n' % (head, '...' if tail else ''))
+    if tail: tell_server('...' + tail)
