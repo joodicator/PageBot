@@ -19,6 +19,8 @@ def reply(bot, id, target, msg, prefix=True):
 def join(bot, source, chans, *args):
     id = ID(*source)
     for chan in chans.split(','):
+        yield sign('SOME_JOIN', bot, id, chan)
+        yield sign(('SOME_JOIN', chan), bot, id)
         if (id.nick.lower() == bot.nick.lower()):
             yield sign('SELF_JOIN', bot, chan)
             yield sign(('SELF_JOIN', chan), bot)
@@ -41,8 +43,8 @@ def part(bot, source, chans, msg=None, *args):
 def kicked(bot, op_id, chan, other_nick, msg=None, *args):
     op_id = ID(*op_id)
     if (other_nick.lower() == bot.nick.lower()):
-        yield sign('SELF_KICKED', bot, chan, msg)
-        yield sign(('SELF_KICKED', chan), bot, msg)
+        yield sign('SELF_KICKED', bot, chan, op_id, msg)
+        yield sign(('SELF_KICKED', chan), bot, op_id, msg)
     else:
         yield sign('OTHER_KICKED', bot, other_nick, op_id, chan, msg)
         yield sign(('OTHER_KICKED', chan), bot, other_nick, op_id, msg)

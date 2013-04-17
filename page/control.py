@@ -93,11 +93,13 @@ def _unload(bot, id, target, args, full_msg):
 @link('!reload')
 @admin
 def _reload(bot, id, target, args, full_msg):
-    expns = dict()
     local = filter(util.module_is_local, sys.modules.values())
     names = [m.__name__ for m in local]
     echo(bot, id, target, 'Reloading: ' + repr(names))
     
+    old_modules = dict()
+    expns = dict()
+
     # Uninstall all local modules (see util.module_is_local for definition).
     for module in local:
         if hasattr(module, 'uninstall'):
@@ -106,6 +108,7 @@ def _reload(bot, id, target, args, full_msg):
             except Exception as e:
                 expns[module.__name__] = e
         del sys.modules[module.__name__]
+        old_modules[module.__name__] = module
     if expns:
         echo(bot, id, target, 'Errors during uninstall: ' + repr(expns))
         expns.clear()
@@ -114,6 +117,7 @@ def _reload(bot, id, target, args, full_msg):
     for name in names:
         try:
             module = import_module(name)
+            if hasattr(module, 'reload'): module.reload(old_modules[name])
             if hasattr(module, 'install'): module.install(bot)
         except Exception as e:
             expns[name] = e

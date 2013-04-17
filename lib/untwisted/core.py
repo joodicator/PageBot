@@ -40,6 +40,9 @@ class Gear(object):
         for ind in self.tick_list:
             ind.poll.drive(TICK, ind)
 
+        import time
+        time.sleep(0.01)
+
     def process_rsock(self):
         for ind in self.rsock:
             ind.poll.drive(READ, ind)
