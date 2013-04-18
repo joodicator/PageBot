@@ -75,6 +75,7 @@ def compose(after, before):
 # Returns True if the given module was loaded from a file in or under the
 # directory containing the module containing this function, or otherwise False.
 def module_is_local(mod):
+    if hasattr(mod, '__is_local__'): return mod.__is_local__
     if not hasattr(mod, '__file__'): return
     root = os.path.dirname(__file__)
     return os.path.commonprefix([mod.__file__, root]) == root

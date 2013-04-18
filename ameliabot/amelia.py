@@ -20,7 +20,7 @@ default_conf = {
     'host':         '0',
     'channels':     ['#untwisted'],
     'plugins':      [],
-    'timeout':      450, # 450s = 5m
+    'timeout':      180, # 180s = 3m
 }
 
 class AmeliaBot(Mac):
