@@ -23,7 +23,7 @@ def h_message(bot, id, msg):
         msg = match.group('msg')
         tell_server('%s: * %s %s' % (chan, id.nick, msg))
     else:
-        tell_server('<%s:%s> %s' % (chan, id.nick, msg))
+        tell_server('%s: <%s> %s' % (chan, id.nick, msg))
 
 @ab_link(('OTHER_JOIN', conf['channel']))
 def h_other_join(bot, id):
@@ -66,7 +66,7 @@ def h_found(server, line):
     if match:
         name, msg = match.group('name', 'msg')
         if msg.startswith('!'): return
-        return bot.send_msg(chan, '<%s:%s> %s' % (s_name, p_name(), msg))
+        return bot.send_msg(chan, '%s: <%s> %s' % (s_name, p_name(), msg))
 
     # Connect
     match = re.match('(?P<name>\S+)\[[^\]]+\] logged in', line)
@@ -142,7 +142,8 @@ def kill_server():
     server = None
 
 def tell_server(msg):
-    while msg:
+    while True:
         head, tail = msg[:100], msg[100:]
         server.dump('say %s%s\n' % (head, '...' if tail else ''))
-        msg = tail
+        if not tail: break
+        msg = '...' + tail
