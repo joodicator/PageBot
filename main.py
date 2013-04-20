@@ -11,7 +11,8 @@ conf = {
     'user':     'Page',
     'name':     'https://github.com/JosephCrowe/page-ircbot',
     'channels': ['#page'],
-    'plugins':  ['message', 'nickserv', 'auth', 'control', 'channel', 'tell']
+    'plugins':  ['runtime', 'message', 'nickserv', 'auth', 'control',
+                 'channel', 'tell']
 }
 execfile('conf/bot.py', conf)
 

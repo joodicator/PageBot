@@ -201,20 +201,15 @@ def h_other_join(bot, id, chan):
 def h_message(bot, id, target, msg):
     if target: deliver_msgs(bot, id, target)
 
-@link('NICK')
-def h_nick(bot, id, new_nick, *args):
+@link('OTHER_NICK_CHAN')
+def h_nick(bot, id, new_nick, chan):
     state = get_state()
     old_id = util.ID(*id)
     new_id = util.ID(new_nick, old_id.user, old_id.host)
-    for chan in {m.channel for m in state.msgs}:
-        names = yield channel.names(bot, chan)
-        names = map(str.lower, channel.strip_names(names))
-        if new_nick.lower() not in names: continue
-        new_msgs = {m for m in state.msgs
-                    if would_deliver(new_id, chan, m)
-                    and not would_deliver(old_id, chan, m)}
-        if not new_msgs: continue
-        notify_msgs(bot, new_id, chan)
+    new_msgs = {m for m in state.msgs
+                if would_deliver(new_id, chan, m)
+                and not would_deliver(old_id, chan, m)}
+    if new_msgs: notify_msgs(bot, new_id, chan)
 
 # Notify `id' of messages left for them in `chan', if any.
 def notify_msgs(bot, id, chan):

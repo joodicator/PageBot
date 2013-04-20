@@ -57,6 +57,16 @@ def quit(bot, source, msg=None, *args):
     else:
         yield sign('OTHER_QUIT', bot, id, msg)
 
+@link('NICK')
+def nick(bot, id, new_nick, *args):
+    id = ID(*id)
+    yield sign('SOME_NICK', bot, id, new_nick)
+    if id.nick.lower() == bot.nick.lower():
+        yield sign('SELF_NICK', bot, new_nick)
+        bot.nick = new_nick
+    else:
+        yield sign('OTHER_NICK', bot, id, new_nick)
+
 @link('PRIVMSG')
 def privmsg(bot, source, target, msg, *args):
     if target == bot.nick: target = None

@@ -121,8 +121,25 @@ def msign(target, event, *args, **kwds):
     return act
 
 # Returns an object which may be yielded in an untwisted event handler to
-# raise `event' with the given arguments, waiting for a response event of the
-# form `(event, *args)' with a single argument, and obtaining this argument.
+# raise `event' in `mode' with the given arguments, waiting for a response
+# event of the form `(event, *args)' with a single argument, and obtaining
+# this argument.
+def mmcall(mode, event, *args):
+    import untwisted.usual
+    token = (event,) + args
+    def act(source, chain):
+        def ret(arg):
+            mode.unlink(token, ret)
+            try:
+                chain.send(arg)(source, chain)
+                untwisted.usual.chain(source, chain)
+            except StopIteration: pass
+        mode.link(token, ret)
+        mode.drive(event, *args)
+        raise StopIteration
+    return act
+
+# As mmcall, but assumes `mode' is the current mode.
 def mcall(event, *args):
     import untwisted.usual
     token = (event,) + args
