@@ -6,6 +6,7 @@ import untwisted.event as u_event
 import untwisted.network as u_network
 import untwisted.utils.std as u_std
 
+import runtime
 import util
 
 conf = util.fdict('conf/minecraft.py')
@@ -47,6 +48,11 @@ def h_other_quit(bot, id, msg):
     chan = conf['channel']
     tell_server('%s: %s quit the network' % (chan, id.nick)
         + ((' (%s)' % msg) if msg else '') + '.')
+
+@ab_link(('OTHER_NICK_CHAN', conf['channel'].lower()))
+def h_other_nick(bot, id, new_nick):
+    chan = conf['channel']
+    tell_server('%s: %s is now known as %s' % (chan, id.nick, new_nick))
 
 @mc_link(u_event.FOUND)
 def h_found(server, line):
@@ -131,7 +137,7 @@ def init_server():
     server.link(u_event.DATA, u_common.append)
     server.link(u_event.BUFFER, u_common.shrug, '\n')
     mc_link.install(server)
-    server.connect(conf['server_address'])
+    server.connect_ex(conf['server_address'])
 
 def kill_server():
     global server
@@ -147,3 +153,10 @@ def tell_server(msg):
         server.dump('say %s%s\n' % (head, '...' if tail else ''))
         if not tail: break
         msg = '...' + tail
+
+@mc_link(u_event.CLOSE)
+@mc_link(u_event.RECV_ERR)
+def h_close(server, *args):
+    kill_server()
+    yield runtime.sleep(1)
+    init_server()

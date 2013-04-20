@@ -77,3 +77,16 @@ def h_other_quit(bot, id, msg):
         track_channels[chan] = names
         yield sign('OTHER_QUIT_CHAN', bot, id, chan, msg)
         yield sign(('OTHER_QUIT_CHAN', chan), bot, id, msg)
+
+@link('SOME_NICK')
+def h_other_nick(bot, id, new_nick):
+    old_nick = id.nick.lower()
+    for chan, names in track_channels.iteritems():
+        if old_nick not in map(str.lower, names): continue
+        names = map(lambda n: new_nick if n.lower() == old_nick else n, names)
+        track_channels[chan] = names
+        yield sign('SOME_NICK_CHAN', bot, id, new_nick, chan)
+        yield sign(('SOME_NICK_CHAN', chan), bot, id, new_nick)
+        if old_nick != bot.nick.lower():
+            yield sign('OTHER_NICK_CHAN', bot, id, new_nick, chan)
+            yield sign(('OTHER_NICK_CHAN', chan), bot, id, new_nick)
