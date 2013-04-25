@@ -45,7 +45,7 @@ class Mode(object):
 
         self.base[event, callback] = args
 
-    def unlink(self, event, callback):
+    def unlink(self, event, callback, *args):
         """ This function unmap an event to a callback. """
 
         del self.base[event, callback]

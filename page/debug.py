@@ -1,4 +1,5 @@
 import untwisted.event
+from control import NotInstalled
 
 def install(bot):
     old_drive = bot.drive
@@ -25,7 +26,10 @@ def install(bot):
     bot._debug_uninstall = uninstall
 
 def uninstall(bot):
-    bot._debug_uninstall()
+    if hasattr(bot, '_debug_uninstall'):
+        bot._debug_uninstall()
+    else:
+        raise NotInstalled
 
 def numeric(event):
     for name, number in untwisted.event.__dict__.iteritems():
