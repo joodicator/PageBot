@@ -16,15 +16,6 @@ ID = namedtuple('ID', ('nick', 'user', 'host'))
 def bind(func, inst):
     return instancemethod(func, inst, inst.__class__)
 
-# Reads a list of namedtuples from a file, where each line evalutes to a tuple,
-# and the first line is a tuple of strings giving the names. Lines containing
-# only whitespace are ignored.
-def table(path, name='table_row'):
-    with open(path) as file:
-        lines = ifilter(re.compile(r'\S').search, file)
-        head = namedtuple(name, eval(lines.next()))
-        return map(lambda t: head(*t), imap(eval, lines))
-
 # Executes a file of Python statements, returning the resulting dictionary of local
 # bindings, in which any top-level classes have been changed to dicts, and, if
 # present, in the context of the given dictionary of global bindings.
@@ -55,12 +46,23 @@ def event_sub(mode, find, repl):
         mode.unlink(find, func)
         mode.link(repl, func)
 
+# Reads a list of namedtuples from a file, where each line evalutes to a tuple,
+# and the first line is a tuple of strings giving the names. Lines containing
+# only whitespace or starting with '#' are ignored. The given global and local
+# dictionaries are passed to eval().
+def table(path, name='table_row', globals=None, locals=None):
+    lines = read_list(path, globals, locals)
+    head = namedtuple(name, lines[0])
+    return map(lambda t: head(*t), lines[1:])
+
 # Read a list of values from the given file, which must contain one Python
-# expression on each non-empty line. The given dictionaries are passed to eval.
+# expression on each non-empty line not starting with '#'.
+# The given dictionaries are passed to eval().
 def read_list(path, globals=None, locals=None):
     not_empty = re.compile('\S').search
     with open(path) as file:
-        return [eval(line, globals, locals) for line in file if not_empty(line)]
+        return [eval(line, globals, locals) for line in file
+                if not_empty(line) and not line.startswith('#')]
 
 # Writes the result of calling repr on each of the given list of values to the
 # given file, one one each line.
@@ -158,10 +160,11 @@ def mcall(event, *args):
 # A LinkSet maintains a list of bindings between events and event handlers,
 # providing some convenience methods for changing and using this list.
 class LinkSet(object):
-    __slots__ = 'links'
+    __slots__ = 'links', 'modules'
     
     def __init__(self):
         self.links = []
+        self.modules = []
     
     # When called, a LinkSet produces a decorator that just adds a given handler
     # bound to each of the the given events, to its list.
@@ -172,14 +175,28 @@ class LinkSet(object):
             self.links.append((event, func) + args)
             return func
         return link
+
+    def link(self, *args):
+        self.links.append(args)
+    
+    def unlink(self, *args):
+        self.links.remove(args)
+
+    def link_module(self, module):
+        self.modules.append(module)
+
+    def unlink_module(self, module):
+        self.modules.remove(module)
     
     # Installs all the current event bindings into the given Mode instance.
     def install(self, mode):
         for link in self.links: mode.link(*link)
+        for module in self.modules: module.install(mode)
     
     # Uninstalls the current event bindings from the given Mode instance.
     def uninstall(self, mode):
         for link in self.links: mode.unlink(*link)
+        for module in self.modules: module.uninstall(mode)
     
     # Maps the given function over the current bindings, returning a pair of
     # functions that respectively install and uninstall the resulting bindings.
@@ -194,26 +211,3 @@ class LinkSet(object):
     # Syntactic sugar for one-line inclusion in modules.
     def triple(self):
         return self, self.install, self.uninstall
-
-'''
-# Given a function which might be called in the following way:
-#   def func(finish, *args, **kwds):
-#       ...
-#       yield sign(token, RETURN_VALUE)
-def aync(callee):
-    from untwisted.usual import chain, apply
-    def decorated(*args, **kwds):
-        def act(mode, caller_gen):
-            token = object()
-            callee_gen = calee(token, *args, **kwds)            
-            mode.link(token, result, caller_gen, callee_gen)
-            chain(callee_gen)
-        return act
-    def result(mode, return_value, caller_gen, callee_gen):
-        callee_gen.
-        try:
-            caller_gen.send(return_value)()
-            chain(caller_gen)
-        except StopIteration: pass            
-    return decorated
-'''

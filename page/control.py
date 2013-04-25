@@ -1,4 +1,5 @@
 from importlib import import_module
+import traceback
 import sys
 import re
 
@@ -78,6 +79,7 @@ def _load(bot, id, target, args, full_msg):
         echo(bot, id, target, 'Done.')
     except Exception as e:
         echo(bot, id, target, repr(e))
+        traceback.print_exc()
 
 @link('!unload')
 @admin
@@ -88,7 +90,12 @@ def _unload(bot, id, target, args, full_msg):
         del sys.modules[args]
     except KeyError as e:
         echo(bot, id, target, repr(e))
+        traceback.print_exc()
     echo(bot, id, target, 'Done.')
+
+
+class NotInstalled(Exception):
+    pass
 
 @link('!reload')
 @admin
@@ -105,8 +112,11 @@ def _reload(bot, id, target, args, full_msg):
         if hasattr(module, 'uninstall'):
             try:
                 module.uninstall(bot)
+            except NotInstalled:
+                names.remove(module.__name__)
             except Exception as e:
                 expns[module.__name__] = e
+                traceback.print_exc()
         del sys.modules[module.__name__]
         old_modules[module.__name__] = module
     if expns:
@@ -121,6 +131,7 @@ def _reload(bot, id, target, args, full_msg):
             if hasattr(module, 'install'): module.install(bot)
         except Exception as e:
             expns[name] = e
+            traceback.print_exc()
     if expns:
         echo(bot, id, target, 'Errors during reinstall: ' + repr(expns))
 

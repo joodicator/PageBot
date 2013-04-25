@@ -5,6 +5,10 @@ def install(obj):
     obj.link(READ, update)
     obj.link(WRITE, flush)
 
+def uninstall(obj):
+    obj.unlink(READ, update)
+    obj.unlink(WRITE, flush)
+
 def update(obj):
     if obj.server:
         yield sign(ACCEPT, obj)
