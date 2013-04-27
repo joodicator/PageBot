@@ -44,7 +44,6 @@ class AmeliaBot(Mac):
         xirclib.install(self)
         self.link('433', self.err_nicknameinuse)
         self.link('001', self.registered)
-        self.link(CLOSE, self.h_close)
         
         # Load plugins
         def plugins():
@@ -60,10 +59,6 @@ class AmeliaBot(Mac):
         self.send_cmd('NICK %s' % self.nick)
         self.send_cmd('USER %(user)s %(host)s %(server)s :%(name)s' % self.conf) 
 
-    def h_close(self, bot):
-        print '! disconnected'
-        sys.exit(0)
- 
     def err_nicknameinuse(self, bot, *args):
         self.nick += "_"
         self.send_cmd('NICK %s' % self.nick)
