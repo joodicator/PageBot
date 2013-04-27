@@ -152,20 +152,20 @@ def ab_other_join(bot, id, chan):
 
 @ab_link('OTHER_PART')
 def ab_other_part(bot, id, chan, msg):
-    cmsg = '%s left the channel.' % id.nick \
-        + ((' (%s)' % msg) if msg else '') + '.'
+    cmsg = '%s left the channel' % \
+        (id.nick, (' (%s)' % msg) if msg else '')
     yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
 
 @ab_link('OTHER_KICKED')
 def ab_other_kick(bot, other_nick, op_id, chan, msg):
-    cmsg = '%s was kicked by %s.' % (other_nick, op_id.nick) \
-        + ((' (%s)' % msg) if msg else '') + '.'
+    cmsg = '%s was kicked by %s' % \
+        (other_nick, op_id.nick, (' (%s)' % msg) if msg else '')
     yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
 
 @ab_link('OTHER_QUIT_CHAN')
 def ab_other_quit(bot, id, chan, msg):
-    cmsg = '%s quit the network.' % id.nick \
-        + ((' (%s)' % msg) if msg else '') + '.'
+    cmsg = '%s quit the network%s.' % \
+        (id.nick, (' (%s)' % msg) if msg else '')
     yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
 
 @ab_link('OTHER_NICK_CHAN')
