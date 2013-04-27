@@ -6,7 +6,7 @@ import socket
 
 from untwisted.mode import Mode
 from untwisted.network import Work
-from untwisted.event import DATA, BUFFER, FOUND
+from untwisted.event import DATA, BUFFER, FOUND, CLOSE, RECV_ERR
 from untwisted.utils import std
 from untwisted.utils.common import append, shrug
 
@@ -14,7 +14,10 @@ import re
 import sys
 import util
 import debug
+import runtime
 
+
+RECONNECT_DELAY_SECONDS = 1
 
 conf_servers = util.table('conf/mc_servers.py', 'server', socket.__dict__)
 conf_channels = util.read_list('conf/mc_channels.py')
@@ -23,14 +26,29 @@ channels = map(lambda l: map(str.lower, l), conf_channels)
 
 mc_work = []
 mc_mode = Mode()
+mc_mode.domain = 'mc'
 mc_link = util.LinkSet()
 mc_link.link_module(std)
 mc_link.link(DATA, append)
 mc_link.link(BUFFER, shrug, '\n')
+if '--debug' in sys.argv: mc_link.link_module(debug)
 
 ab_mode = None
 ab_link = util.LinkSet()
 
+
+def init_work(server):
+    sock = socket.socket(server.family, socket.SOCK_STREAM)
+    work = Work(mc_mode, sock)
+    mc_work.append(work)
+    work.minecraft = server
+    work.connect_ex(server.address)
+
+def kill_work(work):
+    work.destroy()
+    work.shutdown(socket.SHUT_RDWR)
+    work.close()
+    mc_work.remove(work)
 
 def install(bot):
     global ab_mode
@@ -38,20 +56,15 @@ def install(bot):
     ab_link.install(ab_mode)
 
     mc_link.install(mc_mode)
+    names = set(s for c in channels for s in c)
     for server in conf_servers:
-        sock = socket.socket(server.family, socket.SOCK_STREAM)
-        work = Work(mc_mode, sock)
-        mc_work.append(work)
-        work.minecraft = server
-        work.connect_ex(server.address)
+        if server.name.lower() not in names: continue
+        init_work(server)
 
 def uninstall(bot):
     mc_link.uninstall(mc_mode)
-    for work in mc_work:
-        work.destroy()
-        work.shutdown(socket.SHUT_RDWR)
-        work.close()
-    mc_work[:] = []
+    while len(mc_work):
+        kill_work(mc_work[0])
 
     global ab_mode
     ab_link.uninstall(ab_mode)
@@ -109,6 +122,13 @@ def mc_found(work, line):
     if line.startswith('<%s>' % work.minecraft.agent): return
     yield util.msign(mc_mode, 'SERVER_MSG', work.minecraft.name, line)
 
+@mc_link(CLOSE)
+@mc_link(RECV_ERR)
+def mc_close_recv_error(work, *args):
+    kill_work(work)
+    yield runtime.sleep(RECONNECT_DELAY_SECONDS)
+    init_work(work.minecraft)
+
 
 @ab_link('MESSAGE')
 def ab_message(bot, id, chan, msg):
@@ -127,24 +147,44 @@ def ab_other_join(bot, id, chan):
 
 @ab_link('OTHER_PART')
 def ab_other_part(bot, id, chan, msg):
-    cmsg = '%s left the channel' % id.nick \
+    cmsg = '%s left the channel.' % id.nick \
         + ((' (%s)' % msg) if msg else '') + '.'
     yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
 
 @ab_link('OTHER_KICKED')
 def ab_other_kick(bot, other_nick, op_id, chan, msg):
-    cmsg = '%s was kicked by %s' % (other_nick, op_id.nick) \
+    cmsg = '%s was kicked by %s.' % (other_nick, op_id.nick) \
         + ((' (%s)' % msg) if msg else '') + '.'
     yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
 
 @ab_link('OTHER_QUIT_CHAN')
 def ab_other_quit(bot, id, chan, msg):
-    cmsg = '%s quit the network' % id.nick \
+    cmsg = '%s quit the network.' % id.nick \
         + ((' (%s)' % msg) if msg else '') + '.'
     yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
 
 @ab_link('OTHER_NICK_CHAN')
 def ab_other_nick(bot, id, chan, new_nick):
-    cmsg = '%s is now known as %s' % (id.nick, new_nick)
+    cmsg = '%s is now known as %s.' % (id.nick, new_nick)
     yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
 
+@ab_link('SELF_JOIN')
+def ab_self_join(bot, chan):
+    cmsg = 'Joined the channel.'
+    yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
+
+@ab_link('SELF_PART')
+def ab_self_part(bot, chan, msg):
+    cmsg = 'Left the channel%s.' % ((' (%s)' % msg) if msg else '')
+    yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
+
+@ab_link('SELF_KICKED')
+def ab_self_kicked(bot, chan, op_id, msg):
+    cmsg = 'Kicked from the channel by %s%s.' % \
+        (op_id.nick, (' (%s)' % msg) if msg else '')
+    yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
+
+@ab_link('CLOSING_CHAN')
+def ab_self_quit(bot, chan):
+    cmsg = 'Disconnected from the network.'
+    yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)

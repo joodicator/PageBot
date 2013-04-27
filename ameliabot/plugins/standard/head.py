@@ -1,5 +1,6 @@
 from untwisted.event import CLOSE, TICK, FOUND
 from untwisted.magic import sign
+import socket
 import time
 
 __is_local__ = True
@@ -10,13 +11,13 @@ ping_sent = False
 def install(poll):
     poll.link('PING', ping)
     poll.link(TICK, tick)
-    poll.link(CLOSE, handle_close)
+    poll.link('CLOSING', handle_close)
     poll.link(FOUND, found)
 
 def uninstall(poll):
     poll.unlink('PING', ping)
     poll.unlink(TICK, tick)
-    poll.unlink(CLOSE, handle_close)
+    poll.unlink('CLOSING', handle_close)
     poll.unlink(FOUND, found)
 
 def ping(bot, prefix, server):
@@ -40,6 +41,5 @@ def tick(bot):
         yield sign(CLOSE, bot)
 
 def handle_close(bot):
-    bot.shutdown()
+    bot.shutdown(socket.SHUT_RDWR)
     bot.close()
-    bot.destroy()

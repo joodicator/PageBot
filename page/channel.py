@@ -69,6 +69,12 @@ def h_other_kicked(bot, nick, op_id, chan, *args):
     names = [n for n in names if n.lower() != nick.lower()]
     track_channels[chan] = names
 
+@link('SELF_QUIT')
+def h_self_quit(bot, msg):
+    for chan, names in track_channels.iteritems():
+        yield sign('SELF_QUIT_CHAN', bot, chan, msg)
+        yield sign(('SELF_QUIT_CHAN', chan), bot, msg)
+
 @link('OTHER_QUIT')
 def h_other_quit(bot, id, msg):
     for chan, names in track_channels.iteritems():
@@ -90,3 +96,9 @@ def h_other_nick(bot, id, new_nick):
         if old_nick != bot.nick.lower():
             yield sign('OTHER_NICK_CHAN', bot, id, new_nick, chan)
             yield sign(('OTHER_NICK_CHAN', chan), bot, id, new_nick)
+
+@link('CLOSING')
+def h_closing(bot):
+    for chan, names in track_channels.iteritems():
+        yield sign('CLOSING_CHAN', bot, chan)
+        yield sign(('CLOSING_CHAN', chan), bot)

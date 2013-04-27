@@ -18,5 +18,14 @@ execfile('conf/bot.py', conf)
 
 if '--debug' in sys.argv: conf['plugins'].insert(0, 'debug')
 
+
 import amelia
-amelia.AmeliaBot(conf).mainloop()
+from untwisted.event import CLOSE
+
+bot = amelia.AmeliaBot(conf)
+bot.domain = 'bot'
+try:
+    bot.mainloop()
+except BaseException as e:
+    bot.drive('EXCEPTION', bot, e)
+    bot.mainloop()

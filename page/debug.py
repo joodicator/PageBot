@@ -11,7 +11,13 @@ def install(bot):
             event = numeric(event)
         else:
             event = repr(event)
-        print '@ %s %s' % (event, args)
+
+        if hasattr(bot, 'domain'):
+            domain = bot.domain
+        else:
+            domain = id(bot)
+
+        print '@%s %s %s' % (domain, event, args)
 
     def new_drive(event, *args):
         drive(event, *args)
