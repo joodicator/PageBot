@@ -52,9 +52,9 @@ def kill_work(work):
     mc_work.remove(work)
 
 def install(bot):
+    global ab_mode
     if ab_mode is not None: raise AlreadyInstalled
 
-    global ab_mode
     ab_mode = bot
     ab_link.install(ab_mode)
 
@@ -65,13 +65,13 @@ def install(bot):
         init_work(server)
 
 def uninstall(bot):
+    global ab_mode
     if ab_mode is None: raise NotInstalled
 
     mc_link.uninstall(mc_mode)
     while len(mc_work):
         kill_work(mc_work[0])
 
-    global ab_mode
     ab_link.uninstall(ab_mode)
     ab_mode = None
 
