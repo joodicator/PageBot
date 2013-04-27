@@ -97,9 +97,10 @@ def notify_server(server, msg, source):
         msg = msg.replace('§', 'S')
     else:
         msg = re.sub(r'§.?', '', msg)
+    msg = re.sub(r'[\x00-\x1f]', '', msg)
     for work in mc_work:
         if work.minecraft.name.lower() != server.lower(): continue
-        work.dump('%s\n' % msg)
+        work.dump(msg.encode('utf8') + '\n')
         break
 
 
