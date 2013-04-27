@@ -70,6 +70,13 @@ def _mcall(bot, id, target, args, full_msg):
         result = e
     echo(bot, id, target, repr(result))
 
+
+class NotInstalled(Exception):
+    pass
+
+class AlreadyInstalled(Exception):
+    pass
+
 @link('!load')
 @admin
 def _load(bot, id, target, args, full_msg):
@@ -88,14 +95,10 @@ def _unload(bot, id, target, args, full_msg):
         mod = sys.modules[args]
         if hasattr(mod, 'uninstall'): mod.uninstall(bot)
         del sys.modules[args]
-    except KeyError as e:
+    except Exception as e:
         echo(bot, id, target, repr(e))
         traceback.print_exc()
     echo(bot, id, target, 'Done.')
-
-
-class NotInstalled(Exception):
-    pass
 
 @link('!reload')
 @admin
