@@ -15,6 +15,7 @@ import sys
 import util
 import debug
 import runtime
+from control import NotInstalled, AlreadyInstalled
 
 
 RECONNECT_DELAY_SECONDS = 1
@@ -51,6 +52,8 @@ def kill_work(work):
     mc_work.remove(work)
 
 def install(bot):
+    if ab_mode is not None: raise AlreadyInstalled
+
     global ab_mode
     ab_mode = bot
     ab_link.install(ab_mode)
@@ -62,6 +65,8 @@ def install(bot):
         init_work(server)
 
 def uninstall(bot):
+    if ab_mode is None: raise NotInstalled
+
     mc_link.uninstall(mc_mode)
     while len(mc_work):
         kill_work(mc_work[0])
@@ -113,7 +118,7 @@ def notify_server(server, msg, source):
     msg = re.sub(r'[\x00-\x1f]', '', msg)
     for work in mc_work:
         if work.minecraft.name.lower() != server.lower(): continue
-        work.dump(msg.encode('utf8') + '\n')
+        work.dump(msg + '\n')
         break
 
 
