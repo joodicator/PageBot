@@ -14,6 +14,7 @@ import re
 import sys
 import util
 import debug
+from control import NotInstalled, AlreadyInstalled
 
 
 conf_servers = util.table('conf/mc_servers.py', 'server', socket.__dict__)
@@ -33,6 +34,8 @@ ab_link = util.LinkSet()
 
 
 def install(bot):
+    if ab_mode is not None: raise AlreadyInstalled
+
     global ab_mode
     ab_mode = bot
     ab_link.install(ab_mode)
@@ -46,6 +49,8 @@ def install(bot):
         work.connect_ex(server.address)
 
 def uninstall(bot):
+    if ab_mode is None: raise NotInstalled
+
     mc_link.uninstall(mc_mode)
     for work in mc_work:
         work.destroy()
@@ -100,7 +105,7 @@ def notify_server(server, msg, source):
     msg = re.sub(r'[\x00-\x1f]', '', msg)
     for work in mc_work:
         if work.minecraft.name.lower() != server.lower(): continue
-        work.dump(msg.encode('utf8') + '\n')
+        work.dump(msg + '\n')
         break
 
 
