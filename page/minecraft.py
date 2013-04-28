@@ -79,7 +79,7 @@ def uninstall(bot):
 @mc_link('SERVER_MSG')
 @mc_link('CHANNEL_MSG')
 def mc_msg(source, msg):
-    if msg.startswith('!'): return
+    if re.match(r'(<\S+> |\* \S+ |)!', msg): return
     msg = '%s: %s' % (source, msg)
     for group in channels:
         if source.lower() not in group: continue
@@ -97,13 +97,8 @@ def notify_group(group, msg, source):
 def notify_channel(channel, msg, source):
     def escape(match):
         return {
-#            '0':'\x031',  '1':'\x032',  '2':'\x033',  '3':'\x0310',
-#            '4':'\x035',  '5':'\x036',  '6':'\x038',  '7':'\x0315',
-#            '8':'\x0314', '9':'\x0312', 'a':'\x039',  'b':'\x0311',
-#            'c':'\x034',  'd':'\x0313', 'e':'\x038',  'f':'\x0316',
             'l':'\x02',     # bold
             'n':'\x1f',     # underline
-#            'o':'\x1d',     # italic
             'r':'\x0f'      # regular
         }.get(match.group(1), '')
     if not source.startswith('#'):
@@ -137,7 +132,6 @@ def mc_close_recv_error(work, *args):
 
 @ab_link('MESSAGE')
 def ab_message(bot, id, chan, msg):
-    if msg.startswith('!'): return
     match = re.match(r'\x01ACTION (?P<msg>.*)', msg)
     if match:
         cmsg = '* %s %s' % (id.nick, match.group('msg'))
