@@ -163,7 +163,7 @@ def ab_other_quit(bot, id, chan, msg):
     yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
 
 @ab_link('OTHER_NICK_CHAN')
-def ab_other_nick(bot, id, chan, new_nick):
+def ab_other_nick(bot, id, new_nick, chan):
     cmsg = '%s is now known as %s.' % (id.nick, new_nick)
     yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
 
