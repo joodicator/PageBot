@@ -86,10 +86,8 @@ class Work(socket):
         self.queue   = self.queue + data
 
     def destroy(self):
-        gear.rlist.remove(self)
-        gear.wlist.remove(self)
-        gear.xlist.remove(self)
-        gear.tick_list.remove(self)
+        for l in gear.rlist, gear.wlist, gear.xlist, gear.tick_list:
+            if self in l: l.remove(self)
 
 """ These are exotic names for classes.
     Howevr, the intention isn't being meaningful
