@@ -20,10 +20,8 @@ from control import NotInstalled, AlreadyInstalled
 
 RECONNECT_DELAY_SECONDS = 1
 
-conf_servers = util.table('conf/mc_servers.py', 'server', socket.__dict__)
-conf_channels = util.read_list('conf/mc_channels.py')
+conf_servers = util.table('conf/minecraft.py', 'server', socket.__dict__)
 
-channels = map(lambda l: map(str.lower, l), conf_channels)
 
 mc_work = []
 mc_mode = Mode()
@@ -59,9 +57,7 @@ def install(bot):
     ab_link.install(ab_mode)
 
     mc_link.install(mc_mode)
-    names = set(s for c in channels for s in c)
     for server in conf_servers:
-        if server.name.lower() not in names: continue
         init_work(server)
 
 def uninstall(bot):
@@ -76,51 +72,21 @@ def uninstall(bot):
     ab_mode = None
 
 
-@mc_link('SERVER_MSG')
-@mc_link('CHANNEL_MSG')
-def mc_msg(source, msg):
-    if re.match(r'(<\S+> |\* \S+ |)!', msg): return
-    msg = '%s: %s' % (source, msg)
-    for group in channels:
-        if source.lower() not in group: continue
-        notify_group(group, msg, source)
-
-
-def notify_group(group, msg, source):
-    for target in group:
-        if target.lower() == source.lower(): continue
-        if target.startswith('#'):
-            notify_channel(target, msg, source)
-        else:
-            notify_server(target, msg, source)
-
-def notify_channel(channel, msg, source):
-    def escape(match):
-        return {
-            'l':'\x02',     # bold
-            'n':'\x1f',     # underline
-            'r':'\x0f'      # regular
-        }.get(match.group(1), '')
-    if not source.startswith('#'):
-        msg = re.sub(r'§(.?)', escape, msg)
-    ab_mode.send_msg(channel, msg)
-
-def notify_server(server, msg, source):
-    if source.startswith('#'):
-        msg = msg.replace('§', 'S')
-    else:
-        msg = re.sub(r'§.?', '', msg)
-    msg = re.sub(r'[\x00-\x1f]', '', msg)
+@ab_link('BRIDGE')
+def ab_bridge(bot, target_chan, msg):
+    msg = re.sub(r'[\x00-\x1f]', '', msg).replace('§', 'S')
     for work in mc_work:
-        if work.minecraft.name.lower() != server.lower(): continue
+        if work.minecraft.name.lower() != target_chan.lower(): continue
         work.dump(msg + '\n')
-        break
 
 
 @mc_link(FOUND)
 def mc_found(work, line):
+    line = re.sub(r'§.', '', line)
     if line.startswith('<%s>' % work.minecraft.agent): return
-    yield util.msign(mc_mode, 'SERVER_MSG', work.minecraft.name, line)
+    if re.match(r'(<\S+> |\* \S+ |)!', line): return
+    yield util.msign(ab_mode, 'MINECRAFT', ab_mode, work.minecraft.name, line)
+
 
 @mc_link(CLOSE)
 @mc_link(RECV_ERR)
@@ -128,62 +94,3 @@ def mc_close_recv_error(work, *args):
     kill_work(work)
     yield runtime.sleep(RECONNECT_DELAY_SECONDS)
     init_work(work.minecraft)
-
-
-@ab_link('MESSAGE')
-def ab_message(bot, id, chan, msg):
-    match = re.match(r'\x01ACTION (?P<msg>.*)', msg)
-    if match:
-        cmsg = '* %s %s' % (id.nick, match.group('msg'))
-    else:
-        cmsg = '<%s> %s' % (id.nick, msg)
-    yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
-
-@ab_link('OTHER_JOIN')
-def ab_other_join(bot, id, chan):
-    cmsg = '%s joined the channel.' % id.nick
-    yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
-
-@ab_link('OTHER_PART')
-def ab_other_part(bot, id, chan, msg):
-    cmsg = '%s left the channel' % \
-        (id.nick, (' (%s)' % msg) if msg else '')
-    yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
-
-@ab_link('OTHER_KICKED')
-def ab_other_kick(bot, other_nick, op_id, chan, msg):
-    cmsg = '%s was kicked by %s' % \
-        (other_nick, op_id.nick, (' (%s)' % msg) if msg else '')
-    yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
-
-@ab_link('OTHER_QUIT_CHAN')
-def ab_other_quit(bot, id, chan, msg):
-    cmsg = '%s quit the network%s.' % \
-        (id.nick, (' (%s)' % msg) if msg else '')
-    yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
-
-@ab_link('OTHER_NICK_CHAN')
-def ab_other_nick(bot, id, new_nick, chan):
-    cmsg = '%s is now known as %s.' % (id.nick, new_nick)
-    yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
-
-@ab_link('SELF_JOIN')
-def ab_self_join(bot, chan):
-    cmsg = 'Joined the channel.'
-    yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
-
-@ab_link('SELF_PART')
-def ab_self_part(bot, chan, msg):
-    cmsg = 'Left the channel%s.' % ((' (%s)' % msg) if msg else '')
-    yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
-
-@ab_link('SELF_KICKED')
-def ab_self_kicked(bot, chan, op_id, msg):
-    cmsg = 'Kicked from the channel by %s%s.' % \
-        (op_id.nick, (' (%s)' % msg) if msg else '')
-    yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
-
-@ab_link('CLOSING_CHAN')
-def ab_self_quit(bot, chan):
-    cmsg = 'Disconnected from the network.'
-    yield util.msign(mc_mode, 'CHANNEL_MSG', chan, cmsg)
