@@ -1,13 +1,14 @@
 import untwisted.event
 from control import NotInstalled
 
-def install(bot):
+def install(bot, no_numeric=False):
     old_drive = bot.drive
     def drive(event, *args):
         if event == untwisted.event.TICK: return
         if event == untwisted.event.READ: return
         if event == untwisted.event.WRITE: return
         if type(event) == int:
+            if no_numeric: return
             event = numeric(event)
         else:
             event = repr(event)
