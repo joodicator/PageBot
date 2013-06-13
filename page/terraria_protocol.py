@@ -33,11 +33,12 @@ def uninstall(mode):
 
 @link(event.BUFFER)
 def h_buffer(work, data):
-    if len(data) < 5: return
-    length, type = struct.unpack('<iB', data[:5])
-    if len(data) < length: return
-    yield sign('MESSAGE', work, type, data[4:][1:length])
-    work.stack = data[4:][length:]
+    while len(data) > 4:
+        length, type = struct.unpack('<iB', data[:5])
+        if len(data) < length + 4: break
+        yield sign('MESSAGE', work, type, data[4:][1:length])
+        data = data[4:][length:]
+    work.stack = data
 
 
 @link('MESSAGE')
@@ -61,8 +62,8 @@ def h_message(work, head, body):
     elif head == 0x07:
         spawn = struct.unpack('<ii', body[15:23])
         yield sign('WORLD_INFORMATION', work, spawn)
-    else:
-        yield sign('UNKNOWN', work, '$%02X' % head)
+    elif head not in (0x0a, 0x14, 0x17, 0x1a, 0x1b, 0x1c, 0x1d):
+        yield sign('UNKNOWN', work, '$%02X' % head, body)
 
 
 def h_debug(bot, *args):
@@ -140,6 +141,7 @@ def login(work, name, version='Terraria39'):
     class TerrariaProtocol(object): pass
     work.terraria_protocol = TerrariaProtocol()
     work.terraria_protocol.chat_queue = []
+    work.terraria_protocol.players = dict()
     work.terraria_protocol.stage = 0
     work.terraria_protocol.name = name
     work.terraria_protocol.version = version
@@ -158,8 +160,8 @@ def h_connection_approved(work, slot):
     work.terraria_protocol.stage = 1
     work.terraria_protocol.slot = slot
     send_player_appearance(work, slot, work.terraria_protocol.name)
-    send_set_player_life(work, slot, 0, 0)
-    send_set_player_mana(work, slot, 0, 0)
+    send_set_player_life(work, slot, 100, 100)
+    send_set_player_mana(work, slot, 100, 100)
     send_set_player_buffs(work, slot, [0 for i in xrange(10)])
     for islot in xrange(60):
         send_set_inventory(work, slot, islot, 0, 0, 0)
@@ -171,8 +173,7 @@ def h_world_information(work, spawn):
     if work.terraria_protocol.stage != 1: return
     work.terraria_protocol.stage = 2
     work.terraria_protocol.spawn = spawn
-    send_request_initial_tile_data(work, *spawn)
-    h_spawn(work)
+    send_request_initial_tile_data(work, -1, -1)
 
 @link('SPAWN')
 def h_spawn(work):
@@ -185,3 +186,8 @@ def h_spawn(work):
     for text in work.terraria_protocol.chat_queue:
         chat(work, text)
     work.terraria_protocol.chat_queue = []
+
+@link('PLAYER_APPEARANCE')
+def h_player_appearance(work, slot, name):
+    if not hasattr(work, 'terraria_protocol'): return
+    work.terraria_protocol.players[slot] = name
