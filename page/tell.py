@@ -129,7 +129,7 @@ def h_help_untell(bot, reply, args):
 
 @link('!untell')
 def h_untell(bot, id, target, args, full_msg):
-    # Secrely, arguments may prepend the arguments the target channel.
+    # Secrely, arguments may prepend the arguments with the target channel.
     match = re.match(r'(#\S+)\s+(.*)', args)
     if match:
         is_admin = yield auth.check(bot, id)
