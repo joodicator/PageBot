@@ -1,5 +1,7 @@
 from __future__ import print_function
 
+import runtime
+
 from untwisted import event
 from untwisted.utils import common
 from untwisted.utils import std
@@ -9,6 +11,9 @@ from untwisted import event
 import util
 import struct
 import sys
+
+
+__is_local__ = False
 
 
 link = util.LinkSet()
@@ -44,7 +49,7 @@ def h_buffer(work, data):
 @link('MESSAGE')
 def h_message(work, head, body):
     if head == 0x02:
-        yield sign('FATAL_ERROR', work, body)
+        yield sign('DISCONNECT', work, body)
     elif head == 0x03:
         slot, = struct.unpack('<B', body[:1])
         yield sign('CONNECTION_APPROVED', work, slot)
@@ -52,6 +57,10 @@ def h_message(work, head, body):
         slot, = struct.unpack('<B', body[:1])
         name = body[25:]
         yield sign('PLAYER_APPEARANCE', work, slot, name)
+    elif head == 0x09:
+        count = struct.unpack('<i', body[:4])
+        text = body[4:]
+        yield sign('STATUSBAR_TEXT', work, count, text)
     elif head == 0x19:
         slot, = struct.unpack('<B', body[:1])
         colour = struct.unpack('<BBB', body[1:4])
@@ -70,7 +79,7 @@ def h_debug(bot, *args):
     print('> %s %s' % (args[-1], args[:-1]), file=sys.stderr)
 
 for h in (
-    'UNKNOWN', 'FATAL_ERROR', 'CONNECTION_APPROVED', 'PLAYER_APPEARANCE',
+    'DISCONNECT', 'CONNECTION_APPROVED', 'PLAYER_APPEARANCE',
     'CHAT', 'SPAWN', 'WORLD_INFORMATION'
 ): debug_link.link(h, h_debug, h)
 
@@ -153,12 +162,16 @@ def chat(work, text, colour=(255,255,255)):
     else:
         send_chat(work, work.terraria_protocol.slot, colour, text)    
 
+def close(work):
+    del work.terraria_protocol
+
 @link('CONNECTION_APPROVED')
 def h_connection_approved(work, slot):
     if not hasattr(work, 'terraria_protocol'): return
     if work.terraria_protocol.stage != 0: return
     work.terraria_protocol.stage = 1
     work.terraria_protocol.slot = slot
+    work.terraria_protocol.players[slot] = work.terraria_protocol.name
     send_player_appearance(work, slot, work.terraria_protocol.name)
     send_set_player_life(work, slot, 100, 100)
     send_set_player_mana(work, slot, 100, 100)
@@ -186,6 +199,13 @@ def h_spawn(work):
     for text in work.terraria_protocol.chat_queue:
         chat(work, text)
     work.terraria_protocol.chat_queue = []
+    yield sign('HEARTBEAT', work)
+
+@link('HEARTBEAT')
+def h_heartbeat(work):
+    while hasattr(work, 'terraria_protocol'):
+        yield runtime.sleep(1)
+        send_set_player_life(work, work.terraria_protocol.slot, 100, 100)
 
 @link('PLAYER_APPEARANCE')
 def h_player_appearance(work, slot, name):
