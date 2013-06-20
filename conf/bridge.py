@@ -1,1 +1,1 @@
-'#fto-minecraft', 'Arcadia', 'Illyria'
+'#Page', '+Illyria'

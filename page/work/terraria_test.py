@@ -8,6 +8,7 @@ import untwisted.core
 import untwisted.event
 
 import debug
+import runtime
 import terraria_protocol
 
 import sys
@@ -21,6 +22,12 @@ def h_close(w):
     w.close()
     sys.exit()
 
+m = untwisted.mode.Mode()
+m.domain = 'm'
+runtime.install(m)
+terraria_protocol.install(m, debug=('--debug' in sys.argv))
+m.link(untwisted.event.CLOSE, h_close)
+
 def h_chat(w, slot, colour, text):
     if slot == 255:
         print text
@@ -28,15 +35,10 @@ def h_chat(w, slot, colour, text):
         print '<%s> %s' % (w.terraria_protocol.players[slot], text)
     else:
         print '<%s> %s' % (slot, text)
-
-m = untwisted.mode.Mode()
-m.domain = 'm'
-terraria_protocol.install(m)
-m.link(untwisted.event.CLOSE, h_close)
 m.link('CHAT', h_chat)
 
 w = untwisted.network.Work(m, socket.socket())
-w.connect(('149.241.77.185', 25565))
+w.connect(('50.130.76.166', 7777))
 
 terraria_protocol.login(w, 'PageBot%s' % int(time.time()))
 
