@@ -103,7 +103,14 @@ def _unload(bot, id, target, args, full_msg):
 @link('!reload')
 @admin
 def _reload(bot, id, target, args, full_msg):
+    plugins = bot.conf['plugins']
+    def order(m):
+        name = m.__name__
+        if name in plugins: return plugins.index(name)
+        return len(plugins)
+
     local = filter(util.module_is_local, sys.modules.values())
+    local.sort(key=order)
     names = [m.__name__ for m in local]
     echo(bot, id, target, 'Reloading: ' + repr(names))
     
@@ -111,7 +118,7 @@ def _reload(bot, id, target, args, full_msg):
     expns = dict()
 
     # Uninstall all local modules (see util.module_is_local for definition).
-    for module in local:
+    for module in reversed(local):
         if hasattr(module, 'uninstall'):
             try:
                 module.uninstall(bot)

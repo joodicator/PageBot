@@ -9,6 +9,7 @@ import untwisted.event
 import untwisted.mode
 import untwisted.network
 
+import traceback
 import socket
 
 #==============================================================================#
@@ -26,13 +27,19 @@ ab_link = util.LinkSet()
 
 #==============================================================================#
 def install(bot):
-    global ab_mode
+    global ab_mode, te_work
     if ab_mode is not None: raise control.AlreadyInstalled
     ab_mode = bot
     ab_link.install(ab_mode)
     te_link.install(te_mode)
+
+    prev_work, te_work = te_work, dict()
+    for work in prev_work.itervalues():
+        try: reload_work(work)
+        except NameError: trackback.print_exc()
+
     for server in servers:
-        if server.name not in te_work:
+        if server.name.lower() not in te_work:
             te_work[server.name.lower()] = init_work(server)
 
 def uninstall(bot):
@@ -43,19 +50,22 @@ def uninstall(bot):
     ab_mode = None
 
 def reload(prev):
-    if not hasattr('te_work', prev): return
+    if not hasattr(prev, 'te_work'): return
     if not isinstance(prev.te_work, dict): return
-    for work in prev.te_work.itervalues():
-        try: reload_work(work)
-        except NameError: pass
+    te_work.update(prev.te_work)
 
 #==============================================================================#
 def reload_work(work):
-    match = [s for s in servers if s.name not in te_work
-             and s.address != work.terraria.address
-             and s.user != work.user.address]
-    if match: te_work[match[0].name.lower()] = init_work(match[0], work)
-    else: kill_work(work)
+    match = [s for s in servers if s.name.lower() not in te_work
+             and s.address == work.terraria.address
+             and s.user == work.terraria.user]
+    if match:
+        te_work[match[0].name.lower()] = init_work(match[0], work)
+    else:
+        if work.terraria_protocol.stage >= 3:
+            msg = 'Disconnected from server: configuration update.'
+            te_mode.drive('TERRARIA', work, msg)
+        kill_work(work)
 
 def init_work(server, prev=None):
     if prev is None:
@@ -63,8 +73,11 @@ def init_work(server, prev=None):
         work.connect_ex(server.address)
         terraria_protocol.login(work, server.user)
     else:
+        prev.destroy()
         work = untwisted.network.Work(te_mode, prev.sock)
         work.terraria_protocol = prev.terraria_protocol
+        if work.terraria_protocol.stage >= 3:
+            te_mode.drive('HEARTBEAT', work)
     work.terraria = server
     return work
 
@@ -104,7 +117,8 @@ def te_disconnect_recv_err(work, info):
 @te_link('DISCONNECT')
 @te_link(untwisted.event.RECV_ERR)
 @te_link(untwisted.event.CLOSE)
-def te_disconnect_recv_err_close(work):
+def te_disconnect_recv_err_close(work, *args):
+    print '? te_disconnect_recv_err_close %s' % args
     server = work.terraria
     kill_work(work)
     del te_work[server.name.lower()]
