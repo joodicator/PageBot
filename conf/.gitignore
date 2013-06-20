@@ -1,4 +1,5 @@
 bot.py
 nickserv.py
-mc_channels.py
-mc_servers.py
+minecraft.py
+terraria.py
+bridge.py
