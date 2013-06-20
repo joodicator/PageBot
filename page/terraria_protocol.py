@@ -1,6 +1,8 @@
 from __future__ import print_function
 
 import runtime
+import control
+import util
 
 from untwisted import event
 from untwisted.utils import common
@@ -8,12 +10,11 @@ from untwisted.utils import std
 from untwisted.magic import sign
 from untwisted import event
 
-import util
 import struct
 import sys
 
 
-__is_local__ = False
+__INSTALL_BOT__ = False
 
 
 link = util.LinkSet()
@@ -24,6 +25,7 @@ debug_link = util.LinkSet()
 
 
 def install(mode, debug=False):
+    if hasattr(mode, 'terraria_protocol'): raise control.AlreadyInstalled
     class TerrariaProtocol(object): pass
     mode.terraria_protocol = TerrariaProtocol()
     mode.terraria_protocol.debug = debug
@@ -31,6 +33,7 @@ def install(mode, debug=False):
     link.install(mode)
 
 def uninstall(mode):
+    if not hasattr(mode, 'terraria_protocol'): raise control.NotInstalled
     if mode.terraria_protocol.debug: debug_link.uninstall(mode)
     link.uninstall(mode)
     del mode.terraria_protocol
@@ -163,7 +166,7 @@ def chat(work, text, colour=(255,255,255)):
         send_chat(work, work.terraria_protocol.slot, colour, text)    
 
 def close(work):
-    del work.terraria_protocol
+    if hasattr(work, 'terraria_protocol'): del work.terraria_protocol
 
 @link('CONNECTION_APPROVED')
 def h_connection_approved(work, slot):
@@ -173,8 +176,8 @@ def h_connection_approved(work, slot):
     work.terraria_protocol.slot = slot
     work.terraria_protocol.players[slot] = work.terraria_protocol.name
     send_player_appearance(work, slot, work.terraria_protocol.name)
-    send_set_player_life(work, slot, 100, 100)
-    send_set_player_mana(work, slot, 100, 100)
+    send_set_player_life(work, slot, 0, 0)
+    send_set_player_mana(work, slot, 0, 0)
     send_set_player_buffs(work, slot, [0 for i in xrange(10)])
     for islot in xrange(60):
         send_set_inventory(work, slot, islot, 0, 0, 0)
@@ -204,8 +207,8 @@ def h_spawn(work):
 @link('HEARTBEAT')
 def h_heartbeat(work):
     while hasattr(work, 'terraria_protocol'):
+        send_set_player_life(work, work.terraria_protocol.slot, 0, 0)
         yield runtime.sleep(1)
-        send_set_player_life(work, work.terraria_protocol.slot, 100, 100)
 
 @link('PLAYER_APPEARANCE')
 def h_player_appearance(work, slot, name):

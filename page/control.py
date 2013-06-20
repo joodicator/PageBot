@@ -122,13 +122,13 @@ def _reload(bot, id, target, args, full_msg):
         if hasattr(module, 'uninstall'):
             try:
                 module.uninstall(bot)
+                old_modules[module.__name__] = module
             except NotInstalled:
-                names.remove(module.__name__)
+                pass
             except Exception as e:
                 expns[module.__name__] = e
                 traceback.print_exc()
         del sys.modules[module.__name__]
-        old_modules[module.__name__] = module
     if expns:
         echo(bot, id, target, 'Errors during uninstall: ' + repr(expns))
         expns.clear()
@@ -137,6 +137,7 @@ def _reload(bot, id, target, args, full_msg):
     for name in names:
         try:
             module = import_module(name)
+            if name not in old_modules: continue
             if hasattr(module, 'reload'): module.reload(old_modules[name])
             if hasattr(module, 'install'): module.install(bot)
         except Exception as e:

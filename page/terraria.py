@@ -14,6 +14,7 @@ import socket
 
 #==============================================================================#
 RECONNECT_DELAY_SECONDS = 10
+MAX_CHAT_LENGTH = 80
 
 servers = util.table('conf/terraria.py', 'server')
 
@@ -82,17 +83,25 @@ def init_work(server, prev=None):
     return work
 
 def kill_work(work):
-    del work.terraria
+    if hasattr(work, 'terraria'): del work.terraria
     terraria_protocol.close(work)
-    work.destroy()
-    work.shutdown(socket.SHUT_RDWR)
-    work.close()
+    try: work.destroy()
+    except: traceback.print_exc()
+    try: work.shutdown(socket.SHUT_RDWR)
+    except: traceback.print_exc()
+    try: work.close()
+    except: traceback.print_exc()
 
 #==============================================================================#
 @ab_link('BRIDGE')
 def ab_bridge(ab_mode, target, msg):
     work = te_work.get(target.lower())
-    if work is not None: terraria_protocol.chat(work, msg)
+    if work is None: return
+    max_len = MAX_CHAT_LENGTH - len('<%s> ' % work.terraria.user)
+    while len(msg) > max_len:
+        head, msg = msg[:max_len-3]+'...', '...'+msg[max_len-3:]
+        terraria_protocol.chat(work, head)
+    terraria_protocol.chat(work, msg)
 
 #==============================================================================#
 @te_link('CHAT')
@@ -118,7 +127,6 @@ def te_disconnect_recv_err(work, info):
 @te_link(untwisted.event.RECV_ERR)
 @te_link(untwisted.event.CLOSE)
 def te_disconnect_recv_err_close(work, *args):
-    print '? te_disconnect_recv_err_close %s' % args
     server = work.terraria
     kill_work(work)
     del te_work[server.name.lower()]
