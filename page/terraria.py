@@ -4,7 +4,10 @@ import control
 import runtime
 import terraria_protocol
 
+from untwisted.magic import sign
 import untwisted.event
+import untwisted.mode
+import untwisted.network
 
 import socket
 
@@ -13,8 +16,8 @@ RECONNECT_DELAY_SECONDS = 10
 
 servers = util.table('conf/terraria.py', 'server')
 
-te_mode = Mode()
-te_link = until.LinkSet()
+te_mode = untwisted.mode.Mode()
+te_link = util.LinkSet()
 te_link.link_module(terraria_protocol)
 te_work = dict()
 
@@ -82,21 +85,21 @@ def ab_bridge(ab_mode, target, msg):
 @te_link('CHAT')
 def te_chat(work, slot, colour, text):
     if slot == 255:
-        yield sign('TERRARIA', text)
+        yield sign('TERRARIA', work, text)
     elif slot != work.terraria_protocol.slot:
         name = work.terraria_protocol.players.get(slot, slot)
-        yield sign('TERRARIA', '<%s> %s' % (name, text))
+        yield sign('TERRARIA', work, '<%s> %s' % (name, text))
 
 @te_link(untwisted.event.CLOSE)
 def te_close(work):
     if work.terraria_protocol.stage < 3: return
-    yield sign('TERRARIA', 'Disconnected from server.')
+    yield sign('TERRARIA', work, 'Disconnected from server.')
 
 @te_link('DISCONNECT')
 @te_link(untwisted.event.RECV_ERR)
 def te_disconnect_recv_err(work, info):
     if work.terraria_protocol.stage < 3: return
-    yield sign('TERRARIA', 'Disconnected from server: %s' % info)
+    yield sign('TERRARIA', work, 'Disconnected from server: %s' % info)
 
 @te_link('DISCONNECT')
 @te_link(untwisted.event.RECV_ERR)
@@ -110,4 +113,4 @@ def te_disconnect_recv_err_close(work):
 
 @te_link('TERRARIA')
 def te_terraria(work, msg):
-    yield msign(ab_mode, 'TERRARIA', ab_mode, work.terraria.name, msg)
+    yield util.msign(ab_mode, 'TERRARIA', ab_mode, work.terraria.name, msg)
