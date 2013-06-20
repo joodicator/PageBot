@@ -46,8 +46,8 @@ class AmeliaBot(Mac):
         self.link('001', self.registered)
         
         # Load plugins
+        self.conf['plugins'][0:0] = ['plugins.standard.head']
         def plugins():
-            yield head
             for name in self.conf['plugins']:
                 print '! plugin: %s' % name
                 yield import_module(name)

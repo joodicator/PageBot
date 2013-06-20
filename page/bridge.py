@@ -28,6 +28,7 @@ def h_bridge(bot, target_chan, msg):
 
 @link('MESSAGE')
 def h_message(bot, id, chan, msg):
+    if chan is None: return
     match = re.match(r'\x01ACTION (?P<msg>.*)', msg)
     if match:
         if match.group('msg').startswith('!'): return
