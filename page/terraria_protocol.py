@@ -74,6 +74,8 @@ def h_message(work, head, body):
     elif head == 0x07:
         spawn = struct.unpack('<ii', body[15:23])
         yield sign('WORLD_INFORMATION', work, spawn)
+    elif head == 0x25:
+        yield sign('REQUEST_PASSWORD', work)
     elif head not in (0x0a, 0x14, 0x17, 0x1a, 0x1b, 0x1c, 0x1d):
         yield sign('UNKNOWN', work, '$%02X' % head, body)
 
@@ -144,18 +146,23 @@ def send_spawn_player(work, slot, *spawn):
     send_message(work, 0x0C, body)
 
 @debug_send
+def send_password(work, password):
+    send_message(work, 0x26, password)
+
+@debug_send
 def send_chat(work, slot, (r,g,b), text):
     body = struct.pack('<B3B', slot, r,g,b) + text
     send_message(work, 0x19, body)
 
 
-def login(work, name, version='Terraria39'):
+def login(work, name, password='', version='Terraria39'):
     class TerrariaProtocol(object): pass
     work.terraria_protocol = TerrariaProtocol()
     work.terraria_protocol.chat_queue = []
     work.terraria_protocol.players = dict()
     work.terraria_protocol.stage = 0
     work.terraria_protocol.name = name
+    work.terraria_protocol.password = password
     work.terraria_protocol.version = version
     send_connect_request(work, version)
 
@@ -167,6 +174,12 @@ def chat(work, text, colour=(255,255,255)):
 
 def close(work):
     if hasattr(work, 'terraria_protocol'): del work.terraria_protocol
+
+
+@link('REQUEST_PASSWORD')
+def h_request_password(work):
+    if not hasattr(work, 'terraria_protocol'): return
+    send_password(work, work.terraria_protocol.password)
 
 @link('CONNECTION_APPROVED')
 def h_connection_approved(work, slot):

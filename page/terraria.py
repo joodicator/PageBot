@@ -72,7 +72,7 @@ def init_work(server, prev=None):
     if prev is None:
         work = untwisted.network.Work(te_mode, socket.socket())
         work.connect_ex(server.address)
-        terraria_protocol.login(work, server.user)
+        terraria_protocol.login(work, server.user, server.password)
     else:
         prev.destroy()
         work = untwisted.network.Work(te_mode, prev.sock)
