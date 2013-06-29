@@ -1,4 +1,7 @@
-from collections import OrderedDict
+try:
+    from collections import OrderedDict
+except ImportError:
+    from ordereddict import OrderedDict
 from traceback import print_exc as debug
 from usual import *
 
