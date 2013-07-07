@@ -37,7 +37,8 @@ class AmeliaBot(Mac):
         Mac.__init__(self, sock, is_read=True, is_write=True)
         if 'bind_addr' in self.conf: sock.bind(self.conf['bind_addr'])
         address = gethostbyname(self.conf['server'])
-        sock.connect((address, self.conf['port']))
+        sock.setblocking(0)
+        sock.connect_ex((address, self.conf['port']))
 
         # Initialise events
         std.install(self)

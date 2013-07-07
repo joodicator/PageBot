@@ -41,6 +41,7 @@ def init_work(server):
     work = Work(mc_mode, sock)
     mc_work.append(work)
     work.minecraft = server
+    work.setblocking(0)
     work.connect_ex(server.address)
 
 def kill_work(work):
