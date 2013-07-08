@@ -79,7 +79,7 @@ def h_help_tell(bot, reply, args):
     ' in the channel.')
     reply('',
     'If NICK contains the characters * or ?, these will match any sequence of'
-    ' of zero or more characters, or exactly 1 character, respectively.')
+    ' zero or more characters, or exactly 1 character, respectively.')
     reply('',
     'If NICK contains any occurrence of ! or @, it will be matched against the'
     ' full NICK!USER@HOST of the recipient, instead of just their nick.')
