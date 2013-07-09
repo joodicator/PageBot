@@ -136,4 +136,8 @@ def te_disconnect_recv_err_close(work, *args):
 
 @te_link('TERRARIA')
 def te_terraria(work, msg):
-    yield util.msign(ab_mode, 'TERRARIA', ab_mode, work.terraria.name, msg)
+    wname = '+%s' % work.terraria_protocol.world_name
+    yield util.msign(ab_mode, 'TERRARIA', ab_mode,
+        work.terraria.name, msg, wname)
+
+#==============================================================================#

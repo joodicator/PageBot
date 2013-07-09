@@ -11,13 +11,14 @@ bridges = util.read_list('conf/bridge.py')
 @link('IRC')
 @link('MINECRAFT')
 @link('TERRARIA')
-def h_msg(bot, source_chan, msg):
+def h_msg(bot, source_chan, msg, source_name=None):
     for bridge in bridges:
         sources = [c for c in bridge if c.lower() == source_chan.lower()]
         if not sources: continue
         targets = (c for c in bridge if c.lower() != source_chan.lower())
         for target in targets:
-            yield sign('BRIDGE', bot, target, '%s: %s' % (sources[0], msg))
+            name = source_name or sources[0]
+            yield sign('BRIDGE', bot, target, '%s: %s' % (name, msg))
 
 
 @link('BRIDGE')
