@@ -43,9 +43,14 @@ def install(bot):
         if server.name.lower() not in te_work:
             te_work[server.name.lower()] = init_work(server)
 
-def uninstall(bot):
+def reload_uninstall(bot):
+    uninstall(bot, reload=True)
+
+def uninstall(bot, reload=False):
     global ab_mode
     if ab_mode is None: raise control.NotInstalled
+    if not reload:
+        for work in te_work.itervalues(): kill_work(work)
     te_link.uninstall(te_mode)
     ab_link.uninstall(ab_mode)
     ab_mode = None

@@ -198,12 +198,12 @@ def h_connection_approved(work, slot):
     send_request_world_information(work)
 
 @link('WORLD_INFORMATION')
-def h_world_information(work, spawn, world_information):
+def h_world_information(work, spawn, world_name):
     if not hasattr(work, 'terraria_protocol'): return
     if work.terraria_protocol.stage != 1: return
     work.terraria_protocol.stage = 2
     work.terraria_protocol.spawn = spawn
-    work.terraria_protocol.world_information = world_information
+    work.terraria_protocol.world_name = world_name
     send_request_initial_tile_data(work, -1, -1)
 
 @link('SPAWN')

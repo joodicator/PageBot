@@ -102,7 +102,15 @@ def _unload(bot, id, target, args, full_msg):
 
 @link('!reload')
 @admin
-def _reload(bot, id, target, args, full_msg):
+def h_soft_reload(bot, id, target, args, full_msg):
+    h_reload(bot, id, target, hard=False)
+
+@link('!hard_reload')
+@admin
+def h_hard_reload(bot, id, target, args, full_msg):
+    h_reload(bot, id, target, hard=True)
+
+def h_reload(bot, id, target, hard):
     plugins = bot.conf['plugins']
     def order(m):
         name = m.__name__
@@ -121,7 +129,10 @@ def _reload(bot, id, target, args, full_msg):
     for module in reversed(local):
         if hasattr(module, 'uninstall'):
             try:
-                module.uninstall(bot)
+                if not hard and hasattr(module, 'reload_uninstall'):
+                    module.reload_uninstall(bot)
+                else:
+                    module.uninstall(bot)
                 old_modules[module.__name__] = module
             except NotInstalled:
                 pass
@@ -138,8 +149,10 @@ def _reload(bot, id, target, args, full_msg):
         try:
             module = import_module(name)
             if name not in old_modules: continue
-            if hasattr(module, 'reload'): module.reload(old_modules[name])
-            if hasattr(module, 'install'): module.install(bot)
+            if hasattr(module, 'reload') and not hard:
+                module.reload(old_modules[name])
+            if hasattr(module, 'install'):
+                module.install(bot)
         except Exception as e:
             expns[name] = e
             traceback.print_exc()
