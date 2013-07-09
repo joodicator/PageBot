@@ -73,7 +73,8 @@ def h_message(work, head, body):
         yield sign('SPAWN', work)
     elif head == 0x07:
         spawn = struct.unpack('<ii', body[15:23])
-        yield sign('WORLD_INFORMATION', work, spawn)
+        world_name = body[36:]
+        yield sign('WORLD_INFORMATION', work, spawn, world_name)
     elif head == 0x25:
         yield sign('REQUEST_PASSWORD', work)
     elif head not in (0x0a, 0x14, 0x17, 0x1a, 0x1b, 0x1c, 0x1d):
@@ -197,11 +198,12 @@ def h_connection_approved(work, slot):
     send_request_world_information(work)
 
 @link('WORLD_INFORMATION')
-def h_world_information(work, spawn):
+def h_world_information(work, spawn, world_information):
     if not hasattr(work, 'terraria_protocol'): return
     if work.terraria_protocol.stage != 1: return
     work.terraria_protocol.stage = 2
     work.terraria_protocol.spawn = spawn
+    work.terraria_protocol.world_information = world_information
     send_request_initial_tile_data(work, -1, -1)
 
 @link('SPAWN')
