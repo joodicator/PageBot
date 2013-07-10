@@ -116,11 +116,11 @@ def mc_found(work, line):
 
     if line.startswith('<%s>' % work.minecraft.agent): return
 
-    match = re.match(r'<\S+> !online( .*|$)', line)
+    match = re.match(r'(?:<\S+>|\[\S+\]) !online( .*|$)', line)
     if match: bridge.notice(ab_mode, work.minecraft.name, 'NAMES_REQ',
         work.minecraft.name, match.group(1).strip())
 
-    if re.match(r'(<\S+> |\* \S+ |)!', line): return
+    if re.match(r'(<\S+> |\[\S+\] |\* \S+ |)!', line): return
 
     yield util.msign(ab_mode,'MINECRAFT', ab_mode,
         work.minecraft.name, line, work.minecraft_state.map_name)
