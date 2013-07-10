@@ -2,6 +2,8 @@
 
 from __future__ import print_function
 
+import re
+import sys
 import socket
 
 from untwisted.mode import Mode
@@ -11,11 +13,10 @@ from untwisted.utils import std
 from untwisted.utils.common import append, shrug
 from untwisted.magic import sign
 
-import re
-import sys
 import util
 import debug
 import runtime
+import bridge
 from control import NotInstalled, AlreadyInstalled
 
 
@@ -87,6 +88,20 @@ def ab_bridge(bot, target_chan, msg):
         if work.minecraft.name.lower() != target_chan.lower(): continue
         work.dump(msg + '\n')
 
+@ab_link(('BRIDGE', 'NAMES_REQ'))
+def h_bridge_names_req(bot, target, source, name_query):
+    for work in mc_work:
+        if work.minecraft.name.lower() != target.lower(): continue
+
+        name = work.minecraft_state.map_name or target
+        if name_query and name_query.lower() not in (name.lower(), target.lower()):
+            continue
+
+        (state, value) = yield query(work, 'players')
+        if state == 'success':
+            bridge.notice(bot, target, 'NAMES_RES', source, name, value.split())
+        elif state == 'failure':
+            bridge.notice(bot, target, 'NAMES_ERR', source, name, value)
 
 @mc_link(FOUND)
 def mc_found(work, line):
@@ -100,7 +115,13 @@ def mc_found(work, line):
             yield sign(event, work, type, key, body)
 
     if line.startswith('<%s>' % work.minecraft.agent): return
+
+    match = re.match(r'<\S+> !online( .*|$)', line)
+    if match:
+        bridge.notice(ab_mode, work.minecraft.name, match.group(1).strip())
+
     if re.match(r'(<\S+> |\* \S+ |)!', line): return
+
     yield util.msign(ab_mode,'MINECRAFT', ab_mode,
         work.minecraft.name, line, work.minecraft_state.map_name)
 
