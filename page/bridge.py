@@ -1,9 +1,10 @@
-import util
 import re
 
 from untwisted.magic import sign
 
+import util
 import channel
+import message
 
 link, install, uninstall = util.LinkSet().triple()  
 
@@ -50,9 +51,23 @@ def h_bridge(bot, target_chan, msg):
     bot.send_msg(target_chan, msg)
 
 
+@link('HELP')
+def h_help_online_short(bot, reply, args):
+    reply('online [LOCATION]',
+    'Lists online users in connected game worlds and IRC channels.')
+
+@link(('HELP', 'online'))
+def h_help_online(bot, reply, args):
+    reply('online [MINECRAFT_WORLD | +TERRARIA_WORLD | #IRC_CHANNEL]',
+    'Lists the online users in the specified game world or IRC channel,'
+    ' or if none is specified, lists the users in all connected locations.',
+    'May be used from within a game or from IRC, but must be used from a '
+    ' distinct location that is linked by relay to the target location.')
+
 @link('!online')
 def h_online(bot, id, chan, args, full_msg):
-    if chan is None: return
+    if chan is None: return message.reply(bot, id, chan,
+        'The "online" command may not be used by PM.')
     notice(bot, chan, 'NAMES_REQ', chan, args)
 
 @link(('BRIDGE', 'NAMES_REQ'))
