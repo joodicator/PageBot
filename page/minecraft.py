@@ -145,7 +145,7 @@ def query(work, key):
 
 @ab_link('terraria.query')
 def h_query(work, key):
-    work.dump('!query("%s")\n' % key)
+    work.dump('/query("%s")\n' % key)
 
 @mc_link(('QUERY_SUCCESS'))
 @mc_link(('QUERY_FAILURE'))
