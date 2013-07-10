@@ -9,6 +9,7 @@ from untwisted.network import Work
 from untwisted.event import DATA, BUFFER, FOUND, CLOSE, RECV_ERR
 from untwisted.utils import std
 from untwisted.utils.common import append, shrug
+from untwisted.magic import sign
 
 import re
 import sys
@@ -36,13 +37,19 @@ ab_mode = None
 ab_link = util.LinkSet()
 
 
+class MinecraftState(object):
+    def __init__(self):
+        self.map_name = None
+
 def init_work(server):
     sock = socket.socket(server.family, socket.SOCK_STREAM)
     work = Work(mc_mode, sock)
     mc_work.append(work)
     work.minecraft = server
+    work.minecraft_state = MinecraftState()
     work.setblocking(0)
     work.connect_ex(server.address)
+    h_query(work, 'map')
 
 def kill_work(work):
     work.destroy()
@@ -84,10 +91,18 @@ def ab_bridge(bot, target_chan, msg):
 @mc_link(FOUND)
 def mc_found(work, line):
     line = re.sub(r'§.', '', line)
+
+    match = re.match('!query (\S+) (\S+) (.*)', line)
+    if match:
+        type, key, body = match.groups()
+        head = 'QUERY_' + type.upper()
+        for event in head, (head, key):
+            yield sign(event, work, type, key, body)
+
     if line.startswith('<%s>' % work.minecraft.agent): return
     if re.match(r'(<\S+> |\* \S+ |)!', line): return
-    yield util.msign(ab_mode, 'MINECRAFT', ab_mode, work.minecraft.name, line)
-
+    yield util.msign(ab_mode,'MINECRAFT', ab_mode,
+        work.minecraft.name, line, work.minecraft_state.map_name)
 
 @mc_link(CLOSE)
 @mc_link(RECV_ERR)
@@ -95,3 +110,28 @@ def mc_close_recv_error(work, *args):
     kill_work(work)
     yield runtime.sleep(RECONNECT_DELAY_SECONDS)
     init_work(work.minecraft)
+
+@mc_link(('QUERY_SUCCESS', 'map'))
+def h_query_success_map(work, type, key, val):
+    work.minecraft_state.map_name = val
+
+
+# (status, value) = yield terraria.query(key),
+# where status is 'result' or 'failure'
+def query(work, key):
+    return util.mmcall(ab_mode, 'terraria.query', work, key)
+
+
+@ab_link('terraria.query')
+def h_query(work, key):
+    work.dump('!query("%s")\n' % key)
+
+@mc_link(('QUERY_SUCCESS'))
+@mc_link(('QUERY_FAILURE'))
+def h_query_success_failure(work, type, key, val):
+    yield util.msign(ab_mode, ('terraria.query', work, key), (type, val))
+
+
+@ab_link('!players')
+def h_players(bot, id, target, args, full_msg):
+    
