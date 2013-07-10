@@ -130,8 +130,3 @@ def h_query(work, key):
 @mc_link(('QUERY_FAILURE'))
 def h_query_success_failure(work, type, key, val):
     yield util.msign(ab_mode, ('terraria.query', work, key), (type, val))
-
-
-@ab_link('!players')
-def h_players(bot, id, target, args, full_msg):
-    
