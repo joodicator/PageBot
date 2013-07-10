@@ -125,7 +125,7 @@ def h_bridge_names_req(bot, target, source, query):
 #==============================================================================#
 @te_link('CHAT')
 def te_chat(work, slot, colour, text):
-    match = re.match(r'!online( .*|$)', text)
+    match = re.match(r'(?:\[Server\] )?!online( .*|$)', text)
     if match:
         name = work.terraria.name
         query = match.group(1).strip()
