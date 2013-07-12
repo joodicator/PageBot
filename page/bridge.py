@@ -1,6 +1,10 @@
-from untwisted.magic import sign
-import util
 import re
+
+from untwisted.magic import sign
+
+import util
+import channel
+import message
 
 link, install, uninstall = util.LinkSet().triple()  
 
@@ -11,20 +15,68 @@ bridges = util.read_list('conf/bridge.py')
 @link('IRC')
 @link('MINECRAFT')
 @link('TERRARIA')
-def h_msg(bot, source_chan, msg, source_name=None):
+def h_msg(bot, source, msg, source_name=None):
+    for source, target in targets(source):
+        name = source_name or source
+        yield sign('BRIDGE', bot, target, '%s: %s' % (name, msg))
+
+def notice(bot, source, head, *args):
+    for source, target in targets(source):
+        bot.drive(('BRIDGE', head), bot, target, *args)
+
+def targets(source_chan):
     for bridge in bridges:
         sources = [c for c in bridge if c.lower() == source_chan.lower()]
         if not sources: continue
         targets = (c for c in bridge if c.lower() != source_chan.lower())
-        for target in targets:
-            name = source_name or sources[0]
-            yield sign('BRIDGE', bot, target, '%s: %s' % (name, msg))
+        for target in targets: yield (sources[0], target)
+
+
+@link(('BRIDGE', 'NAMES_RES'))
+def h_bridge_names_res(bot, target, target_, source_name, names):
+    if target.lower() != target_.lower(): return
+    msg = 'Online in %s: %s.' % (source_name, ', '.join(names))
+    yield sign('BRIDGE', bot, target, msg)
+
+@link(('BRIDGE', 'NAMES_ERR'))
+def h_bridge_names_err(bot, target, target_, source_name, error):
+    if target.lower() != target_.lower(): return
+    msg = 'Failed to enumerate users in %s: %s.' % (source_name, error)
+    yield sign('BRIDGE', bot, target, msg)
 
 
 @link('BRIDGE')
 def h_bridge(bot, target_chan, msg):
     if not target_chan.startswith('#'): return
     bot.send_msg(target_chan, msg)
+
+
+@link('HELP')
+def h_help_online_short(bot, reply, args):
+    reply('online [LOCATION]',
+    'Lists online users in connected game worlds and IRC channels.')
+
+@link(('HELP', 'online'))
+def h_help_online(bot, reply, args):
+    reply('online [MINECRAFT_WORLD | +TERRARIA_WORLD | #IRC_CHANNEL]',
+    'Lists the online users in the specified game world or IRC channel,'
+    ' or if none is specified, lists the users in all connected locations.',
+    'May be used from within a game or from IRC, but must be used from a '
+    ' distinct location that is linked by relay to the target location.')
+
+@link('!online')
+def h_online(bot, id, chan, args, full_msg):
+    if chan is None: return message.reply(bot, id, chan,
+        'The "online" command may not be used by PM.')
+    notice(bot, chan, 'NAMES_REQ', chan, args)
+
+@link(('BRIDGE', 'NAMES_REQ'))
+def h_bridge_names_req(bot, target, source, query):
+    if not target.startswith('#'): return
+    if query and query.lower() != target.lower(): return
+    names = yield channel.names(bot, target)
+    names = channel.strip_names(names)
+    notice(bot, target, 'NAMES_RES', source, target, names)
 
 
 @link('MESSAGE')

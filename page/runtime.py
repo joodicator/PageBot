@@ -19,7 +19,7 @@ mode.domain = 'run'
 mode.poll = mode
 gear.tick_list.append(mode)
 m_link = util.LinkSet()
-if '--debug' in sys.argv: m_link.link_module(debug)
+#if '--debug' in sys.argv: m_link.link_module(debug)
 
 sleepers = list()
 
