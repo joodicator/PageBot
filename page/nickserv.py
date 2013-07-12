@@ -19,13 +19,15 @@ def conf(*args, **kwds):
 
 @link(REGISTERED)
 def registered(bot, *rargs):
-    # Wait until mode +r is received before proceeding.
-    while conf('password'):
-        _, margs = yield hold(bot, 'MODE')
-        bot, source, target, modes = margs[:4]
-        if target != bot.nick: continue
-        if re.search(r'\+[a-zA-Z]*r', modes): break
+    if conf('password'):
+        yield hold(bot, 'NICKSERV_REGISTERED')
     yield sign(IDENTIFIED, bot, *rargs)
+
+@link('MODE')
+def h_mode(bot, source, target, modes):
+    if target.lower() != bot.nick.lower(): return
+    if not re.search(r'\+[a-zA-Z]*r', modes): return
+    yield sign('NICKSERV_REGISTERED', bot)
 
 @link(('UNOTICE', None))
 def notice(bot, id, msg):
@@ -40,6 +42,10 @@ def notice(bot, id, msg):
 def nickserv_notice(bot, id, msg):
     if msg.startswith(conf('prompt')):
         bot.send_msg(id.nick, 'IDENTIFY %s' % conf('password'))
+        return
+    final = conf('final')
+    if final and msg.startswith(final):
+        yield sign('NICKSERV_REGISTERED', bot)
         return
     match = re.match(r'STATUS\s+(?P<nick>\S+)\s+(?P<code>\d+)', msg)
     if match:
