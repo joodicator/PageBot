@@ -21,6 +21,7 @@ default_conf = {
     'channels':     ['#untwisted'],
     'plugins':      [],
     'timeout':      180, # 180s = 3m
+    'bang_cmd':     True
 }
 
 class AmeliaBot(Mac):

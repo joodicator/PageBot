@@ -39,7 +39,9 @@ def h_auth_check(bot, id):
     with open('conf/admins.txt') as file:
         admins = re.findall(r'\S+', file.read())
 
-    if id.nick not in admins:
+    if '*!%s@%s' % (id.user, id.host) in admins:
+        yield ret(True)
+    elif id.nick not in admins:
         yield ret(False)
     elif id in passed:
         yield ret(True)

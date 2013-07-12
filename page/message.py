@@ -93,8 +93,9 @@ def notice(bot, source, target, msg, *args):
 def message(bot, id, target, msg):
     while True:
         # !CMD [ARGS...]
-        match = re.match(r'!(?P<head>\S+)\s*(?P<body>.*)', msg)
-        if match: break
+        if bot.conf['bang_cmd']:
+            match = re.match(r'!(?P<head>\S+)\s*(?P<body>.*)', msg)
+            if match: break
         # NICK: CMD [ARGS...]
         match = re.match(r'(?P<addr>\S+):\s+(?P<head>\S+)\s*(?P<body>.*)', msg)
         if match and match.group('addr').lower() == bot.nick.lower(): break
@@ -138,9 +139,10 @@ def h_help(bot, id, target, args, full_msg):
     else:
         # Display general help and a summary of all commands.
         output(
-            'Commands are issued by saying "!COMMAND" or "%s: COMMAND" or,'
+            'Commands are issued by saying%s "%s: COMMAND" or,'
             ' by PM, just "COMMAND", where COMMAND is the command and its'
-            ' parameters. The following commands are available:' % bot.nick)
+            ' parameters. The following commands are available:'
+            % ('"!COMMAND" or' if bot.conf['bang_cmd'] else '', bot.nick))
         yield sign('HELP', bot, callback, args)
         lines = map(lambda l: ('\2' + l[0] + '\2',) + l[1:], lines)
         map(output, util.align_table(lines))
