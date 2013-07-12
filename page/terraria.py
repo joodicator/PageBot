@@ -3,6 +3,7 @@ import util
 import control
 import runtime
 import terraria_protocol
+import bridge
 
 from untwisted.magic import sign
 import untwisted.event
@@ -11,6 +12,7 @@ import untwisted.network
 
 import traceback
 import socket
+import re
 
 #==============================================================================#
 RECONNECT_DELAY_SECONDS = 10
@@ -109,9 +111,28 @@ def ab_bridge(ab_mode, target, msg):
         terraria_protocol.chat(work, head)
     terraria_protocol.chat(work, msg)
 
+@ab_link(('BRIDGE', 'NAMES_REQ'))
+def h_bridge_names_req(bot, target, source, query):
+    work = te_work.get(target.lower())
+    if work is None: return
+
+    name = '+%s' % work.terraria_protocol.world_name
+    if query and name.lower() != query.lower(): return
+
+    names = work.terraria_protocol.players.values()
+    bridge.notice(bot, target, 'NAMES_RES', source, name, names)
+
 #==============================================================================#
 @te_link('CHAT')
 def te_chat(work, slot, colour, text):
+    match = re.match(r'(?:\[Server\] )?!online( .*|$)', text)
+    if match:
+        name = work.terraria.name
+        query = match.group(1).strip()
+        bridge.notice(ab_mode, name, 'NAMES_REQ', name, query)
+    
+    if text.startswith('!'): return
+    
     if slot == 255:
         yield sign('TERRARIA', work, text)
     elif slot != work.terraria_protocol.slot:
