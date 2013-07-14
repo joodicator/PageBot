@@ -126,7 +126,7 @@ def h_help(bot, id, target, args, full_msg):
 
     if args:
         # Display help for a particular command.
-        cmd, args = re.match(r'(\S+)\s*(.*)', args).groups()
+        cmd, args = re.match(r'!?(\S+)\s*(.*)', args).groups()
         yield sign(('HELP', cmd.lower()), bot, callback, args)
         if not lines:
             reply(bot, id, target,
