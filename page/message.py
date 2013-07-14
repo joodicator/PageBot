@@ -97,10 +97,10 @@ def message(bot, id, target, msg):
             match = re.match(r'!(?P<head>\S+)\s*(?P<body>.*)', msg)
             if match: break
         # NICK: CMD [ARGS...]
-        match = re.match(r'(?P<addr>\S+):\s+(?P<head>\S+)\s*(?P<body>.*)', msg)
+        match = re.match(r'(?P<addr>\S+):\s+!?(?P<head>\S+)\s*(?P<body>.*)', msg)
         if match and match.group('addr').lower() == bot.nick.lower(): break
         # (Private) CMD [ARGS...]
-        match = re.match(r'\s*(?P<head>\S+)\s*(?P<body>.*)', msg)
+        match = re.match(r'\s*!?(?P<head>\S+)\s*(?P<body>.*)', msg)
         if match and target == None: break
         return
     event = '!' + match.group('head').lower()
@@ -144,5 +144,5 @@ def h_help(bot, id, target, args, full_msg):
             ' parameters. The following commands are available:'
             % ('"!COMMAND" or' if bot.conf['bang_cmd'] else '', bot.nick))
         yield sign('HELP', bot, callback, args)
-        lines = map(lambda l: ('\2' + l[0] + '\2',) + l[1:], lines)
+        lines = map(lambda l: ('\2!' + l[0] + '\2',) + l[1:], lines)
         map(output, util.align_table(lines))
