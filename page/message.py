@@ -142,7 +142,7 @@ def h_help(bot, id, target, args, full_msg):
             'Commands are issued by saying%s "%s: COMMAND" or,'
             ' by PM, just "COMMAND", where COMMAND is the command and its'
             ' parameters. The following commands are available:'
-            % ('"!COMMAND" or' if bot.conf['bang_cmd'] else '', bot.nick))
+            % (' "!COMMAND" or' if bot.conf['bang_cmd'] else '', bot.nick))
         yield sign('HELP', bot, callback, args)
         lines = map(lambda l: ('\2!' + l[0] + '\2',) + l[1:], lines)
         map(output, util.align_table(lines))
