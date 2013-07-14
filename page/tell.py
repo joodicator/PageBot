@@ -119,7 +119,7 @@ def h_tell(bot, id, target, args, full_msg):
 @link('HELP')
 def h_help_untell_short(bot, reply, args):
     reply('untell NICK',
-    'Cancels a message left using "tell".')
+    'Cancels messages left using "tell".')
 
 @link(('HELP', 'untell'))
 def h_help_untell(bot, reply, args):
