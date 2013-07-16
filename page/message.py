@@ -1,4 +1,5 @@
 from untwisted.magic import sign
+from untwisted.usual import Stop
 from util import LinkSet, ID
 import util
 from itertools import *
@@ -107,15 +108,19 @@ def message(bot, id, target, msg):
     body = match.group('body').strip()
     yield sign(event, bot, id, target, body, msg)
     yield sign((event, target), bot, id, body, msg)
+    raise Stop
 
 
 @link('HELP')
+def h_help_help_short(bot, reply, args):
+    reply('help [COMMAND]',
+    'Gives detailed information about COMMAND, or lists all commands.')
+
 @link(('HELP', 'help'))
-@link(('HELP', 'commands'))
 def h_help_help(bot, reply, args):
-    reply('help',           'Shows a summary of all available commands.')
-    reply('help COMMAND',   'Gives detailed information about COMMAND.')
-    reply('commands',       'A synonym for "help".')
+    reply('help [COMMAND]',
+    'If COMMAND is given, gives detailed information about its usage;'
+    ' otherwise, gives a summary of all available commands.')
 
 @link('!help')
 @link('!commands')
@@ -123,6 +128,9 @@ def h_help(bot, id, target, args, full_msg):
     lines = []
     callback = lambda *args: lines.append(args)
     output = lambda msg: bot.send_msg(target or id.nick, msg)
+
+    def header(str):
+        return '\2%s%s\2' % ('!' if bot.conf['bang_cmd'] else '', str)
 
     if args:
         # Display help for a particular command.
@@ -133,7 +141,7 @@ def h_help(bot, id, target, args, full_msg):
                 'Error: no help is available for "%s".' % cmd)
             return
         for line in lines:
-            if line[0]: output('\2!' + line[0] + '\2')
+            if line[0]: output(header(line[0]))
             for para in line[1:]:
                 if para: output('    ' + para)
     else:
@@ -144,5 +152,5 @@ def h_help(bot, id, target, args, full_msg):
             ' parameters. The following commands are available:'
             % (' "!COMMAND" or' if bot.conf['bang_cmd'] else '', bot.nick))
         yield sign('HELP', bot, callback, args)
-        lines = map(lambda l: ('\2!' + l[0] + '\2',) + l[1:], lines)
+        lines = map(lambda l: (header(l[0]),) + l[1:], lines)
         map(output, util.align_table(lines))
