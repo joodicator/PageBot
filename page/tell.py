@@ -2,6 +2,16 @@
 # tell.py - provides !tell, and related commands, to allow users to leave each
 # other messages in an IRC channel.
 
+#==============================================================================#
+# Possible extensions:
+#
+# - Allow "private" messages: if user A is in channel #C and tells the bot by,
+#   PM "!tell #C B MSG", user B will be delivered MSG by PM next time they are
+#   in channel C, provided that user A is also in channel #C.
+#
+# - Place some limit on the number of messages a single user can leave, possibly
+#   also per recipient (if it's possible to identify "recipients"...)
+
 import util
 import auth
 from util import LinkSet
@@ -72,13 +82,16 @@ def put_state(state):
 #==============================================================================#
 @link('HELP')
 def h_help_tell_short(bot, reply, args):
-    reply('tell NICK MESSAGE',
+    reply('tell NICK [...] MESSAGE',
     'When NICK is next seen in this channel, MESSAGE will be delivered to them.')
 
 @link(('HELP', 'tell'))
 def h_help_tell(bot, reply, args):
-    h_help_tell_short(bot, reply, args)
+    reply('tell NICK MESSAGE')
+    reply('tell NICK[, NICK[, ...]]: MESSAGE')
     reply('',
+    'Leaves a message for the given NICK, or for each of the listed NICKs,'
+    ' so that it will be delivered to them when next seen in this channel.',
     'If NICK contains any occurrence of ! or @, it will be matched against'
     ' the full NICK!USER@HOST of the recipient, instead of just their nick;'
     ' if NICK contains the wildcard characters * or ?, these will match any'
@@ -90,83 +103,102 @@ def h_tell(bot, id, target, args, full_msg):
     match = re.match(r'(#\S+)\s+(.*)', args)
     if match:
         is_admin = yield auth.check(bot, id)
-        if is_admin:
-            channel, args = match.groups()
-        else:
-            reply(bot, id, target,
-            'Error: "%s" is not a valid nick or hostmask.' % match.group(1))
-            return
+        if is_admin: channel, args = match.groups()
     elif target:
         channel = target
     else:
         reply(bot, id, target,
-        'Error: the "tell" command may only be used in a channel.')
+            'Error: the "tell" command may only be used in a channel.')
         return
 
-    to_nick, msg = re.match(r'(\S+)\s+(.*)', args).groups()
+    match = re.match(r'(%(nick)s(?:(?:\s*,\s*%(nick)s)*\s*:)?)\s+(.*)'
+        % {'nick': r'[^\s,]*[^\s,:]'}, args)
+    if not match:
+        reply(bot, id, target,
+            'Error: invalid syntax. See "help tell" for correct usage.')
+        return
 
+    to, msg = match.groups()
+    to_nicks = [nick.strip() for nick in to.strip(':').split(',')]
     state = get_state()
-    record = Message(
-        time_sent   = datetime.datetime.utcnow(),
-        channel     = channel,
-        from_id     = id,
-        to_nick     = to_nick,
-        message     = msg)
-    state.msgs.append(record)
+    for to_nick in to_nicks:
+        if re.search(r'[#]', to_nick):
+            reply(bot, id, target,
+                'Error: "%s" is not a valid IRC nick or hostmask'
+                ' (no messages sent).' % to_nick)
+            return
+
+        record = Message(
+            time_sent   = datetime.datetime.utcnow(),
+            channel     = channel,
+            from_id     = id,
+            to_nick     = to_nick,
+            message     = msg)
+        state.msgs.append(record)
+
     put_state(state)
-    reply(bot, id, target, 'It shall be done.')
+    count = len(to_nicks)
+    reply(bot, id, target, 'It shall be done%s.'
+        % (' (message sent to %s recipients)' % count if count > 1 else ''))
 
 #==============================================================================#
 @link('HELP')
 def h_help_untell_short(bot, reply, args):
-    reply('untell NICK',
+    reply('untell NICK [...]',
     'Cancels messages left using "tell".')
 
 @link(('HELP', 'untell'))
 def h_help_untell(bot, reply, args):
-    reply('untell NICK',
-    'Cancels all undelivered messages issued using the "tell" command'
-    ' with the same NICK, by any user with your hostmask.')
+    reply('untell NICK[, NICK[, ...]]',
+    'Cancels all undelivered messages sent using the "tell" command to any of'
+    ' the listed NICKs, by any user with your hostmask.')
 
 @link('!untell')
 def h_untell(bot, id, target, args, full_msg):
-    # Secrely, arguments may prepend the arguments with the target channel.
+    # Secretly, admins may prepend the arguments with the target channel.
     match = re.match(r'(#\S+)\s+(.*)', args)
     if match:
         is_admin = yield auth.check(bot, id)
-        if is_admin:
-            channel, args = match.groups()
-        else:
-            reply(bot, id, target,
-            'Error: "%s" is not a valid nick or hostmask.' % match.group(1))
-            return
+        if is_admin: channel, args = match.groups()
     elif target:
         channel = target
     else:
         reply(bot, id, target,
-        'Error: the "untell" command may only be used in a channel.')
+            'Error: the "untell" command may only be used in a channel.')
         return
 
-    def will_cancel(msg):
+    if not args:
+        reply(bot, id, target,
+            'Error: you must specify at least one recipient.'
+            ' See "help untell" for correct usage.')
+        return
+
+    def will_cancel(msg, to_nick):
         if msg.channel != channel: return False
-        if msg.to_nick != args: return False
+        if msg.to_nick != to_nick: return False
         if msg.from_id != id: return False
         return True
 
+    count = dict()
     state = get_state()
-    msgs = [(will_cancel(m), m) for m in state.msgs]
-    msgs_cancel = [m for (b, m) in msgs if b]
-    msgs_keep = [m for (b, m) in msgs if not b]
-    if not msgs_cancel:
-        reply(bot, id, target,
-            'There were no messages to "%s" from %s in %s.'
-            % (args, '%s!%s@%s' % tuple(id), channel))
-        return
-    state.msgs = msgs_keep
-    count = len(msgs_cancel)
+    for to_nick in [n.strip() for n in args.split(',')]:
+        msgs = [(will_cancel(m, to_nick), m) for m in state.msgs]
+        msgs_cancel = [m for (b, m) in msgs if b]
+        msgs_keep = [m for (b, m) in msgs if not b]
+        count[to_nick] = len(msgs_cancel)
+        if len(msgs_cancel): state.msgs = msgs_keep
+
+    total = sum(count.itervalues())
+    msg = '%s message%s deleted.' % (total, 's' if total != 1 else '')
+
+    empty = ['"%s"' % nick for (nick, count) in count.iteritems() if not count]
+    if empty:
+        list = ', '.join(empty[:-2] + [' or '.join(empty[-2:])])
+        msg += (' There were no messages to %s, from %s in %s.'
+            % (list, '%s!%s@%s' % tuple(id), channel))
+
     put_state(state)
-    reply(bot, id, target, '%s %s deleted.' %
-        (count, 'message' if count == 1 else 'messages'))
+    reply(bot, id, target, '%s' % msg)
 
 #==============================================================================#
 @link('HELP')
@@ -238,7 +270,7 @@ def h_undismiss(bot, id, target, query, *args):
         'them' if count != 1 else 'it'))
 
 #==============================================================================#
-@link('!tell_list')
+@link('!tell?')
 @admin
 def h_tell_list(bot, id, target, args, full_msg):
     output = lambda msg: reply(bot, id, target, msg, prefix=False)
@@ -258,7 +290,7 @@ def h_tell_list(bot, id, target, args, full_msg):
     output('\2End of tell_list')
 
 #==============================================================================#
-@link('!tell_reset')
+@link('!tell=')
 @admin
 def h_tell_reset(bot, id, target, args, full_msg):
     put_state(State())

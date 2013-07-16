@@ -2,7 +2,7 @@ try:
     from collections import OrderedDict
 except ImportError:
     from ordereddict import OrderedDict
-from traceback import print_exc as debug
+import traceback
 from usual import *
 
 class Mode(object):
@@ -31,13 +31,13 @@ class Mode(object):
                     if seq:
                         chain(self, seq)        
                 except Exception as excpt:
-                    debug()
-
                     #it stops processing event
                     if isinstance(excpt, Stop):
                         break
                     elif isinstance(excpt, Kill):
-                        raise excpt
+                        raise
+                    else:
+                        traceback.print_exc()
 
              ################
 
