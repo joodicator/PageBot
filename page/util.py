@@ -10,6 +10,7 @@ import sys
 import re
 
 ID = namedtuple('ID', ('nick', 'user', 'host'))
+ID.__getstate__ = lambda *a, **k: None
 
 # Given a function and an instance, returns an instancemethod appearing as that
 # function as a method of the instnace's class, bound to the instance.

@@ -44,6 +44,7 @@ STATE = None
 # A saved message kept by the system.
 Message = namedtuple('Message',
     ('time_sent', 'channel', 'from_id', 'to_nick', 'message'))
+Message.__getstate__ = lambda *a, **k: None
 
 # The plugin's persistent state object.
 class State(object):
@@ -287,7 +288,24 @@ def h_tell_list(bot, id, target, args, full_msg):
     lines = util.align_table(lines)
     output('\2' + lines[0])
     map(output, lines[1:])
-    output('\2End of tell_list')
+    output('\2End of list')
+
+#==============================================================================#
+@link('!tell-')
+@admin
+def h_tell_remove(bot, id, target, args, full_msg):
+    state = get_state()
+    remove_msgs = []
+    try:
+        for match in re.finditer(r'\S+', args):
+            index = int(match.group()) - 1
+            remove_msgs.append(state.msgs[index])
+        for msg in remove_msgs:
+            state.msgs.remove(msg)
+    except Exception as e:
+        return reply(bot, id, target, repr(e))
+    put_state(state)
+    reply(bot, id, target, 'Done.')
 
 #==============================================================================#
 @link('!tell=')
