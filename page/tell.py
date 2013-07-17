@@ -35,6 +35,9 @@ link, install, uninstall = LinkSet().triple()
 # from the dismissed_msgs list.
 DISMISS_DAYS = 30
 
+# The date format used by !tell? and !tell+.
+DATE_FORMAT_SHORT = '%Y-%m-%d %H:%M'
+
 # The file where the plugin's persistent state is stored.
 STATE_FILE = 'state/tell.pickle'
 
@@ -283,12 +286,35 @@ def h_tell_list(bot, id, target, args, full_msg):
             '%s!%s@%s' % tuple(msg.from_id),
             msg.to_nick,
             msg.channel,
-            msg.time_sent.strftime('%Y-%m-%d %H:%M'),
+            msg.time_sent.strftime(DATE_FORMAT_SHORT),
             msg.message))
     lines = util.align_table(lines)
     output('\2' + lines[0])
     map(output, lines[1:])
     output('\2End of list')
+
+#==============================================================================#
+@link('!tell+')
+@admin
+def h_tell_add(bot, id, target, args, full_msg):
+    args = [a.strip() for a in args.split(',', 4)]
+    if len(args) != 5: return reply(bot, id, target,
+        'Error: expected: FROM_ID, TO_NICK, CHAN, %s, MESSAGE...'
+         % DATE_FORMAT_SHORT)
+
+    [from_id, to_nick, channel, time_sent, message] = args
+    try:
+        from_id = util.ID(*re.match(r'(.*?)!(.*?)@(.*)$', from_id).groups())
+        time_sent = datetime.datetime.strptime(time_sent, DATE_FORMAT_SHORT)
+    except Exception as e: return reply(bot, id, target, repr(e))
+
+    msg = Message(from_id=from_id, to_nick=to_nick, channel=channel,
+                  time_sent=time_sent, message=message)
+    state = get_state()
+    state.msgs.append(msg)
+    state.msgs.sort(key=lambda m: m.time_sent)
+    put_state(state)
+    reply(bot, id, target, 'Done.')
 
 #==============================================================================#
 @link('!tell-')
@@ -308,7 +334,7 @@ def h_tell_remove(bot, id, target, args, full_msg):
     reply(bot, id, target, 'Done.')
 
 #==============================================================================#
-@link('!tell=')
+@link('!tell--')
 @admin
 def h_tell_reset(bot, id, target, args, full_msg):
     put_state(State())
