@@ -5,6 +5,8 @@
 #==============================================================================#
 # Possible extensions:
 #
+# - Allow multiple senders to be specified for !dismiss and !undismiss.
+#
 # - Allow "private" messages: if user A is in channel #C and tells the bot by,
 #   PM "!tell #C B MSG", user B will be delivered MSG by PM next time they are
 #   in channel C, provided that user A is also in channel #C.
@@ -56,34 +58,25 @@ Message.__getstate__ = lambda *a, **k: None
 
 # The plugin's persistent state object.
 class State(object):
-    def __init__(self):
+    def __new__(clas):
+        inst = object.__new__(clas)
+        inst.init()
+        return inst
+
+    def init(self):
         self.msgs = []
         self.dismissed_msgs = []
         self.prev_state = None
-        self.next_state = None
-    def __getinitargs__(self):
-        return ()
+        self.next_state = None        
 
 #==============================================================================#
 # Retrieve a copy of the plugin's state.
 def get_state():
-    global current_state
+    return deepcopy(load_state())
 
-    if not current_state and os.path.exists(STATE_FILE):
-        try:
-            with open(STATE_FILE, 'r') as state_file:
-                current_state = pickle.load(state_file)
-        except pickle.UnpicklingError: pass
-        except EOFError: pass
-    
-    if not current_state:
-        current_state = State()
-
-    return deepcopy(current_state)
-
-# Commit a change to the plugin's state.
+# Commit a forward change to the plugin's state.
 def put_state(state):
-    global current_state
+    current_state.next_state = state
     state.prev_state = current_state
     state.next_state = None
 
@@ -95,26 +88,45 @@ def put_state(state):
     else:
         old_state.prev_state = None
 
+    set_state(state)
+
+# Retrieve the plugin's state.
+def load_state():
+    global current_state
+    if not current_state and os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, 'r') as state_file:
+                current_state = pickle.load(state_file)
+        except pickle.UnpicklingError: pass
+        except EOFError: pass    
+    if not current_state:
+        current_state = State()
+    return current_state
+
+# Change to the given state without any processing of metadata.
+def set_state(state):
+    global current_state
     with open(STATE_FILE, 'w') as state_file:
         pickler = pickle.Pickler(state_file)
         pickler.clear_memo()
         pickler.dump(state)
+    current_state = state    
 
-    current_state = state
+class HistoryEmpty(Exception): pass
 
 # Restores the state which existed before the last call to put_state().
-# Raises LookupError if no such state exists.
+# Raises HistoryEmpty if no such state exists.
 def undo_state():
-    state = get_state().prev_state
-    if state is None: raise LookupError
-    put_state(state)
+    state = load_state().prev_state
+    if state is None: raise HistoryEmpty
+    set_state(state)
 
 # Restores the state which existed before the last call to undo_state().
-# Raises LookupError if no such state exists.
+# Raises HistoryEmpty if no such state exists.
 def redo_state():
-    state = get_state().next_state
-    if state is None: raise LookupError
-    put_state(state)
+    state = load_state().next_state
+    if state is None: raise HistoryEmpty
+    set_state(state)
 
 #==============================================================================#
 @link('HELP')
@@ -340,7 +352,7 @@ def h_tell_list(bot, id, target, args, full_msg):
     lines = util.align_table(lines)
     output('\2' + lines[0])
     map(output, lines[1:])
-    output('\2End of list')
+    output('\2End of List')
 
 #==============================================================================#
 @link('!tell+')
@@ -383,11 +395,33 @@ def h_tell_remove(bot, id, target, args, full_msg):
     reply(bot, id, target, 'Done.')
 
 #==============================================================================#
-@link('!tell--')
+@link('!tell-clear')
 @admin
-def h_tell_reset(bot, id, target, args, full_msg):
+def h_tell_clear(bot, id, target, args, full_msg):
     put_state(State())
     reply(bot, id, target, 'Done.')
+
+#==============================================================================#
+@link('!tell-undo')
+@admin
+def h_tell_undo(bot, id, target, args, full_msg):
+    try:
+        undo_state()
+    except HistoryEmpty:
+        reply(bot, id, target, 'Error: no undo state is available.')
+    else:
+        reply(bot, id, target, 'Done.')
+
+#==============================================================================#
+@link('!tell-redo')
+@admin
+def h_tell_undo(bot, id, target, args, full_msg):
+    try:
+        redo_state()
+    except HistoryEmpty:
+        reply(bot, id, target, 'Error: no redo state is available.')
+    else:
+        reply(bot, id, target, 'Done.')
 
 #==============================================================================#
 @link('OTHER_JOIN')
