@@ -21,6 +21,7 @@ import channel
 import untwisted.magic
 
 from collections import namedtuple
+from copy import deepcopy
 from itertools import *
 import pickle as pickle
 import os.path
@@ -31,53 +32,89 @@ import re
 #==============================================================================#
 link, install, uninstall = LinkSet().triple()
 
-# The number of days from a message's timestamp after which it may be deleted
-# from the dismissed_msgs list.
-DISMISS_DAYS = 30
+# Memory-cached plugin state.
+current_state = None
 
-# The file where the plugin's persistent state is stored.
+
+# File where the plugin state is stored.
 STATE_FILE = 'state/tell.pickle'
 
-# The memory-cached persistent global state.
-STATE = None
+# After this many days, dismissed messages may be deleted.
+DISMISS_DAYS = 30
+
+# Date format used by !tell? and !tell+.
+DATE_FORMAT_SHORT = '%Y-%m-%d %H:%M'
+
+# Maximum number of history states to remember.
+HISTORY_SIZE = 8 
+
 
 # A saved message kept by the system.
 Message = namedtuple('Message',
     ('time_sent', 'channel', 'from_id', 'to_nick', 'message'))
+Message.__getstate__ = lambda *a, **k: None
 
 # The plugin's persistent state object.
 class State(object):
     def __init__(self):
         self.msgs = []
         self.dismissed_msgs = []
+        self.prev_state = None
+        self.next_state = None
     def __getinitargs__(self):
         return ()
 
 #==============================================================================#
-# Load the plugin's persistent state object.
+# Retrieve a copy of the plugin's state.
 def get_state():
-    # We use the in-memory state if it exists, to avoid excessive file IO.
-    global STATE
-    if STATE: return STATE
-    
-    if os.path.exists(STATE_FILE):
+    global current_state
+
+    if not current_state and os.path.exists(STATE_FILE):
         try:
             with open(STATE_FILE, 'r') as state_file:
-                STATE = pickle.load(state_file)
+                current_state = pickle.load(state_file)
         except pickle.UnpicklingError: pass
         except EOFError: pass
-    if not STATE: STATE = State()
-    return STATE
+    
+    if not current_state:
+        current_state = State()
 
-# Save the plugin's persistent state object.
+    return deepcopy(current_state)
+
+# Commit a change to the plugin's state.
 def put_state(state):
-    global STATE
-    STATE = state
+    global current_state
+    state.prev_state = current_state
+    state.next_state = None
+
+    # Prune undo history based on HISTORY_SIZE.
+    old_state = state
+    for count in range(HISTORY_SIZE):
+        if old_state.prev_state is None: break
+        old_state = old_state.prev_state
+    else:
+        old_state.prev_state = None
 
     with open(STATE_FILE, 'w') as state_file:
         pickler = pickle.Pickler(state_file)
         pickler.clear_memo()
         pickler.dump(state)
+
+    current_state = state
+
+# Restores the state which existed before the last call to put_state().
+# Raises LookupError if no such state exists.
+def undo_state():
+    state = get_state().prev_state
+    if state is None: raise LookupError
+    put_state(state)
+
+# Restores the state which existed before the last call to undo_state().
+# Raises LookupError if no such state exists.
+def redo_state():
+    state = get_state().next_state
+    if state is None: raise LookupError
+    put_state(state)
 
 #==============================================================================#
 @link('HELP')
@@ -298,15 +335,55 @@ def h_tell_list(bot, id, target, args, full_msg):
             '%s!%s@%s' % tuple(msg.from_id),
             msg.to_nick,
             msg.channel,
-            msg.time_sent.strftime('%Y-%m-%d %H:%M'),
+            msg.time_sent.strftime(DATE_FORMAT_SHORT),
             msg.message))
     lines = util.align_table(lines)
     output('\2' + lines[0])
     map(output, lines[1:])
-    output('\2End of tell_list')
+    output('\2End of list')
 
 #==============================================================================#
-@link('!tell=')
+@link('!tell+')
+@admin
+def h_tell_add(bot, id, target, args, full_msg):
+    args = [a.strip() for a in args.split(',', 4)]
+    if len(args) != 5: return reply(bot, id, target,
+        'Error: expected: FROM_ID, TO_NICK, CHAN, %s, MESSAGE...'
+         % DATE_FORMAT_SHORT)
+
+    [from_id, to_nick, channel, time_sent, message] = args
+    try:
+        from_id = util.ID(*re.match(r'(.*?)!(.*?)@(.*)$', from_id).groups())
+        time_sent = datetime.datetime.strptime(time_sent, DATE_FORMAT_SHORT)
+    except Exception as e: return reply(bot, id, target, repr(e))
+
+    msg = Message(from_id=from_id, to_nick=to_nick, channel=channel,
+                  time_sent=time_sent, message=message)
+    state = get_state()
+    state.msgs.append(msg)
+    state.msgs.sort(key=lambda m: m.time_sent)
+    put_state(state)
+    reply(bot, id, target, 'Done.')
+
+#==============================================================================#
+@link('!tell-')
+@admin
+def h_tell_remove(bot, id, target, args, full_msg):
+    state = get_state()
+    remove_msgs = []
+    try:
+        for match in re.finditer(r'\S+', args):
+            index = int(match.group()) - 1
+            remove_msgs.append(state.msgs[index])
+        for msg in remove_msgs:
+            state.msgs.remove(msg)
+    except Exception as e:
+        return reply(bot, id, target, repr(e))
+    put_state(state)
+    reply(bot, id, target, 'Done.')
+
+#==============================================================================#
+@link('!tell--')
 @admin
 def h_tell_reset(bot, id, target, args, full_msg):
     put_state(State())
