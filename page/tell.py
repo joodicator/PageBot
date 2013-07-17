@@ -21,6 +21,7 @@ import channel
 import untwisted.magic
 
 from collections import namedtuple
+from copy import deepcopy
 from itertools import *
 import pickle as pickle
 import os.path
@@ -31,18 +32,22 @@ import re
 #==============================================================================#
 link, install, uninstall = LinkSet().triple()
 
-# The number of days from a message's timestamp after which it may be deleted
-# from the dismissed_msgs list.
-DISMISS_DAYS = 30
+# Memory-cached plugin state.
+current_state = None
 
-# The date format used by !tell? and !tell+.
-DATE_FORMAT_SHORT = '%Y-%m-%d %H:%M'
 
-# The file where the plugin's persistent state is stored.
+# File where the plugin state is stored.
 STATE_FILE = 'state/tell.pickle'
 
-# The memory-cached persistent global state.
-STATE = None
+# After this many days, dismissed messages may be deleted.
+DISMISS_DAYS = 30
+
+# Date format used by !tell? and !tell+.
+DATE_FORMAT_SHORT = '%Y-%m-%d %H:%M'
+
+# Maximum number of history states to remember.
+HISTORY_SIZE = 8 
+
 
 # A saved message kept by the system.
 Message = namedtuple('Message',
@@ -54,34 +59,62 @@ class State(object):
     def __init__(self):
         self.msgs = []
         self.dismissed_msgs = []
+        self.prev_state = None
+        self.next_state = None
     def __getinitargs__(self):
         return ()
 
 #==============================================================================#
-# Load the plugin's persistent state object.
+# Retrieve a copy of the plugin's state.
 def get_state():
-    # We use the in-memory state if it exists, to avoid excessive file IO.
-    global STATE
-    if STATE: return STATE
-    
-    if os.path.exists(STATE_FILE):
+    global current_state
+
+    if not current_state and os.path.exists(STATE_FILE):
         try:
             with open(STATE_FILE, 'r') as state_file:
-                STATE = pickle.load(state_file)
+                current_state = pickle.load(state_file)
         except pickle.UnpicklingError: pass
         except EOFError: pass
-    if not STATE: STATE = State()
-    return STATE
+    
+    if not current_state:
+        current_state = State()
 
-# Save the plugin's persistent state object.
+    return deepcopy(current_state)
+
+# Commit a change to the plugin's state.
 def put_state(state):
-    global STATE
-    STATE = state
+    global current_state
+    state.prev_state = current_state
+    state.next_state = None
+
+    # Prune undo history based on HISTORY_SIZE.
+    old_state = state
+    for count in range(HISTORY_SIZE):
+        if old_state.prev_state is None: break
+        old_state = old_state.prev_state
+    else:
+        old_state.prev_state = None
 
     with open(STATE_FILE, 'w') as state_file:
         pickler = pickle.Pickler(state_file)
         pickler.clear_memo()
         pickler.dump(state)
+
+    current_state = state
+
+# Restores the state which existed before the last call to put_state().
+# Raises LookupError if no such state exists.
+def undo_state():
+    state = get_state().prev_state
+    if state is None: raise LookupError
+    put_state(state)
+
+# Restores the state which existed before the last call to undo_state().
+# Raises LookupError if no such state exists.
+def redo_state():
+    state = get_state().next_state
+    if state is None: raise LookupError
+    put_state(state)
 
 #==============================================================================#
 @link('HELP')
