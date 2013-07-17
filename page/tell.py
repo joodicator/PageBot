@@ -174,7 +174,7 @@ def h_untell(bot, id, target, args, full_msg):
         return
 
     def will_cancel(msg, to_nick):
-        if msg.channel != channel: return False
+        if msg.channel.lower() != channel.lower(): return False
         if msg.to_nick != to_nick: return False
         if msg.from_id != id: return False
         return True
@@ -198,7 +198,7 @@ def h_untell(bot, id, target, args, full_msg):
             % (list, '%s!%s@%s' % tuple(id), channel))
 
     put_state(state)
-    reply(bot, id, target, '%s' % msg)
+    reply(bot, id, target, msg)
 
 #==============================================================================#
 @link('HELP')
@@ -217,22 +217,33 @@ def h_help_dismiss(bot, reply, args):
     ' matching message is dismissed.')
 
 @link('!dismiss')
-def h_dismiss(bot, id, target, query, *args):
+def h_dismiss(bot, id, chan, query, *args):
+    if chan is None: return reply(bot, id, chan,
+        'Error: the "dismiss" command may only be used in a channel.')
+
     state = get_state()
-    msgs = [m for m in state.msgs if not query or match_id(query, m.from_id)]
-    if not msgs: return reply(bot, id, target,
+    msgs = [m for m in state.msgs
+            if m.channel.lower() == chan.lower()
+            and (not query or match_id(query, m.from_id))]
+
+    msgs = [m for m in state.msgs if would_deliver(id, chan, m)
+            and (not query or match_id(query, m.from_id))]
+    if not msgs: return reply(bot, id, chan,
         'You have no messages%s to dismiss.' % (query and ' from "%s"' % query))
+
     msg = msgs[-1]
     state.msgs.remove(msg)
     state.dismissed_msgs = [m for m in state.dismissed_msgs
         if (datetime.datetime.utcnow() - m.time_sent).days <= DISMISS_DAYS]
     state.dismissed_msgs.append(msg)
+
+    count = len([m for m in state.msgs if would_deliver(id, chan, m)])
+    msg = ('1 message from %s deleted; you now have %s message%s'
+       ' (you may reverse this using "undismiss").'
+       % (msg.from_id.nick, count, 's' if count != 1 else ''))
+
     put_state(state)
-    count = len(state.msgs)
-    reply(bot, id, target,
-        '1 message from %s deleted; you now have %s message%s'
-        ' (you may reverse this using "undismiss").'
-        % (msg.from_id.nick, count, 's' if count != 1 else ''))
+    reply(bot, id, chan, msg)
 
 #==============================================================================#
 @link('HELP')
@@ -251,23 +262,28 @@ def h_help_undismiss(bot, reply, args):
     ' the wildcard characters * and ?.')
 
 @link('!undismiss')
-def h_undismiss(bot, id, target, query, *args):
+def h_undismiss(bot, id, chan, query, *args):
+    if chan == None: return reply(bot, id, chan,
+        'Error: the "undismiss" command may only be used in a channel.')
+
     state = get_state()
-    msgs = [m for m in state.dismissed_msgs
-        if not query or match_id(query, m.from_id)]
-    if not msgs: return reply(bot, id, target,
+    msgs = [m for m in state.dismissed_msgs if would_deliver(id, chan, m)
+            and (not query or match_id(query, m.from_id))]
+    if not msgs: return reply(bot, id, chan,
         'You have no dismissed messages%s.'
         % (query and ' from "%s"' % query))
     msg = msgs[-1]
     state.dismissed_msgs.remove(msg)
     state.msgs.append(msg)
-    put_state(state)
-    count = len(state.msgs)
-    reply(bot, id, target,
-        '1 message from %s restored; you now have %s message%s'
+
+    count = len([m for m in state.msgs if would_deliver(id, chan, m)])
+    msg = ('1 message from %s restored; you now have %s message%s'
         ' (say anything to read %s).'
         % (msg.from_id.nick, count, 's' if count != 1 else '',
         'them' if count != 1 else 'it'))
+
+    put_state(state)
+    reply(bot, id, chan, msg)
 
 #==============================================================================#
 @link('!tell?')
@@ -361,7 +377,7 @@ def deliver_msg(bot, id, chan, msg):
 # Returns True if `msg' would be delivered at this time to `id' in `chan',
 # or otherwise returns False.
 def would_deliver(id, chan, msg):
-    if msg.channel != chan: return False
+    if msg.channel.lower() != chan.lower(): return False
     if not match_id(msg.to_nick, id): return False
     delta = datetime.datetime.utcnow() - msg.time_sent
     if delta.total_seconds() < 1: return False    
