@@ -26,6 +26,7 @@ from collections import namedtuple
 from copy import deepcopy
 from itertools import *
 import pickle as pickle
+import traceback
 import os.path
 import datetime
 import time
@@ -58,16 +59,15 @@ Message.__getstate__ = lambda *a, **k: None
 
 # The plugin's persistent state object.
 class State(object):
-    def __new__(clas):
-        inst = object.__new__(clas)
-        inst.init()
-        return inst
-
-    def init(self):
+    def __init__(self):
         self.msgs = []
         self.dismissed_msgs = []
         self.prev_state = None
         self.next_state = None        
+
+    def __setstate__(self, new_dict):
+        self.__init__()
+        self.__dict__.update(new_dict)
 
 #==============================================================================#
 # Retrieve a copy of the plugin's state.
