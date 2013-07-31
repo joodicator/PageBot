@@ -129,7 +129,8 @@ def te_chat(work, slot, colour, text):
     if match:
         name = work.terraria.name
         query = match.group(1).strip()
-        bridge.notice(ab_mode, name, 'NAMES_REQ', name, query)
+        bridge.notice(ab_mode, name, 'NAMES_REQ', name, query,
+            include_self=True)
     
     if text.startswith('!'): return
     

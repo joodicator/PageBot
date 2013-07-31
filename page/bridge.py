@@ -20,11 +20,11 @@ def h_msg(bot, source, msg, source_name=None):
         name = source_name or source
         yield sign('BRIDGE', bot, target, '%s: %s' % (name, msg))
 
-def notice(bot, source, head, *args):
-    for source, target in targets(source):
+def notice(bot, source, head, include_self=False, *args):
+    for source, target in targets(source, include_self):
         bot.drive(('BRIDGE', head), bot, target, *args)
 
-def targets(source_chan):
+def targets(source_chan, include_self=False):
     for bridge in bridges:
         sources = [c for c in bridge if c.lower() == source_chan.lower()]
         if not sources: continue
@@ -68,7 +68,7 @@ def h_help_online(bot, reply, args):
 def h_online(bot, id, chan, args, full_msg):
     if chan is None: return message.reply(bot, id, chan,
         'The "online" command may not be used by PM.')
-    notice(bot, chan, 'NAMES_REQ', chan, args)
+    notice(bot, chan, 'NAMES_REQ', chan, args, include_self=True)
 
 @link(('BRIDGE', 'NAMES_REQ'))
 def h_bridge_names_req(bot, target, source, query):
