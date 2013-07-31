@@ -121,7 +121,7 @@ def mc_found(work, line):
     if match:
         args = match.group('args').strip()
         bridge.notice(ab_mode, work.minecraft.name, 'NAMES_REQ',
-                      work.minecraft.name, args, include_self=True)
+                      work.minecraft.name, args)
 
     if re.match(r'(<\S+> |\[\S+\] |\* \S+ |)!', line): return
 
