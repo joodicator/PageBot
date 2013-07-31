@@ -83,7 +83,7 @@ class Work(socket):
             Otherwise you might have some odd behavior.
 
         """
-        self.queue   = self.queue + data
+        self.queue   = self.queue + data.encode('utf8')
 
     def destroy(self):
         for l in gear.rlist, gear.wlist, gear.xlist, gear.tick_list:
