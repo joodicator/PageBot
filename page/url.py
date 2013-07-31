@@ -33,6 +33,20 @@ def h_message(bot, id, target, message):
         history[target.lower()].append(urls)
         del history[target.lower()][:-HISTORY_SIZE]
 
+#==============================================================================#
+@link('HELP')
+def h_help(bot, reply, args):
+    reply('url [URL]',
+    'Shows the titles of recently mentioned URLs, or of a specific URL.')
+
+@link(('HELP', 'url'))
+def h_help_url(bot, reply, args):
+    reply('url [URL]',
+    'If URL is given, shows the title (if any) of the HTML page it locates;'
+    ' otherwise, show the titles of all URLs in the most recent channel'
+    ' message which contains a URL, and for which "url" has not already been'
+    ' called.')
+
 @link('!url')
 def h_url(bot, id, target, args, full_msg):
     from message import reply
