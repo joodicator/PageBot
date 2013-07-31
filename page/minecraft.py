@@ -117,9 +117,11 @@ def mc_found(work, line):
     for fmt in '<%s>', '* %s', '%s':
         if line.startswith(fmt % work.minecraft.agent): return
 
-    match = re.match(r'(?:<\S+>|\[\S+\]) !online( .*|$)', line)
-    if match: bridge.notice(ab_mode, work.minecraft.name, 'NAMES_REQ',
-        work.minecraft.name, match.group(1).strip())
+    match = re.match(r'(<\S+>|\[\S+\]) !online(?P<args> .*|$)', line)
+    if match:
+        args = match.group('args').strip()
+        bridge.notice(ab_mode, work.minecraft.name, 'NAMES_REQ',
+                      work.minecraft.name, args, include_self=True)
 
     if re.match(r'(<\S+> |\[\S+\] |\* \S+ |)!', line): return
 
