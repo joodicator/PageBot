@@ -94,11 +94,11 @@ def kill_work(work):
     if hasattr(work, 'terraria'): del work.terraria
     terraria_protocol.close(work)
     try: work.destroy()
-    except: traceback.print_exc()
+    except socket.error: pass
     try: work.shutdown(socket.SHUT_RDWR)
-    except: traceback.print_exc()
+    except socket.error: pass
     try: work.close()
-    except: traceback.print_exc()
+    except socket.error: pass
 
 #==============================================================================#
 @ab_link('BRIDGE')
@@ -129,8 +129,7 @@ def te_chat(work, slot, colour, text):
     if match:
         name = work.terraria.name
         query = match.group(1).strip()
-        bridge.notice(ab_mode, name, 'NAMES_REQ', name, query,
-            include_self=True)
+        bridge.notice(ab_mode, name, 'NAMES_REQ', name, query)
     
     if text.startswith('!'): return
     
