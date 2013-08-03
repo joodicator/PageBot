@@ -4,6 +4,7 @@
 # - Show Google reverse image search keywords for images.
 # - Recognise quit messages, part messages, notices.
 # - Recognise messages from !tell.
+# - Allow !title as an alias to !url.
 
 #==============================================================================#
 import collections
