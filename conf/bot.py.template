@@ -1,6 +1,8 @@
 server   = 'irc.newnet.net'
 port     = 6667
-nick     = 'Sentry'
-user     = 'Sentry'
-name     = 'Sentry'
-channels = ['#sentry']
+nick     = 'Page'
+user     = 'Page'
+name     = 'https://github.com/JosephCrowe/page-ircbot'
+channels = ['#Page']
+plugins  = ['runtime', 'message', 'nickserv', 'auth', 'control', 'channel',
+            'tell', 'url']
