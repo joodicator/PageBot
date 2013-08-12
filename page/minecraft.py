@@ -93,7 +93,7 @@ def h_bridge_names_req(bot, target, source, name_query):
     for work in mc_work:
         if work.minecraft.name.lower() != target.lower(): continue
 
-        name = work.minecraft_state.map_name or target
+        name = work.minecraft_state.map_name or work.minecraft.display or target
         if name_query and name_query.lower() not in (name.lower(), target.lower()):
             continue
 
@@ -125,8 +125,9 @@ def mc_found(work, line):
 
     if re.match(r'(<\S+> |\[\S+\] |\* \S+ |)!', line): return
 
-    yield util.msign(ab_mode,'MINECRAFT', ab_mode,
-        work.minecraft.name, line, work.minecraft_state.map_name)
+    yield util.msign(ab_mode, 'MINECRAFT', ab_mode,
+        work.minecraft.name, line,
+        work.minecraft_state.map_name or work.minecraft.display)
 
 @mc_link(CLOSE)
 @mc_link(RECV_ERR)
