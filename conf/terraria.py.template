@@ -1,3 +1,3 @@
-'name',         'address',                  'user',     'password'
+'name',             'address',                  'user',     'password'
 
-'Server',       ('127.0.0.1',7777),         'Page',     ''
+'terraria',         ('localhost',7777),         'PageBot',  ''

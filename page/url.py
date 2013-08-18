@@ -1,4 +1,12 @@
 #==============================================================================#
+# Possible Extensions:
+# - Show YouTube video descriptions, etc, for YT videos.
+# - Show Google reverse image search keywords for images.
+# - Recognise quit messages, part messages, notices.
+# - Recognise messages from !tell.
+# - Allow !title as an alias to !url.
+
+#==============================================================================#
 import collections
 import urllib2
 import socket
@@ -92,6 +100,7 @@ def get_title(url):
 # True if the given hostname or IPV4 or IPV6 address string is not in any
 # address range reserved for private or local use, or otherwise False.
 def is_global_address(host):
+    # See: http://en.wikipedia.org/wiki/Reserved_IP_addresses
     family, _, _, _, address = socket.getaddrinfo(host, None)[0]
     if family == socket.AF_INET:
         host, _ = address
@@ -106,7 +115,14 @@ def is_global_address(host):
         return True
     elif family == socket.AF_INET6:
         host, _, _, _ = address
-        return inet6_tuple(host)[0] & 0x000f == 0x000e
+        addr = inet6_int(host)
+        for range in ('::/128', '::1/128', '::ffff:0:0/96', '64:ff9b::/96',
+        '2001::/32', '2001:10::/28', '2001:db8::/32', '2002::/16', 'fc00::/7',
+        'fe80::/10', 'ff00::/8'):
+            prefix, size = range.split('/')
+            prefix, size = inet6_int(prefix), int(size)
+            if addr>>(128-size) == prefix>>(128-size): return False
+        return True
     else:
         raise PageURLError(
             'Unsupported address family for "%s": %s.' % (host, family))    
@@ -119,7 +135,7 @@ def inet4_int(addr):
 
 # IPV6 address string to integer.
 def inet6_int(addr):
-    addr = inet6_tuple(adddr)
+    addr = inet6_tuple(addr)
     return sum(addr[-i-1]<<(16*i) for i in xrange(8))
 
 # IPV4 address string to 4-tuple of integers.
