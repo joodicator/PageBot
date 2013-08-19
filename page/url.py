@@ -8,6 +8,7 @@
 
 #==============================================================================#
 import collections
+import urllib
 import urllib2
 import socket
 import re
@@ -21,6 +22,7 @@ import util
 link, install, uninstall = util.LinkSet().triple()
 
 URL_RE = re.compile('(https?://.+?)[.,;:!?>)}\]]?(?:\s|$)', re.I)
+AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:23.0) Gecko/20100101 Firefox/23.0'
 HISTORY_SIZE = 8
 TIMEOUT_SECONDS = 5
 READ_BYTES_MAX = 1024*1024
@@ -79,8 +81,7 @@ class PageURLError(Exception):
 
 def get_title(url):
     request = urllib2.Request(url)
-    request.add_header('User-Agent',
-    'Mozilla/5.0 (X11; Linux x86_64; rv:22.0) Gecko/20100101 Firefox/22.0')
+    request.add_header('User-Agent', AGENT)
 
     host = request.get_host()
     if not is_global_address(host): raise PageURLError(
@@ -93,8 +94,30 @@ def get_title(url):
             soup = BeautifulSoup(stream.read(READ_BYTES_MAX))
             title = soup.find('title').text
 
+    if title is None and type.startswith('image/'):
+        title = google_image_title(url)
+        title = title and 'Best guess: \x02%s\x02' % title
+
     title = (title and title.strip()) or '(no title)'
-    return '%s [%s]' % (title, type)
+    summary = '...' + url[-29:] if len(url) > 32 else url
+    return '%s [%s; %s]' % (title, type, summary)
+
+#==============================================================================#
+# Returns the "best guess" phrase that Google's reverse image search offers to
+# describe the image at the given URL, or None if no such phrase is offered.
+def google_image_title(url):
+    PHRASE = 'Best guess for this image:'
+    soup = google_image_title_soup(url)
+    node = soup.find(text=re.compile(re.escape(PHRASE)))
+    return node and node.parent.text.replace(PHRASE, '').strip()
+
+def google_image_title_soup(url):
+    request = urllib2.Request('https://www.google.com/searchbyimage?'
+        + urllib.urlencode({'image_url': url}))
+    request.add_header('Referer', 'https://www.google.com/imghp?hl=en&tab=wi')
+    request.add_header('User-Agent', AGENT)
+    with closing(urllib2.urlopen(request, timeout=TIMEOUT_SECONDS)) as stream:
+        return BeautifulSoup(stream.read(READ_BYTES_MAX))    
 
 #==============================================================================#
 # True if the given hostname or IPV4 or IPV6 address string is not in any
