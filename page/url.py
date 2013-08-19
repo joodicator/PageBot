@@ -52,6 +52,7 @@ def h_help(bot, reply, args):
     'Shows the titles of recently mentioned URLs, or of a specific URL.')
 
 @link(('HELP', 'url'))
+@link(('HELP', 'title'))
 def h_help_url(bot, reply, args):
     reply('url [URL]',
     'If URL is given, shows the title (if any) of the HTML page it locates;'
@@ -60,6 +61,7 @@ def h_help_url(bot, reply, args):
     ' called.')
 
 @link('!url')
+@link('!title')
 def h_url(bot, id, target, args, full_msg):
     from message import reply
 
