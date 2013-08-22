@@ -1,9 +1,9 @@
 #==============================================================================#
 # Possible Extensions:
 # - Show YouTube video descriptions, etc, for YT videos.
+# - Interpret imgur HTML URLs (etc) as images.
 # - Recognise quit messages, part messages, notices.
 # - Recognise messages from !tell.
-# - Allow !title as an alias to !url.
 
 #==============================================================================#
 import collections
