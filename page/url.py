@@ -15,7 +15,10 @@ from contextlib import closing
 
 from bs4 import BeautifulSoup
 
+from untwisted.magic import sign
+
 import util
+import runtime
 
 #==============================================================================#
 link, install, uninstall = util.LinkSet().triple()
@@ -49,6 +52,7 @@ def h_help(bot, reply, args):
     'Shows the titles of recently mentioned URLs, or of a specific URL.')
 
 @link(('HELP', 'url'))
+@link(('HELP', 'title'))
 def h_help_url(bot, reply, args):
     reply('url [URL]',
     'If URL is given, shows the title (if any) of the HTML page it locates;'
@@ -57,6 +61,7 @@ def h_help_url(bot, reply, args):
     ' called.')
 
 @link('!url')
+@link('!title')
 def h_url(bot, id, target, args, full_msg):
     from message import reply
 
@@ -72,39 +77,55 @@ def h_url(bot, id, target, args, full_msg):
             title = get_title(url)
             reply(bot, id, target, title, prefix=False)
         except (socket.error, urllib2.URLError, PageURLError) as e:
-            reply(bot, id, target, 'Error: %s' % e, prefix=False)
+            reply(bot, id, target, 'Error: %s' % e, prefix=False)    
+
+        yield runtime.sleep(0)
 
 #==============================================================================#
 class PageURLError(Exception):
     pass
 
+class HeadRequest(urllib2.Request):
+    def get_method(self):
+        return "HEAD"
+
 def get_title(url):
-    request = urllib2.Request(url)
+    request = HeadRequest(url)
     request.add_header('User-Agent', AGENT)
 
     host = request.get_host()
     if not is_global_address(host): raise PageURLError(
         'Access to this host is denied: %s.' % host)
 
-    title = None
     with closing(urllib2.urlopen(request, timeout=TIMEOUT_SECONDS)) as stream:
         type = stream.info().gettype()
-        if 'html' in type:
-            soup = BeautifulSoup(stream.read(READ_BYTES_MAX))
-            title = soup.find('title').text
 
-    if title is None and type.startswith('image/'):
-        title = google_image_title(url)
-        title = title and 'Best guess: \x02%s\x02' % title
+    title = None
+    if 'html' in type:
+        title = get_title_html(url)
+    elif type.startswith('image/'):
+        title = get_title_image(url)
 
-    title = (title and title.strip()) or '(no title)'
+    title = title or '(no title)'
     summary = '...' + url[-29:] if len(url) > 32 else url
     return '%s [%s; %s]' % (title, type, summary)
+
+def get_title_html(url):
+    request = urllib2.Request(url)
+    request.add_header('User-Agent', AGENT)
+    with closing(urllib2.urlopen(request, timeout=TIMEOUT_SECONDS)) as stream:
+        soup = BeautifulSoup(stream.read(READ_BYTES_MAX))
+    title = soup.find('title')
+    return title and title.text.strip()
+
+def get_title_image(url):
+    title = google_image_best_guess(url)
+    return 'Best guess: %s' % ('\2%s\2' % title if title else '(none)')
 
 #==============================================================================#
 # Returns the "best guess" phrase that Google's reverse image search offers to
 # describe the image at the given URL, or None if no such phrase is offered.
-def google_image_title(url):
+def google_image_best_guess(url):
     PHRASE = 'Best guess for this image:'
     soup = google_image_title_soup(url)
     node = soup.find(text=re.compile(re.escape(PHRASE)))
@@ -112,7 +133,7 @@ def google_image_title(url):
 
 def google_image_title_soup(url):
     request = urllib2.Request('https://www.google.com/searchbyimage?'
-        + urllib.urlencode({'image_url': url}))
+        + urllib.urlencode({'image_url':url, 'safe':'off'}))
     request.add_header('Referer', 'https://www.google.com/imghp?hl=en&tab=wi')
     request.add_header('User-Agent', AGENT)
     with closing(urllib2.urlopen(request, timeout=TIMEOUT_SECONDS)) as stream:
@@ -171,7 +192,7 @@ def inet6_tuple(addr):
         addr0, addr1 = inet6_tuple_base(addr[0]), inet6_tuple_base(addr[1])
         return addr0 + (0,)*(8 - len(addr0) - len(addr1)) + addr1
     else:
-        return inet6_tuple(addr[0])
+        return inet6_tuple_base(addr[0])
 
 # As inet6_tuple(), but does not allow :: notation.
 def inet6_tuple_base(addr):
