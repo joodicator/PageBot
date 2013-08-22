@@ -1,3 +1,5 @@
+# coding=utf8
+
 #==============================================================================#
 # Possible Extensions:
 # - Show YouTube video descriptions, etc, for YT videos.
@@ -107,8 +109,8 @@ def get_title(url):
         title = get_title_image(url)
 
     title = title or '(no title)'
-    summary = '...' + url[-29:] if len(url) > 32 else url
-    return '%s [%s; %s]' % (title, type, summary)
+    summary = '...' + url[-31:] if len(url) > 34 else url
+    return '\2%s\2 [%s; %s]' % (title, type, summary)
 
 def get_title_html(url):
     request = urllib2.Request(url)
