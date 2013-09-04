@@ -1,3 +1,5 @@
+# coding=utf8
+
 #==============================================================================#
 # Possible Extensions:
 # - Show YouTube video descriptions, etc, for YT videos.
@@ -26,7 +28,7 @@ link, install, uninstall = util.LinkSet().triple()
 URL_RE = re.compile('(https?://.+?)[.,;:!?>)}\]]?(?:\s|$)', re.I)
 AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:23.0) Gecko/20100101 Firefox/23.0'
 HISTORY_SIZE = 8
-TIMEOUT_SECONDS = 5
+TIMEOUT_SECONDS = 8 
 READ_BYTES_MAX = 1024*1024
 
 history = collections.defaultdict(lambda: [])
@@ -77,7 +79,8 @@ def h_url(bot, id, target, args, full_msg):
             title = get_title(url)
             reply(bot, id, target, title, prefix=False)
         except (socket.error, urllib2.URLError, PageURLError) as e:
-            reply(bot, id, target, 'Error: %s' % e, prefix=False)    
+            reply(bot, id, target,
+                'Error: %s [%s]' % (e, abbrev_url(url)), prefix=False)
 
         yield runtime.sleep(0)
 
@@ -107,8 +110,10 @@ def get_title(url):
         title = get_title_image(url)
 
     title = title or '(no title)'
-    summary = '...' + url[-29:] if len(url) > 32 else url
-    return '%s [%s; %s]' % (title, type, summary)
+    return '%s [%s; %s]' % (title, type, abbrev_url(url))
+
+def abbrev_url(url):
+    return '...' + url[-31:] if len(url) > 34 else url
 
 def get_title_html(url):
     request = urllib2.Request(url)
@@ -116,7 +121,7 @@ def get_title_html(url):
     with closing(urllib2.urlopen(request, timeout=TIMEOUT_SECONDS)) as stream:
         soup = BeautifulSoup(stream.read(READ_BYTES_MAX))
     title = soup.find('title')
-    return title and title.text.strip()
+    return title and '\2%s\2' % title.text.strip()
 
 def get_title_image(url):
     title = google_image_best_guess(url)
