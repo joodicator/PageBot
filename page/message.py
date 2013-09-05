@@ -74,10 +74,12 @@ def privmsg(bot, source, target, msg, *args):
     if type(source) == tuple:
         id = ID(*source)
         yield sign('MESSAGE', bot, id, target, msg)
-        yield sign(('MESSAGE', target.lower()), bot, id, target, msg)
+        yield sign(('MESSAGE', target and target.lower()),
+            bot, id, target, msg)
     elif type(source) == str:
         yield sign('SMESSAGE', bot, source, target, msg)
-        yield sign(('SMESSAGE', target.lower()), bot, source, target, msg)
+        yield sign(('SMESSAGE', target and target.lower()),
+            bot, source, target, msg)
 
 @link('NOTICE')
 def notice(bot, source, target, msg, *args):
