@@ -2,6 +2,7 @@
 
 #==============================================================================#
 # Possible Extensions:
+# - Recognise images tagged by the poster as NSFW.
 # - Show YouTube video descriptions, etc, for YT videos.
 # - Interpret imgur HTML URLs (etc) as images.
 # - Recognise quit messages, part messages, notices.

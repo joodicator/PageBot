@@ -142,9 +142,12 @@ def h_help_tell(bot, reply, args):
     'Leaves a message for the given NICK, or for each of the listed NICKs,'
     ' so that it will be delivered to them when next seen in this channel.',
     'If NICK contains any occurrence of ! or @, it will be matched against'
-    ' the full NICK!USER@HOST of the recipient, instead of just their nick;'
-    ' if NICK contains the wildcard characters * or ?, these will match any'
-    ' sequence of 0 or more characters, or exactly 1 character, respectively.')
+    ' the full NICK!USER@HOST of the recipient, instead of just their nick.'
+    ' If NICK contains the wildcard characters * or ?, these will match any'
+    ' sequence of 0 or more characters, or exactly 1 character, respectively.'
+    ' Alternatively, if NICK contains the character $, it will be interpreted'
+    ' as a Python 2 regular expression using re.match() semantics.'
+    ' (see: http://docs.python.org/2/library/re.html).')
 
 @link('!tell')
 def h_tell(bot, id, target, args, full_msg):
@@ -261,9 +264,10 @@ def h_help_dismiss(bot, reply, args):
     'If NICK is given, dismisses the most recent message left for you by NICK,'
     ' preventing it from being delivered; otherwise, dismisses the most recent'
     ' message left by anybody. Messages may be recovered using "undismiss".',
-    'NICK may be an IRC nick or a NICK!USER@HOST, and may contain the wildcard'
-    ' characters * and ?, as specified in "help tell", in which case the last'
-    ' matching message is dismissed.')
+    'NICK may be an IRC nick or a NICK!USER@HOST, may contain the wildcard'
+    ' characters * and ?, and may be a Python 2 regular expression containing'
+    ' the character $, as specified in "help tell"; in which case, the most'
+    ' recent matching message is dismissed.')
 
 @link('!dismiss')
 def h_dismiss(bot, id, chan, query, *args):
@@ -495,11 +499,13 @@ def would_deliver(id, chan, msg):
     return True
 
 #==============================================================================#
-# Returns True if `query', which is is a wildcard expression matching either a
-# nick or a nick!user@host, matches the given id.
+# Returns True if `query', which is is a wildcard expression or (if it contains
+# '$'), a regular expression matching either a nick or a nick!user@host,
+# matches the given id.
 def match_id(query, id):
     id_str = '%s!%s@%s' % tuple(id) if re.search(r'!|@', query) else id.nick
-    return re.match(wc_to_re(query), id_str, re.I) is not None
+    rexp = query if '$' in query else wc_to_re(query)
+    return re.match(rexp, id_str, re.I) is not None
 
 #==============================================================================#
 # Returns a Python regular expression pattern string equivalent to the given
