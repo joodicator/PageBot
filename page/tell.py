@@ -144,8 +144,8 @@ def h_help_tell(bot, reply, args):
     'If NICK contains any occurrence of ! or @, it will be matched against'
     ' the full NICK!USER@HOST of the recipient, instead of just their nick.'
     ' If NICK contains the wildcard characters * or ?, these will match any'
-    ' sequence of 0 or more characters, or exactly 1 character, respectively.'
-    ' Alternatively, if NICK contains the character $, it will be interpreted'
+    ' sequence of 0 or more characters, or exactly 1 character, respectively.',
+    'Alternatively, if NICK contains the character $, it will be interpreted'
     ' as a Python 2 regular expression using re.match() semantics.'
     ' (see: http://docs.python.org/2/library/re.html).')
 
