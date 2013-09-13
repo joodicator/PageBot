@@ -22,6 +22,7 @@ from untwisted.magic import sign
 
 import util
 import runtime
+from itertools import *
 
 #==============================================================================#
 link, install, uninstall = util.LinkSet().triple()
@@ -31,6 +32,7 @@ AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:23.0) Gecko/20100101 Firefox/23.0'
 HISTORY_SIZE = 8
 TIMEOUT_SECONDS = 8 
 READ_BYTES_MAX = 1024*1024
+CMDS_PER_LINE_MAX = 4
 
 history = collections.defaultdict(lambda: [])
 
@@ -51,39 +53,51 @@ def h_message(bot, id, target, message):
 #==============================================================================#
 @link('HELP')
 def h_help(bot, reply, args):
-    reply('url [URL]',
+    reply('url [URL ...]',
     'Shows the titles of recently mentioned URLs, or of a specific URL.')
 
 @link(('HELP', 'url'))
 @link(('HELP', 'title'))
 def h_help_url(bot, reply, args):
-    reply('url [URL]',
-    'If URL is given, shows the title (if any) of the HTML page it locates;'
-    ' otherwise, show the titles of all URLs in the most recent channel'
+    reply('url [URL ...]',
+    'If URL is given, shows the title of the HTML page or image it locates;'
+    ' otherwise, shows the titles of all URLs in the most recent channel'
     ' message which contains a URL, and for which "url" has not already been'
-    ' called.')
+    ' called. Further "!url" commands (up to %s in total) may be given on the'
+    ' same line.' % CMDS_PER_LINE_MAX)
 
 @link('!url')
 @link('!title')
 def h_url(bot, id, target, args, full_msg):
     from message import reply
 
-    if args:
-        urls = re.findall(URL_RE, args)
-    elif target and history[target.lower()]:
-        urls = history[target.lower()].pop(-1)
-    else:
-        return
+    commands = re.split(r'!(?:url|title)(?:\s|$)', args,
+                        maxsplit = CMDS_PER_LINE_MAX-1,
+                        flags    = re.I)
 
-    for url in urls:
-        try:
-            title = get_title(url)
-            reply(bot, id, target, title, prefix=False)
-        except (socket.error, urllib2.URLError, PageURLError) as e:
-            reply(bot, id, target,
-                'Error: %s [%s]' % (e, abbrev_url(url)), prefix=False)
+    for (n, args) in izip(count(1), commands):
+        def reply_(msg):
+            if len(commands) > 1: msg = '[%s] %s' % (n, msg)
+            reply(bot, id, target, msg, prefix=False)
 
-        yield runtime.sleep(0)
+        if args:
+            urls = re.findall(URL_RE, args)
+        elif target and history[target.lower()]:
+            urls = history[target.lower()].pop(-1)
+        else:
+            urls = None
+    
+        if not urls:
+            reply_('No URL found.')
+            continue
+    
+        for url in urls:
+            try:
+                title = get_title(url)
+                reply_(title)
+            except (socket.error, urllib2.URLError, PageURLError) as e:
+                reply_('Error: %s [%s]' % (e, abbrev_url(url)))    
+            yield runtime.sleep(0)
 
 #==============================================================================#
 class PageURLError(Exception):
