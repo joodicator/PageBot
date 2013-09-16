@@ -3,21 +3,25 @@ from untwisted.magic import sign, hold
 import re
 import time
 
+import auth
 import util
 import message
 link, install, uninstall = util.LinkSet().triple()
 
-
-@link('MESSAGE')
+#===============================================================================
+@link(('MESSAGE', '#fto'))
 def h_message(bot, id, target, msg):
-    if target in ('#fto', '#page'):
-        yield sign('FTO_MSG', bot, id, target, msg)
+    yield sign('FTO_MSG', bot, id, target, msg)
+
+@link(('MESSAGE', None))
+@link(('MESSAGE', '#page'))
+@auth.admin
+def h_message_admin(bot, id, target, msg):
+    yield sign('FTO_MSG', bot, id, target, msg)
 
 #===============================================================================
 @link('FTO_MSG')
-def h_message_fto(bot, id, target, msg):
-    if target not in ('#fto', '#page'): return
-
+def h_fto_msg(bot, id, target, msg):
     reply = lambda rmsg: message.reply(bot, id, target, rmsg, prefix=False)
 
     #---------------------------------------------------------------------------
@@ -77,6 +81,7 @@ def h_message_fto(bot, id, target, msg):
     elif strip('Banana! Banana!') in strip(msg):
         remaining = map(strip, 
         'BananaBanana Cucumber Eggplant Caviar Papaya GIANTASPARAGUS'.split())
+        start = time.clock()
         while True:
             part = ''
             while remaining and part + remaining[0] in strip(msg):
@@ -84,10 +89,9 @@ def h_message_fto(bot, id, target, msg):
 
             if len(remaining) <= 1: break
 
-            start = time.clock()
             (_, (bot, id, target, msg)) = yield hold(bot, 'FTO_MSG')
             if strip('Banana! Banana!') in strip(msg): return
-            if time.clock() - start > 60*30: return
+            if time.clock() - start > 3600: return
 
         if remaining: reply('\2GIANT ASPARAGUS!')
 
