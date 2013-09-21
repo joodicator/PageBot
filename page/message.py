@@ -113,7 +113,7 @@ def message(bot, id, target, msg):
     raise Stop
 
 
-@link('HELP')
+@link('HELP*')
 def h_help_help_short(bot, reply, args):
     reply('help [COMMAND]',
     'Gives detailed information about COMMAND, or lists all commands.')
@@ -153,6 +153,12 @@ def h_help(bot, id, target, args, full_msg):
             ' by PM, just "COMMAND", where COMMAND is the command and its'
             ' parameters. The following commands are available:'
             % (' "!COMMAND" or' if bot.conf['bang_cmd'] else '', bot.nick))
-        yield sign('HELP', bot, callback, args)
+
+        yield sign('HELP*', bot, callback, args)
         lines = map(lambda l: (header(l[0]),) + l[1:], lines)
         map(output, util.align_table(lines))
+
+        del lines[:]
+        yield sign('HELP', bot, callback, args)
+        if lines: output('Other commands: %s.' % ', '.join(
+            '\2%s\2' % l[0].split()[0] for l in lines))
