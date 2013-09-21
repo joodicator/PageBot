@@ -129,7 +129,7 @@ def redo_state():
     set_state(state)
 
 #==============================================================================#
-@link('HELP')
+@link('HELP*')
 def h_help_tell_short(bot, reply, args):
     reply('tell NICK [...] MESSAGE',
     'When NICK is next seen in this channel, MESSAGE will be delivered to them.')

@@ -51,7 +51,7 @@ def h_message(bot, id, target, message):
         del history[target.lower()][:-HISTORY_SIZE]
 
 #==============================================================================#
-@link('HELP')
+@link('HELP*')
 def h_help(bot, reply, args):
     reply('url [URL ...]',
     'Shows the titles of recently mentioned URLs, or of a specific URL.')
