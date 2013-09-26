@@ -10,6 +10,7 @@
 
 #==============================================================================#
 import collections
+import traceback
 import urllib
 import urllib2
 import socket
@@ -136,11 +137,24 @@ def get_title_html(url):
     with closing(urllib2.urlopen(request, timeout=TIMEOUT_SECONDS)) as stream:
         soup = BeautifulSoup(stream.read(READ_BYTES_MAX))
     title = soup.find('title')
-    return title and '\2%s\2' % title.text.strip()
+    return title and format_title(title.text.strip())
 
 def get_title_image(url):
     title = google_image_best_guess(url)
-    return 'Best guess: %s' % ('\2%s\2' % title if title else '(none)')
+    return 'Best guess: %s' % (format_title(title) if title else '(none)')
+
+def format_title(title):
+    title = '\2%s\2' % title
+
+    try:
+        import kakasi_lib
+        main_title = re.match('\2(.*?)( - YouTube)?\2$', title).group(1)
+        if kakasi_lib.is_ja(main_title):
+            title = '%s (read: \2%s\2)' % (title, kakasi_lib.kakasi(main_title))
+    except:
+        traceback.print_exc()
+
+    return title
 
 #==============================================================================#
 # Returns the "best guess" phrase that Google's reverse image search offers to
