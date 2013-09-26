@@ -27,6 +27,10 @@ def kakasi_unicode(text):
     return res
 
 def is_ja(text, threshold=0.5):
+    return ja_quotient(text) > threshold
+
+def ja_quotient(text):
     if type(text) is not unicode: text = text.decode('utf8')
     ja_len = len(filter(lambda c: kakasi_unicode(c) != c, text))
-    return float(ja_len)/len(text) > threshold
+    return float(ja_len)/len(text)
+
