@@ -30,7 +30,7 @@ link, install, uninstall = util.LinkSet().triple()
 URL_RE = re.compile('(https?://.+?)[.,;:!?>)}\]]?(?:\s|$)', re.I)
 AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:23.0) Gecko/20100101 Firefox/23.0'
 HISTORY_SIZE = 8
-TIMEOUT_SECONDS = 8 
+TIMEOUT_SECONDS = 20
 READ_BYTES_MAX = 1024*1024
 CMDS_PER_LINE_MAX = 4
 
