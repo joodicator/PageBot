@@ -26,15 +26,18 @@ def h_help(bot, reply, args):
 
 @link(('HELP', 'romaji'))
 def h_help_romaji(bot, reply, args):
-    reply('romaji TEXT',
+    reply('romaji TEXT')
+    reply('rj TEXT',
     'Shows the Hepburn romanisation(s) of Japanese characters occurring in TEXT,'
-    ' according to KAKASI (http://kakasi.namazu.org).')
+    ' according to KAKASI <http://kakasi.namazu.org>.')
 
 @link('!romaji')
+@link('!rj')
 def h_romaji(bot, id, target, args, full_msg):
-    kakasi(bot, id, target, args)
+    kakasi(bot, id, target, args, prefix=False)
 
 #===============================================================================
-def kakasi(bot, id, target, msg):
-    reply = '<%s> %s' % (id.nick, kakasi_lib.kakasi(msg))
+def kakasi(bot, id, target, msg, prefix=True):
+    reply = kakasi_lib.kakasi(msg)
+    if prefix: reply = '<%s> %s' % (id.nick, reply)
     message.reply(bot, id, target, reply, prefix=False)
