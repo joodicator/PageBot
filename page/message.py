@@ -99,12 +99,11 @@ def message(bot, id, target, msg):
         if bot.conf['bang_cmd']:
             match = re.match(r'!(?P<head>\S+)\s*(?P<body>.*)', msg)
             if match: break
+
         # NICK: CMD [ARGS...]
         match = re.match(r'(?P<addr>\S+):\s+!?(?P<head>\S+)\s*(?P<body>.*)', msg)
         if match and match.group('addr').lower() == bot.nick.lower(): break
-        # (Private) CMD [ARGS...]
-        match = re.match(r'\s*!?(?P<head>\S+)\s*(?P<body>.*)', msg)
-        if match and target == None: break
+
         return
     event = '!' + match.group('head').lower()
     body = match.group('body').strip()
@@ -149,9 +148,9 @@ def h_help(bot, id, target, args, full_msg):
     else:
         # Display general help and a summary of all commands.
         output(
-            'Commands are issued by saying%s "%s: COMMAND" or,'
-            ' by PM, just "COMMAND", where COMMAND is the command and its'
-            ' parameters. The following commands are available:'
+            'Commands are issued by saying%s "%s: COMMAND",'
+            ' where COMMAND is the command and its parameters.'
+            ' The following commands are available:'
             % (' "!COMMAND" or' if bot.conf['bang_cmd'] else '', bot.nick))
 
         yield sign('HELP*', bot, callback, args)
