@@ -156,7 +156,7 @@ def send_chat(work, slot, (r,g,b), text):
     send_message(work, 0x19, body)
 
 
-def login(work, name, password='', version='Terraria39'):
+def login(work, name, password='', version='Terraria71'):
     class TerrariaProtocol(object): pass
     work.terraria_protocol = TerrariaProtocol()
     work.terraria_protocol.chat_queue = []
