@@ -12,6 +12,7 @@ from untwisted import event
 
 import struct
 import sys
+import re
 
 
 __INSTALL_BOT__ = False
@@ -72,8 +73,12 @@ def h_message(work, head, body):
     elif head == 0x31:
         yield sign('SPAWN', work)
     elif head == 0x07:
-        spawn = struct.unpack('<ii', body[15:23])
-        world_name = body[36:]
+        if work.terraria_protocol.version_number < 69:
+            spawn = struct.unpack('<ii', body[15:23])
+            world_name = body[36:]
+        else:
+            spawn = struct.unpack('<ii', body[16:24])
+            world_name = body[91:]
         yield sign('WORLD_INFORMATION', work, spawn, world_name)
     elif head == 0x25:
         yield sign('REQUEST_PASSWORD', work)
@@ -157,6 +162,8 @@ def send_chat(work, slot, (r,g,b), text):
 
 
 def login(work, name, password='', version='Terraria71'):
+    version_number = int(re.search(r'\d+', version).group())
+
     class TerrariaProtocol(object): pass
     work.terraria_protocol = TerrariaProtocol()
     work.terraria_protocol.chat_queue = []
@@ -165,6 +172,7 @@ def login(work, name, password='', version='Terraria71'):
     work.terraria_protocol.name = name
     work.terraria_protocol.password = password
     work.terraria_protocol.version = version
+    work.terraria_protocol.version_number = version_number
     send_connect_request(work, version)
 
 def chat(work, text, colour=(255,255,255)):

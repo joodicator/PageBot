@@ -100,13 +100,13 @@ def h_other_join(bot, id, chan):
 
 @link('OTHER_PART')
 def h_other_part(bot, id, chan, msg):
-    cmsg = '%s left the channel' % \
+    cmsg = '%s left the channel%s.' % \
         (id.nick, (' (%s)' % msg) if msg else '')
     yield sign('IRC', bot, chan, cmsg)
 
 @link('OTHER_KICKED')
 def h_other_kick(bot, other_nick, op_id, chan, msg):
-    cmsg = '%s was kicked by %s' % \
+    cmsg = '%s was kicked by %s%s.' % \
         (other_nick, op_id.nick, (' (%s)' % msg) if msg else '')
     yield sign('IRC', bot, chan, cmsg)
 
