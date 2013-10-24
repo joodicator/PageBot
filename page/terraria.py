@@ -16,7 +16,7 @@ import re
 
 #==============================================================================#
 RECONNECT_DELAY_SECONDS = 10
-MAX_CHAT_LENGTH = 80
+MAX_CHAT_LENGTH = None
 
 servers = util.table('conf/terraria.py', 'server')
 
@@ -105,10 +105,11 @@ def kill_work(work):
 def ab_bridge(ab_mode, target, msg):
     work = te_work.get(target.lower())
     if work is None: return
-    max_len = MAX_CHAT_LENGTH - len('<%s> ' % work.terraria.user)
-    while len(msg) > max_len:
-        head, msg = msg[:max_len-3]+'...', '...'+msg[max_len-3:]
-        terraria_protocol.chat(work, head)
+    if MAX_CHAT_LENGTH is not None:
+        max_len = MAX_CHAT_LENGTH - len('<%s> ' % work.terraria.user)
+        while len(msg) > max_len:
+            head, msg = msg[:max_len-3]+'...', '...'+msg[max_len-3:]
+            terraria_protocol.chat(work, head)
     terraria_protocol.chat(work, msg)
 
 @ab_link(('BRIDGE', 'NAMES_REQ'))
