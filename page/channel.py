@@ -102,3 +102,10 @@ def h_closing(bot):
     for chan, names in track_channels.iteritems():
         yield sign('CLOSING_CHAN', bot, chan)
         yield sign(('CLOSING_CHAN', chan), bot)
+
+@link('INVITE')
+def h_invite(bot, id, target, channel, *args):
+    if target.lower() != bot.nick.lower(): return
+    channels = util.fdict('conf/bot.py').get('channels', [])
+    if channel.lower() not in map(str.lower, channels): return
+    bot.send_cmd('JOIN %s' % channel)
