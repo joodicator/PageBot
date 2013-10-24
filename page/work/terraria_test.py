@@ -38,8 +38,7 @@ def h_chat(w, slot, colour, text):
 m.link('CHAT', h_chat)
 
 w = untwisted.network.Work(m, socket.socket())
-#w.connect(('50.130.76.238', 7777))
-w.connect(('larch.jcrowe.name', 25565))
+w.connect(('50.130.76.238', 7777))
 
 terraria_protocol.login(w, 'TestBot', 'fto', version='Terraria71')
 
