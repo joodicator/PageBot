@@ -66,7 +66,7 @@ def h_message(work, head, body):
         text = body[4:]
         yield sign('STATUSBAR_TEXT', work, count, text)
     elif head == 0x0E:
-        slot, active = struct.unpack('<B?')
+        slot, active = struct.unpack('<B?', body)
         yield sign('SET_PLAYER_ACTIVITY', work, slot, active)
     elif head == 0x19:
         slot, = struct.unpack('<B', body[:1])
@@ -244,4 +244,5 @@ def h_player_appearance(work, slot, name):
 @link('SET_PLAYER_ACTIVITY')
 def h_set_player_activity(work, slot, active):
     if not hasattr(work, 'terraria_protocol'): return
-    if not active: del work.terraria_protocol.players[slot]
+    if active or slot not in work.terraria_protocol.players: return
+    del work.terraria_protocol.players[slot]
