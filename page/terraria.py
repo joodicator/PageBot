@@ -10,6 +10,7 @@ import untwisted.event
 import untwisted.mode
 import untwisted.network
 
+from datetime import datetime
 import traceback
 import socket
 import re
@@ -126,14 +127,18 @@ def h_bridge_names_req(bot, target, source, query):
 #==============================================================================#
 @te_link('CHAT')
 def te_chat(work, slot, colour, text):
-    match = re.match(r'(?:\[Server\] )?!online( .*|$)', text)
+    match = re.match(r'(\[Server\] )?(?P<cmd>!\S+)(?P<arg> .*|$)', text)
     if match:
-        name = work.terraria.name
-        query = match.group(1).strip()
-        bridge.notice(ab_mode, name, 'NAMES_REQ', name, query)
-    
-    if text.startswith('!'): return
-    
+        cmd, arg = match.group('cmd', 'arg')
+        if cmd.lower() == '!online':
+            name = work.terraria.name
+            bridge.notice(ab_mode, name, 'NAMES_REQ', name, arg.strip())
+            return
+        elif cmd.lower() in ('!time', '!date'):
+            msg = datetime.utcnow().strftime('%H:%M:%S %a %d/%b/%Y UTC')
+            terraria_protocol.chat(work, msg)
+            return
+
     if slot == 255:
         yield sign('TERRARIA', work, text)
     elif slot != work.terraria_protocol.slot:
