@@ -65,6 +65,9 @@ def h_message(work, head, body):
         count = struct.unpack('<i', body[:4])
         text = body[4:]
         yield sign('STATUSBAR_TEXT', work, count, text)
+    elif head == 0x0E:
+        slot, active = struct.unpack('<B?')
+        yield sign('SET_PLAYER_ACTIVITY', work, slot, active)
     elif head == 0x19:
         slot, = struct.unpack('<B', body[:1])
         colour = struct.unpack('<BBB', body[1:4])
@@ -237,3 +240,8 @@ def h_heartbeat(work):
 def h_player_appearance(work, slot, name):
     if not hasattr(work, 'terraria_protocol'): return
     work.terraria_protocol.players[slot] = name
+
+@link('SET_PLAYER_ACTIVITY')
+def h_set_player_activity(work, slot, active):
+    if not hasattr(work, 'terraria_protocol'): return
+    if not active: del work.terraria_protocol.players[slot]
