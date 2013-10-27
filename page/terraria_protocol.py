@@ -68,6 +68,10 @@ def h_message(work, head, body):
     elif head == 0x0E:
         slot, active = struct.unpack('<B?', body)
         yield sign('SET_PLAYER_ACTIVITY', work, slot, active)
+#    elif head == 0x0D:
+#        slot, cflags, islot, x,y, dx,dy, flags \
+#            = struct.unpack('<BBBffffB', body)
+#        yield sign('PLAYER_CONTROL', work, slot, (x, y))
     elif head == 0x19:
         slot, = struct.unpack('<B', body[:1])
         colour = struct.unpack('<BBB', body[1:4])
@@ -94,7 +98,7 @@ def h_debug(bot, *args):
 
 for h in (
     'DISCONNECT', 'CONNECTION_APPROVED', 'PLAYER_APPEARANCE',
-    'CHAT', 'SPAWN', 'WORLD_INFORMATION'
+    'CHAT', 'SPAWN', 'WORLD_INFORMATION'#, 'PLAYER_CONTROL'
 ): debug_link.link(h, h_debug, h)
 
 def debug_send(send_f):
@@ -164,7 +168,7 @@ def send_chat(work, slot, (r,g,b), text):
     send_message(work, 0x19, body)
 
 
-def login(work, name, password='', version='Terraria71'):
+def login(work, name, password='', version='Terraria72'):
     version_number = int(re.search(r'\d+', version).group())
 
     class TerrariaProtocol(object): pass
@@ -222,9 +226,8 @@ def h_spawn(work):
     if not hasattr(work, 'terraria_protocol'): return
     if work.terraria_protocol.stage != 2: return
     work.terraria_protocol.stage = 3
-    send_spawn_player(work,
-        work.terraria_protocol.slot,
-        *work.terraria_protocol.spawn)
+    spawn = (0, 9999)
+    send_spawn_player(work, work.terraria_protocol.slot, *spawn)
     for text in work.terraria_protocol.chat_queue:
         chat(work, text)
     work.terraria_protocol.chat_queue = []
