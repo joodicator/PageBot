@@ -6,6 +6,7 @@ import terraria_protocol
 import bridge
 
 from untwisted.magic import sign
+from untwisted.usual import Stop
 import untwisted.event
 import untwisted.mode
 import untwisted.network
@@ -13,11 +14,13 @@ import untwisted.network
 from datetime import datetime
 import traceback
 import socket
+import json
 import re
 
 #==============================================================================#
 RECONNECT_DELAY_SECONDS = 10
 MAX_CHAT_LENGTH = None
+STATE_FILE = 'state/terraria.json'
 
 servers = util.table('conf/terraria.py', 'server')
 
@@ -76,12 +79,14 @@ def reload_work(work):
             te_mode.drive('TERRARIA', work, msg)
         kill_work(work)
 
-def init_work(server, prev=None):
+#-------------------------------------------------------------------------------
+def init_work(server, prev=None, version=None):
     if prev is None:
         work = untwisted.network.Work(te_mode, socket.socket())
         work.setblocking(0)
         work.connect_ex(server.address)
-        terraria_protocol.login(work, server.user, server.password)
+        terraria_protocol.login(
+            work, server.user, server.password, version=version)
     else:
         prev.destroy()
         work = untwisted.network.Work(te_mode, prev.sock)
@@ -91,6 +96,7 @@ def init_work(server, prev=None):
     work.terraria = server
     return work
 
+#-------------------------------------------------------------------------------
 def kill_work(work):
     if hasattr(work, 'terraria'): del work.terraria
     terraria_protocol.close(work)
@@ -145,27 +151,53 @@ def te_chat(work, slot, colour, text):
         name = work.terraria_protocol.players.get(slot, slot)
         yield sign('TERRARIA', work, '<%s> %s' % (name, text))
 
+#-------------------------------------------------------------------------------
+@te_link('DISCONNECT')
+def te_disconnect(work, msg):
+    if msg != 'You are not using the same version as this server.': return
+
+    with open(STATE_FILE) as file: state = json.load(file)
+    state = state.get(work.terraria.address, dict())
+    base_version = state.get('version', terraria_protocol.DEFAULT_VERSION)
+    base_version = int(re.search(r'\d+', base_version))
+
+    version = work.terraria_protocol.version_number
+    version = 2*base_version - version + (1 if version <= base_version else 0)
+    if version < 0: return
+
+    yield reconnect_work(work, version='Terraria%s' % version)
+    raise Stop
+
+#-------------------------------------------------------------------------------
+@te_link('CONNECTION_APPROVED')
+def te_connection_approved(work, *args):
+    with open(STATE_FILE) as file: state = json.load(file)
+    server_state = state.get(work.terraria.address, dict())
+    server_state['version'] = work.terraria_protocol.version
+    state[work.terraria.address] = server_state
+    with open(STATE_FILE) as file: json.dump(state, file)
+
+#-------------------------------------------------------------------------------
 @te_link(untwisted.event.CLOSE)
 def te_close(work):
     if work.terraria_protocol.stage < 3: return
     yield sign('TERRARIA', work, 'Disconnected from server.')
 
+#-------------------------------------------------------------------------------
 @te_link('DISCONNECT')
 @te_link(untwisted.event.RECV_ERR)
 def te_disconnect_recv_err(work, info):
     if work.terraria_protocol.stage < 3: return
     yield sign('TERRARIA', work, 'Disconnected from server: %s' % info)
 
+#-------------------------------------------------------------------------------
 @te_link('DISCONNECT')
 @te_link(untwisted.event.RECV_ERR)
 @te_link(untwisted.event.CLOSE)
 def te_disconnect_recv_err_close(work, *args):
-    server = work.terraria
-    kill_work(work)
-    del te_work[server.name.lower()]
-    yield runtime.sleep(RECONNECT_DELAY_SECONDS)
-    te_work[server.name.lower()] = init_work(server)
+    yield reconnect_work(work)
 
+#-------------------------------------------------------------------------------
 @te_link('TERRARIA')
 def te_terraria(work, msg):
     wname = '+%s' % work.terraria_protocol.world_name
@@ -173,3 +205,18 @@ def te_terraria(work, msg):
         work.terraria.name, msg, wname)
 
 #==============================================================================#
+def reconnect_work(work, version=None):
+    yield util.msign(ab_mode, 'terraria.reconnect_work', work, version)
+
+@ab_link('terraria.reconnect_work')
+def h_reconnect_work(work, version):
+    if version is None:
+        with open(STATE_FILE) as file: state = json.load(file)
+        version = state.get(work.terraria.address, dict()).get('version')
+
+    server = work.terraria
+    kill_work(work)
+    del te_work[server.name.lower()]
+    yield runtime.sleep(RECONNECT_DELAY_SECONDS)
+    te_work[server.name.lower()] = init_work(server, version=version)
+

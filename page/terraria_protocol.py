@@ -17,6 +17,7 @@ import re
 
 __INSTALL_BOT__ = False
 
+DEFAULT_VERSION = 'Terraria72'
 
 link = util.LinkSet()
 link.link_module(std)
@@ -168,7 +169,8 @@ def send_chat(work, slot, (r,g,b), text):
     send_message(work, 0x19, body)
 
 
-def login(work, name, password='', version='Terraria72'):
+def login(work, name, password='', version=None):
+    if version is None: version = DEFAULT_VERSION
     version_number = int(re.search(r'\d+', version).group())
 
     class TerrariaProtocol(object): pass
