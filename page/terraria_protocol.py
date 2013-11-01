@@ -17,7 +17,7 @@ import re
 
 __INSTALL_BOT__ = False
 
-DEFAULT_VERSION = 'Terraria72'
+DEFAULT_VERSION = 'Terraria70'
 
 link = util.LinkSet()
 link.link_module(std)

@@ -165,39 +165,43 @@ class LinkSet(object):
     
     def __init__(self):
         self.links = []
-        self.modules = []
     
     # When called, a LinkSet produces a decorator that just adds a given handler
     # bound to each of the the given events, to its list.
     # IMPORTANT: this decorator should be applied after any other decorators,
     # (i.e. it should be first in the list) so that the right function is bound.
-    def __call__(self, event, *args):
+    def __call__(self, event, *args, **kwds):
         def link(func):
-            self.links.append((event, func) + args)
+            self.link(event, func, *args, **kwds)
             return func
         return link
 
-    def link(self, *args):
-        self.links.append(args)
+    def link(self, *args, **kwds):
+        self.links.append(('link', args, kwds))
     
-    def unlink(self, *args):
-        self.links.remove(args)
+    def unlink(self, *args, **kwds):
+        self.links.remove(('link', args, kwds))
 
-    def link_module(self, module):
-        self.modules.append(module)
+    def link_module(self, mod, *args, **kwds):
+        self.links.append(('link_module', mod, args, kwds))
 
-    def unlink_module(self, module):
-        self.modules.remove(module)
+    def unlink_module(self, mod, *args, **kwds):
+        self.links.remove(('link_module', mod, args, kwds))
     
     # Installs all the current event bindings into the given Mode instance.
     def install(self, mode):
-        for link in self.links: mode.link(*link)
-        for module in self.modules: module.install(mode)
+        for link in self.links:
+            if link[0] == 'link':
+                (_, args, kwds) = link
+                mode.link(*args, **kwds)
+            elif link[0] == 'link_module':
+                (_, mod, args, kwds) = link
+                mod.install(mode, *args, **kwds)
     
     # Uninstalls the current event bindings from the given Mode instance.
     def uninstall(self, mode):
         for link in self.links: mode.unlink(*link)
-        for module in self.modules: module.uninstall(mode)
+        for args, kwds in self.modules: args[0].uninstall(mode)
     
     # Maps the given function over the current bindings, returning a pair of
     # functions that respectively install and uninstall the resulting bindings.
