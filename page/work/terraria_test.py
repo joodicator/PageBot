@@ -40,7 +40,7 @@ m.link('CHAT', h_chat)
 w = untwisted.network.Work(m, socket.socket())
 w.connect(('50.130.76.238', 7777))
 
-terraria_protocol.login(w, 'TestBot', 'fto', version='Terraria72')
+terraria_protocol.login(w, 'TestBot', 'fto', version='Terraria9')
 
 while True:
     try:
