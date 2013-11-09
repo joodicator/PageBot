@@ -1,15 +1,22 @@
+import re
+import util
+import time
+import nickserv
+import inspect
+
 from untwisted.mode import Mode
 from untwisted.usual import apply
 from untwisted.magic import hold, sign
+
 from util import ID, just, msign, LinkSet
-import util
-import nickserv
-import inspect
-import re
+from message import reply
 
 link, install, uninstall = LinkSet().triple()
 
+IDENTIFY_DURATION_S = 60
+
 passed = set()
+identified = dict()
 
 # Decorates an untwisted event handler which takes arguments 'bot' and 'id',
 # causing its body to be executed iff the specified user is an admin according
@@ -36,6 +43,9 @@ def check(bot, id):
 def h_auth_check(bot, id):
     ret = lambda a: sign(('auth.check', bot, id), a)
 
+    if identify_check(id):
+        yield ret(True)
+
     with open('conf/admins.txt') as file:
         admins = re.findall(r'\S+', file.read())
 
@@ -54,3 +64,26 @@ def h_auth_check(bot, id):
             yield ret(True)
         else:
             yield ret(False)
+
+#===============================================================================
+
+@link('!id')
+@link('!identify')
+def h_identify(bot, id, target, args, full_msg):
+    with open('conf/auth_password.txt') as file:
+        password = file.read().strip()
+    if args.strip() == password:
+        identified[id] = time.clock()
+        reply(bot, id, target, 'Authentication successful.')
+    else:
+        reply(bot, id, target, 'Authentication failed: incorrect password.')
+
+def identify_check(id):
+    if id not in identified:
+        return False
+    elif time.clock() - identified[id] > IDENTIFY_DURATION_S:
+        del identified[id]
+        return False
+    else:
+        identified[id] = time.clock()
+        return True
