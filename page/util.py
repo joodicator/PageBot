@@ -187,7 +187,7 @@ class LinkSet(object):
 
     def unlink_module(self, mod, *args, **kwds):
         self.links.remove(('link_module', mod, args, kwds))
-    
+
     # Installs all the current event bindings into the given Mode instance.
     def install(self, mode):
         for link in self.links:
@@ -200,18 +200,13 @@ class LinkSet(object):
     
     # Uninstalls the current event bindings from the given Mode instance.
     def uninstall(self, mode):
-        for link in self.links: mode.unlink(*link)
-        for args, kwds in self.modules: args[0].uninstall(mode)
-    
-    # Maps the given function over the current bindings, returning a pair of
-    # functions that respectively install and uninstall the resulting bindings.
-    def map(self, func):
-        links = map(func, self.links)
-        def mapped_install(mode):
-            for link in links: mode.link(*link)
-        def mapped_uninstall(mode):
-            for link in links: mode.unlink(*link)
-        return mapped_install, mapped_uninstall
+        for link in self.links:
+            if link[0] == 'link':
+                (_, args, kwds) = link
+                mode.unlink(*args, **kwds)
+            elif link[0] == 'link_module':
+                (_, mod, args, kwds) = link
+                mod.uninstall(mode)
     
     # Syntactic sugar for one-line inclusion in modules.
     def triple(self):
