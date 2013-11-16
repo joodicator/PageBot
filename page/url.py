@@ -104,12 +104,8 @@ def h_url(bot, id, target, args, full_msg):
 class PageURLError(Exception):
     pass
 
-class HeadRequest(urllib2.Request):
-    def get_method(self):
-        return "HEAD"
-
 def get_title(url):
-    request = HeadRequest(url)
+    request = urllib2.Request(url)
     request.add_header('User-Agent', AGENT)
 
     host = request.get_host()
@@ -118,6 +114,7 @@ def get_title(url):
 
     with closing(urllib2.urlopen(request, timeout=TIMEOUT_SECONDS)) as stream:
         type = stream.info().gettype()
+        final_url = stream.geturl()
 
     title = None
     if 'html' in type:
@@ -126,7 +123,9 @@ def get_title(url):
         title = get_title_image(url)
 
     title = title or '(no title)'
-    return '%s [%s; %s]' % (title, type, abbrev_url(url))
+    if final_url == url: url_info = abbrev_url(url)
+    else: url_info = '%s -> %s' % (abbrev_url(url), abbrev_url(final_url))
+    return '%s [%s; %s]' % (title, type, url_info)
 
 def abbrev_url(url):
     return '...' + url[-31:] if len(url) > 34 else url
