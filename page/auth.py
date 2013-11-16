@@ -13,7 +13,7 @@ from message import reply
 
 link, install, uninstall = LinkSet().triple()
 
-IDENTIFY_DURATION_S = 60
+IDENTIFY_DURATION_S = 60*60
 
 passed = set()
 identified = dict()
