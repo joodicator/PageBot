@@ -18,6 +18,12 @@ IDENTIFY_DURATION_S = 60*60
 passed = set()
 identified = dict()
 
+def reload(prev):
+    if hasattr(prev, 'passed') and isinstance(prev.passed, set):
+        passed.update(prev.passed)
+    if hasattr(prev, 'identified') and isinstance(prev.identified, dict):
+        identified.update(prev.identified)
+
 # Decorates an untwisted event handler which takes arguments 'bot' and 'id',
 # causing its body to be executed iff the specified user is an admin according
 # to check(bot, id).
