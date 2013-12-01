@@ -144,7 +144,7 @@ def h_help(bot, id, target, args, full_msg):
         for line in lines:
             if line[0]: output(header(line[0]))
             for para in line[1:]:
-                if para: output('    ' + para)
+                if para: output(para)
     else:
         # Display general help and a summary of all commands.
         output(

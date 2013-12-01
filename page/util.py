@@ -170,9 +170,10 @@ class LinkSet(object):
     # bound to each of the the given events, to its list.
     # IMPORTANT: this decorator should be applied after any other decorators,
     # (i.e. it should be first in the list) so that the right function is bound.
-    def __call__(self, event, *args, **kwds):
+    def __call__(self, *events, **kwds):
         def link(func):
-            self.link(event, func, *args, **kwds)
+            for event in events:
+                self.link(event, func, **kwds)
             return func
         return link
 
