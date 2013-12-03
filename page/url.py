@@ -5,8 +5,6 @@
 # - Recognise images tagged by the poster as NSFW.
 # - Show YouTube video descriptions, etc, for YT videos.
 # - Interpret imgur HTML URLs (etc) as images.
-# - Recognise quit messages, part messages, notices.
-# - Recognise messages from !tell.
 
 #==============================================================================#
 import collections
@@ -43,8 +41,19 @@ def reload(prev):
         history.update(prev.history)
 
 #==============================================================================#
-@link('MESSAGE')
+@link('MESSAGE', 'UNOTICE', 'OTHER_PART', 'OTHER_QUIT')
 def h_message(bot, id, target, message):
+    examine_message(message, target)
+
+@link('OTHER_KICKED')
+def h_other_kicked(bot, other_nick, op_id, channel, message):
+    examine_message(message, channel)
+
+@link('TELL_DELIVERY')
+def h_tell_delivery(bot, from_id, to_id, channel, message):
+    examine_message(message, channel)
+
+def examine_message(message, target):
     if target is None: return
     urls = re.findall(URL_RE, message)
     if urls:

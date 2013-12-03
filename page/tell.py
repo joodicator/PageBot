@@ -486,6 +486,8 @@ def deliver_msg(bot, id, chan, msg):
         '%sd, %02d:%02d:%02d' % (delta.days, d_hours, d_mins, d_secs)))
     bot.send_msg(chan, "<%s> %s" % (msg.from_id.nick, msg.message))
 
+    bot.drive('TELL_DELIVERY', bot, msg.from_id, id, chan, msg.message)
+
     return True
 
 #==============================================================================#
