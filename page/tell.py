@@ -189,21 +189,25 @@ def h_tell(bot, id, target, args, full_msg):
         state.msgs.append(record)
 
     put_state(state)
+
     count = len(to_nicks)
-    reply(bot, id, target, 'It shall be done%s.'
-        % (' (message sent to %s recipients)' % count if count > 1 else ''))
+    if count > 1: reply(bot, id, target,
+        'It shall be done (%s messages sent).' % count)
+    else: reply(bot, id, target,
+        'It shall be done (1 message sent to "%s").' % to_nick)
 
 #==============================================================================#
 @link('HELP')
 def h_help_untell_short(bot, reply, args):
-    reply('untell NICK [...]',
-    'Cancels messages left using "tell".')
+    reply('untell [NICK ...]',
+    'Cancels your last "tell" message, or all messages to given NICKs.')
 
 @link(('HELP', 'untell'))
 def h_help_untell(bot, reply, args):
-    reply('untell NICK[, NICK[, ...]]',
+    reply('untell [NICK[, NICK[, ...]]]',
     'Cancels all undelivered messages sent using the "tell" command to any of'
-    ' the listed NICKs, by any user with your hostmask.')
+    ' the listed NICKs, by any user with your hostmask; or, if no NICK is'
+    ' given, cancels your single most recent message.')
 
 @link('!untell')
 def h_untell(bot, id, target, args, full_msg):
@@ -217,24 +221,46 @@ def h_untell(bot, id, target, args, full_msg):
     else:
         reply(bot, id, target,
             'Error: the "untell" command may only be used in a channel.')
-        return
+        return # No return with argument allowed in a generator.
 
-    if not args:
-        reply(bot, id, target,
-            'Error: you must specify at least one recipient.'
-            ' See "help untell" for correct usage.')
-        return
+    if args:
+        untell_nicks(bot, id, target, channel, args)
+    else:
+        untell_last(bot, id, target, channel)
 
-    def will_cancel(msg, to_nick):
+#-------------------------------------------------------------------------------
+def untell_last(bot, id, target, channel):
+    state = get_state()
+    def would_cancel(msg):
+        if msg.channel.lower() != channel.lower(): return False
+        if msg.from_id != id: return False
+        return True
+    cancel_msgs = filter(would_cancel, state.msgs)
+
+    if cancel_msgs:
+        last_msg = cancel_msgs[-1]
+        state.msgs = [m for m in state.msgs if m is not last_msg]
+        put_state(state)
+        msg = ('1 message (to "%s"; the most recent of %s such message%s)'
+            ' deleted.' % (last_msg.to_nick, len(cancel_msgs),
+            's' if len(cancel_msgs) > 1 else ''))
+    else:
+        msg = 'Error: you have no messages to cancel.'
+    reply(bot, id, target, msg)
+
+#-------------------------------------------------------------------------------
+def untell_nicks(bot, id, target, channel, args):
+    state = get_state()
+    count = dict()
+
+    def would_cancel(msg, to_nick):
         if msg.channel.lower() != channel.lower(): return False
         if msg.to_nick != to_nick: return False
         if msg.from_id != id: return False
         return True
 
-    count = dict()
-    state = get_state()
     for to_nick in [n.strip() for n in args.split(',')]:
-        msgs = [(will_cancel(m, to_nick), m) for m in state.msgs]
+        msgs = [(would_cancel(m, to_nick), m) for m in state.msgs]
         msgs_cancel = [m for (b, m) in msgs if b]
         msgs_keep = [m for (b, m) in msgs if not b]
         count[to_nick] = len(msgs_cancel)
