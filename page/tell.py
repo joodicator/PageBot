@@ -51,11 +51,21 @@ DATE_FORMAT_SHORT = '%Y-%m-%d %H:%M'
 # Maximum number of history states to remember.
 HISTORY_SIZE = 8 
 
+# No interval of time shorter than this shall pass between repeated
+# notification of new messages when the recipient is changing their nick.
+MIN_NICKCHANGE_NOTIFY_INTERVAL_S = 3600 # 1 hour
+
+
+last_notify = dict()
+# last_notify[msg] = time.time()
+# when msg's recipient was last notified of it.
+
 
 # A saved message kept by the system.
 Message = namedtuple('Message',
     ('time_sent', 'channel', 'from_id', 'to_nick', 'message'))
 Message.__getstate__ = lambda *a, **k: None
+
 
 # The plugin's persistent state object.
 class State(object):
@@ -127,6 +137,13 @@ def redo_state():
     state = load_state().next_state
     if state is None: raise HistoryEmpty
     set_state(state)
+
+# Mark that msg's receipient has been notified of it now.
+def set_last_notify(msg, state):
+    last_notify[msg] = time.time()
+    for other_msg in last_notify.keys():
+        if other_msg not in state.msgs:
+            last_notify.pop(other_msg, None)
 
 #==============================================================================#
 @link('HELP*')
@@ -467,22 +484,25 @@ def h_nick(bot, id, new_nick, chan):
     state = get_state()
     old_id = util.ID(*id)
     new_id = util.ID(new_nick, old_id.user, old_id.host)
-    new_msgs = {m for m in state.msgs
-                if would_deliver(new_id, chan, m)
-                and not would_deliver(old_id, chan, m)}
-    if new_msgs: notify_msgs(bot, new_id, chan)
+
+    last_notify_max = time.time() - MIN_NICKCHANGE_NOTIFY_INTERVAL_S
+    def would_notify(msg):
+        if not would_deliver(new_id, chan, msg): return False
+        return msg not in last_notify or last_notify[msg] < last_notify_max
+
+    if any(would_notify(m) for m in state.msgs):
+        return notify_msgs(bot, new_id, chan)
 
 #==============================================================================#
 # Notify `id' of messages left for them in `chan', if any.
 def notify_msgs(bot, id, chan):
     state = get_state()
     msgs = filter(lambda m: would_deliver(id, chan, m), state.msgs)
-    if len(msgs) > 1:
-        reply(bot, id, chan,
-            'You have %s messages; say anything to read them.' % len(msgs))
-    elif len(msgs):
-        reply(bot, id, chan,
-            'You have a message; say anything to read it.')    
+    if msgs:
+        reply(bot, id, chan, 'You have %s message%s; say anything to read %s.'
+            % ((len(msgs),'s','them') if len(msgs) > 1 else (len(msgs),'','it')))
+        for msg in msgs:
+            set_last_notify(msg, state)
 
 #==============================================================================#
 # Deliver to `id' any messages left for them in `chan'.
@@ -513,7 +533,6 @@ def deliver_msg(bot, id, chan, msg):
     bot.send_msg(chan, "<%s> %s" % (msg.from_id.nick, msg.message))
 
     bot.drive('TELL_DELIVERY', bot, msg.from_id, id, chan, msg.message)
-
     return True
 
 #==============================================================================#
