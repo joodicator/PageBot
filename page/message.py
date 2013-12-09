@@ -100,8 +100,8 @@ def message(bot, id, target, msg):
         return
     event = '!' + match.group('head').lower()
     body = match.group('body').strip()
+    yield sign('COMMAND', bot, id, target, event, body, msg)
     yield sign(event, bot, id, target, body, msg)
-    yield sign((event, target), bot, id, body, msg)
     raise Stop
 
 
