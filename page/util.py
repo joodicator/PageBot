@@ -1,8 +1,8 @@
 from types import MethodType as instancemethod
 from types import ClassType as classobj
 from collections import namedtuple
-from itertools import *
 from functools import *
+from itertools import *
 import os.path
 import inspect
 import random
@@ -246,15 +246,16 @@ def multi(*cmds, **kwds): # limit=None, prefix=True
     def multi_deco(func):
         def multi_func(bot, id, target, args, *extra):
             argss = re.split(cre, args)
-            plain_reply = lambda msg: message_reply(bot, id, target, msg)
+            def plain_reply(msg):
+                message_reply(bot, id, target, msg)
             for (index, sub_args) in izip(count(1), argss):
                 if limit and index > limit:
-                    return plain_reply('(further invocations ignored).')
-                if len(argss) > 1:
-                    reply = lambda msg: plain_reply('[%d] %s' % (index, msg))
-                else: reply = plain_reply
-
-                yield sub(func(bot, id, target, sub_args.strip(), *extra, reply))
+                    plain_reply('(further invocations ignored).')
+                    break
+                def multi_reply(msg):
+                   plain_reply('[%d] %s' % (index, msg))
+                yield sub(func(bot, id, target, sub_args.strip(), *extra,
+                    reply=multi_reply if len(argss)>1 else plain_reply))
         return multi_func
     return multi_deco
 
@@ -263,9 +264,21 @@ def multi(*cmds, **kwds): # limit=None, prefix=True
 # which sub_gen is the return value.
 def sub(sub_gen):
     import untwisted.usual
-    def action(mode, gen):
+    def action(mode, super_gen):
         if not inspect.isgenerator(sub_gen): return
-        chain = itertools.chain(sub_gen, gen)
-        untwisted.usual.chain(mode, chain)
+        gen = gen_chain(sub_gen, super_gen)
+        untwisted.usual.chain(mode, gen)
         raise StopIteration
     return action
+
+#===============================================================================
+# As itertools.chain, but supports the send() method, and requires all arguments
+# to be generators (or otherwise to support send()).
+def gen_chain(*gens):
+    for gen in gens:
+        value = None
+        try:
+            while True:
+                value = yield gen.send(value)
+        except StopIteration:
+            pass

@@ -93,6 +93,7 @@ def h_url(bot, id, target, args, full_msg, reply):
     for url in urls:
         try:
             reply(get_title(url))
+            yield runtime.sleep(0.01)
         except (socket.error, urllib2.URLError, PageURLError) as e:
             reply('Error: %s [%s]' % (e, abbrev_url(url)))    
 
