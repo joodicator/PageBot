@@ -53,6 +53,11 @@ def h_other_kicked(bot, other_nick, op_id, channel, message):
 def h_tell_delivery(bot, from_id, to_id, channel, message):
     examine_message(message, channel)
 
+@link('COMMAND')
+def h_command(bot, id, target, cmd, args, full_msg):
+    if cmd in ('!url', '!title'): return
+    examine_message(args, target)
+
 def examine_message(message, target):
     if target is None: return
     urls = re.findall(URL_RE, message)
