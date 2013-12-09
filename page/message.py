@@ -1,19 +1,12 @@
 from untwisted.magic import sign
 from untwisted.usual import Stop
 from util import LinkSet, ID
+from util import message_reply as reply
 import util
 from itertools import *
 import re
 
 link, install, uninstall = LinkSet().triple()
-
-# Reply (in the same channel or by PM, as appropriate) to a message by `id'
-# sent to `target' with the message `msg', possibly prefixing the message with
-# their nick, unless `prefix' is given as False.
-def reply(bot, id, target, msg, prefix=True):
-    if prefix and target != None:
-        msg = '%s: %s' % (id.nick, msg)
-    bot.send_msg(target or id.nick, msg)
 
 
 @link('JOIN')
