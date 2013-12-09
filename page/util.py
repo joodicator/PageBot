@@ -12,6 +12,14 @@ import re
 ID = namedtuple('ID', ('nick', 'user', 'host'))
 ID.__getstate__ = lambda *a, **k: None
 
+# Reply (in the same channel or by PM, as appropriate) to a message by `id'
+# sent to `target' with the message `msg', possibly prefixing the message with
+# their nick, unless `prefix' is given as False.
+def message_reply(bot, id, target, msg, prefix=True):
+    if prefix and target != None:
+        msg = '%s: %s' % (id.nick, msg)
+    bot.send_msg(target or id.nick, msg)
+
 # Given a function and an instance, returns an instancemethod appearing as that
 # function as a method of the instnace's class, bound to the instance.
 def bind(func, inst):
@@ -212,3 +220,52 @@ class LinkSet(object):
     # Syntactic sugar for one-line inclusion in modules.
     def triple(self):
         return self, self.install, self.uninstall
+
+#===============================================================================
+# Decorates a !command event handler, so that it accepts multiple invocations on
+# a single line, whose arguments are separated by the given strings, which will
+# typically be the events ('!cmd1', '!cmd2', ...) that the event handler is
+# bound to.
+#
+# The event handler must accept an additional keyword argument called called
+# 'reply', which is a function reply(msg) with similar semantics to
+# message.reply; but which prepends '[%d] '%index to msg, where index is the
+# 1-based index of the sub-invocation of the command (unless only 1 invocation
+# is given, in which case nothing is prepended); and taking its 'prefix'
+# argument from the arguments to multi(). This should usually be used instead
+# of replying directly to the command.
+#
+# If limit=N is given, only the first N invocations are processed, with an
+# explanatory message supplied to the invoker when more than N are supplied,
+# in the same style as the reply() function would otherwise have been given.
+def multi(*cmds, **kwds): # limit=None, prefix=True
+    limit = kwds.get('limit', None)
+    prefix = kwds.get('prefix', True)
+    cre = '|'.join(re.escape(cmd) for cmd in cmds)
+    cre = re.compile('(?:%s)(?:\s|$)'%cre, re.I)
+    def multi_deco(func):
+        def multi_func(bot, id, target, args, *extra):
+            argss = re.split(cre, args)
+            plain_reply = lambda msg: message_reply(bot, id, target, msg)
+            for (index, sub_args) in izip(count(1), argss):
+                if limit and index > limit:
+                    return plain_reply('(further invocations ignored).')
+                if len(argss) > 1:
+                    reply = lambda msg: plain_reply('[%d] %s' % (index, msg))
+                else: reply = plain_reply
+
+                yield sub(func(bot, id, target, sub_args.strip(), *extra, reply))
+        return multi_func
+    return multi_deco
+
+#===============================================================================
+# When yielded from an untwisted event handler, runs the handler invocation from
+# which sub_gen is the return value.
+def sub(sub_gen):
+    import untwisted.usual
+    def action(mode, gen):
+        if not inspect.isgenerator(sub_gen): return
+        chain = itertools.chain(sub_gen, gen)
+        untwisted.usual.chain(mode, chain)
+        raise StopIteration
+    return action

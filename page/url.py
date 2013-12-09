@@ -7,21 +7,21 @@
 # - Interpret imgur HTML URLs (etc) as images.
 
 #==============================================================================#
+from contextlib import closing
+from itertools import *
 import collections
 import traceback
 import urllib
 import urllib2
 import socket
 import re
-from contextlib import closing
 
 from bs4 import BeautifulSoup
-
 from untwisted.magic import sign
 
+from util import multi
 import util
 import runtime
-from itertools import *
 
 #==============================================================================#
 link, install, uninstall = util.LinkSet().triple()
@@ -76,38 +76,25 @@ def h_help_url(bot, reply, args):
     ' called. Further "!url" commands (up to %s in total) may be given on the'
     ' same line.' % CMDS_PER_LINE_MAX)
 
-@link('!url')
-@link('!title')
-def h_url(bot, id, target, args, full_msg):
-    from message import reply
+@link('!url', '!title')
+@multi('!url', '!title', limit=CMDS_PER_LINE_MAX)
+def h_url(bot, id, target, args, full_msg, reply):
+    if args:
+        urls = re.findall(URL_RE, args)
+    elif target and history[target.lower()]:
+        urls = history[target.lower()].pop(-1)
+    else:
+        urls = None
 
-    commands = re.split(r'!(?:url|title)(?:\s|$)', args,
-                        maxsplit = CMDS_PER_LINE_MAX-1,
-                        flags    = re.I)
+    if not urls:
+        reply('No URL found.')
+        return
 
-    for (n, args) in izip(count(1), commands):
-        def reply_(msg):
-            if len(commands) > 1: msg = '[%s] %s' % (n, msg)
-            reply(bot, id, target, msg, prefix=False)
-
-        if args:
-            urls = re.findall(URL_RE, args)
-        elif target and history[target.lower()]:
-            urls = history[target.lower()].pop(-1)
-        else:
-            urls = None
-    
-        if not urls:
-            reply_('No URL found.')
-            continue
-    
-        for url in urls:
-            try:
-                title = get_title(url)
-                reply_(title)
-            except (socket.error, urllib2.URLError, PageURLError) as e:
-                reply_('Error: %s [%s]' % (e, abbrev_url(url)))    
-            yield runtime.sleep(0)
+    for url in urls:
+        try:
+            reply(get_title(url))
+        except (socket.error, urllib2.URLError, PageURLError) as e:
+            reply('Error: %s [%s]' % (e, abbrev_url(url)))    
 
 #==============================================================================#
 class PageURLError(Exception):
