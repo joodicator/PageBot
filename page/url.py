@@ -43,7 +43,7 @@ def reload(prev):
 #==============================================================================#
 @link('MESSAGE', 'UNOTICE', 'OTHER_PART', 'OTHER_QUIT')
 def h_message(bot, id, target, message):
-    examine_message(message, target)
+    examine_message(message, target, id)
 
 @link('OTHER_KICKED')
 def h_other_kicked(bot, other_nick, op_id, channel, message):
@@ -56,14 +56,14 @@ def h_tell_delivery(bot, from_id, to_id, channel, message):
 @link('COMMAND')
 def h_command(bot, id, target, cmd, args, full_msg):
     if cmd in ('!url', '!title'): return
-    examine_message(args, target)
+    examine_message(args, target, id)
 
-def examine_message(message, target):
-    if target is None: return
+def examine_message(message, channel, id):
+    channel = channel or ('%s!%s@%s' % id).lower()
     urls = re.findall(URL_RE, message)
     if urls:
-        history[target.lower()].append(urls)
-        del history[target.lower()][:-HISTORY_SIZE]
+        history[channel].append(urls)
+        del history[channel][:-HISTORY_SIZE]
 
 #==============================================================================#
 @link('HELP*')
@@ -84,10 +84,12 @@ def h_help_url(bot, reply, args):
 @link('!url', '!title')
 @multi('!url', '!title', limit=CMDS_PER_LINE_MAX)
 def h_url(bot, id, target, args, full_msg, reply):
+    channel = target or ('%s!%s@%s' % id).lower()
+
     if args:
         urls = re.findall(URL_RE, args)
-    elif target and history[target.lower()]:
-        urls = history[target.lower()].pop(-1)
+    elif history[channel]:
+        urls = history[channel].pop(-1)
     else:
         urls = None
 
