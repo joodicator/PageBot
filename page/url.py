@@ -82,7 +82,7 @@ def h_help_url(bot, reply, args):
     ' same line.' % CMDS_PER_LINE_MAX)
 
 @link('!url', '!title')
-@multi('!url', '!title', limit=CMDS_PER_LINE_MAX)
+@multi('!url', '!title', limit=CMDS_PER_LINE_MAX, prefix=False)
 def h_url(bot, id, target, args, full_msg, reply):
     channel = target or ('%s!%s@%s' % id).lower()
 
