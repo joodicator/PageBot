@@ -24,6 +24,11 @@ VERSION_RECONNECT_DELAY_SECONDS = 1
 MAX_CHAT_LENGTH = None
 STATE_FILE = 'state/terraria.json'
 
+IGNORE_MESSAGES=(
+    'The air is getting colder around you...',
+    'You feel vibrations from deep below...',
+    'This is going to be a terrible night...')
+
 servers = util.table('conf/terraria.py', 'server')
 
 te_mode = untwisted.mode.Mode()
@@ -165,6 +170,7 @@ def te_chat(work, slot, colour, text):
             return
 
     if slot == 255:
+        if text in IGNORE_MESSAGES: return
         yield sign('TERRARIA', work, text)
     elif slot != work.terraria_protocol.slot:
         name = work.terraria_protocol.players.get(slot, slot)
