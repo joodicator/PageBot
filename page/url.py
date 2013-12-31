@@ -152,8 +152,8 @@ def format_title(title):
     try:
         import kakasi_lib
         main_title = re.match('\2(.*?)( - YouTube)?\2$', title).group(1)
-        if kakasi_lib.is_ja(main_title):
-            title = '%s (read: \2%s\2)' % (title, kakasi_lib.kakasi(main_title))
+#        if kakasi_lib.is_ja(main_title):
+#            title = '%s (read: \2%s\2)' % (title, kakasi_lib.kakasi(main_title))
     except:
         traceback.print_exc()
 
