@@ -37,7 +37,10 @@ def h_rpl_namereply(bot, _1, _2, _3, chan, names):
 
 @link('366')
 def h_rpl_endofnames(bot, _1, _2, chan, *args):
-    yield sign(('channel.names', bot, chan.lower()), names_channels[chan.lower()])
+    names = names_channels[chan.lower()]
+    yield sign(('channel.names', bot, chan.lower()), names)
+    yield sign(('NAMES', chan.lower()), bot, names)
+    yield sign('NAMES', bot, chan.lower(), names)
     del names_channels[chan.lower()]
 
 
