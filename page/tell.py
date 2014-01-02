@@ -14,12 +14,13 @@
 # - Place some limit on the number of messages a single user can leave, possibly
 #   also per recipient (if it's possible to identify "recipients"...)
 
+from message import reply
+from util import LinkSet, multi
+from auth import admin
+import channel
 import util
 import auth
-from util import LinkSet
-from auth import admin
-from message import reply
-import channel
+
 import untwisted.magic
 
 from collections import namedtuple
@@ -303,18 +304,20 @@ def h_help_dismiss_short(bot, reply, args):
 
 @link(('HELP', 'dismiss'))
 def h_help_dismiss(bot, reply, args):
-    reply('dismiss [NICK]',
+    reply('dismiss [NICK] [!dismiss [NICK] ...]',
     'If NICK is given, dismisses the most recent message left for you by NICK,'
     ' preventing it from being delivered; otherwise, dismisses the most recent'
-    ' message left by anybody. Messages may be recovered using "undismiss".',
+    ' message left by anybody. Messages may be recovered using "undismiss".'
+    ' Up to 3 additional !dismiss commands may be given on the same line.',
     'NICK may be an IRC nick or a NICK!USER@HOST, may contain the wildcard'
     ' characters * and ?, and may be a Python 2 regular expression containing'
     ' the character $, as specified in "help tell"; in which case, the most'
     ' recent matching message is dismissed.')
 
 @link('!dismiss')
-def h_dismiss(bot, id, chan, query, *args):
-    if chan is None: return reply(bot, id, chan,
+@multi('!dismiss', limit=4)
+def h_dismiss(bot, id, chan, query, full_msg, reply):
+    if chan is None: return reply(
         'Error: the "dismiss" command may only be used in a channel.')
 
     state = get_state()
@@ -324,7 +327,7 @@ def h_dismiss(bot, id, chan, query, *args):
 
     msgs = [m for m in state.msgs if would_deliver(id, chan, m)
             and (not query or match_id(query, m.from_id))]
-    if not msgs: return reply(bot, id, chan,
+    if not msgs: return reply(
         'You have no messages%s to dismiss.' % (query and ' from "%s"' % query))
 
     msg = msgs[-1]
@@ -339,7 +342,7 @@ def h_dismiss(bot, id, chan, query, *args):
        % (msg.from_id.nick, count, 's' if count != 1 else ''))
 
     put_state(state)
-    reply(bot, id, chan, msg)
+    reply(msg)
 
 #==============================================================================#
 @link('HELP')

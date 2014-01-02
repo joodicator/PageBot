@@ -247,7 +247,7 @@ def multi(*cmds, **kwds): # limit=None, prefix=True
         def multi_func(bot, id, target, args, *extra):
             argss = re.split(cre, args)
             def plain_reply(msg):
-                message_reply(bot, id, target, msg)
+                message_reply(bot, id, target, msg, prefix=prefix)
             for (index, sub_args) in izip(count(1), argss):
                 if limit and index > limit:
                     plain_reply('(further invocations ignored).')
