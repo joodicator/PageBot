@@ -11,7 +11,7 @@ def init_kakasi(*args):
     libkakasi.kakasi_do.restype = ctypes.c_void_p
     libkakasi.kakasi_getopt_argv(len(args), (ctypes.c_char_p * len(args))(*args))
 
-init_kakasi('-Ea', '-Ka', '-Ha', '-Ja', '-s', '-p', '-rhepburn')
+init_kakasi('-Ka', '-Ha', '-Ja', '-s', '-p', '-rhepburn')
 
 def kakasi(text):
     if type(text) is unicode:
@@ -22,6 +22,7 @@ def kakasi(text):
         raise TypeError('utf8 str or unicode expected.')
 
 def kakasi_unicode(text):
+    if not text: return text
     text = text.encode(backslash_escape(KAKASI_CODEC), 'backslashreplace')
     res_ptr = libkakasi.kakasi_do(text)
     res = ctypes.string_at(res_ptr).decode(KAKASI_CODEC)
