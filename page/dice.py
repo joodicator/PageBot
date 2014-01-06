@@ -1,6 +1,8 @@
 import re
 import random
 
+from untwisted.magic import sign
+
 import util
 import message
 
@@ -16,10 +18,7 @@ def h_help(bot, reply, args):
     'Simulates the rolling of dice.')
 
 #===============================================================================
-@link(('HELP', 'dice'))
-@link(('HELP', 'roll'))
-@link(('HELP', 'd'))
-@link(('HELP', 'r'))
+@link(('HELP', 'dice'), ('HELP, roll'), ('HELP', 'd'), ('HELP', 'r'))
 def h_help_roll(bot, reply, args):
     reply('dice [MdN[+K|-K] ...]',
     'Simulates one or more dice rolls, listing for each roll its total result,'
@@ -45,6 +44,8 @@ def h_roll(bot, id, target, args, full_msg):
     class UserError(Exception):
         pass
 
+    rolls = []
+
     def check_roll(dice=None, sides=None, add=None):
         if sides is not None and sides == 0: raise UserError(
             '"d0" does not make sense - the number of sides must be positive.')
@@ -59,33 +60,40 @@ def h_roll(bot, id, target, args, full_msg):
         dice = int(match.group(1)) if match.group(1) else 1
         sides = int(match.group(2))
         add = int(match.group(3)) if match.group(3) else 0
-        check_roll(dice, sides, add)
-        return roll_str(dice, sides, add)
+        return do_roll_str(dice, sides, add)
 
     def add_sub(match):
         dice, sides, add = DEFAULT_ROLL
         add += int(match.group(1))
+        return do_roll_str(dice, sides, add)
+
+    def do_roll_str(dice, sides, add):
         check_roll(dice, sides, add)
-        return roll_str(dice, sides, add)
+        rstr, rint = roll_str_int(dice, sides, add)
+        rolls.append(((dice, sides, add), rint))
+        return rstr
     
     try:
         msg = re.sub(r'(?:^|(?<=\W))([+-]\d+)\b', add_sub, args)
         msg = re.sub(r'\b(\d*)[dD](\d+)([+-]\d+)?\b', roll_sub, msg)
         if msg == args:
-            msg = '%s %s' % (roll_str(*DEFAULT_ROLL), args)
+            msg = '%s %s' % (do_roll_str(*DEFAULT_ROLL), args)
             msg = '(%s) %s' % (roll_str_spec(*DEFAULT_ROLL), msg)
         if len(msg) > 400: msg = '%s(...)' % msg[:395]
+        yield sign('DICE_ROLLS', bot, id, target, rolls, msg)
         message.reply(bot, id, target, msg)
     except UserError as e:
         message.reply(bot, id, target, 'Error: %s' % e.message)
 
 #===============================================================================
-def roll_str(dice, sides, add):
+def roll_str_int(dice, sides, add):
     rolls = roll_list(dice, sides)
-    return '%s%s%s' % (
-        '\2%s\2' % (sum(rolls) + add),
+    rint = sum(rolls) + add
+    rstr = '%s%s%s' % (
+        '\2%s\2' % rint,
         '=%s' % '+'.join(map(str, rolls)) if add or dice>1 else '',
         '(%+d)' % add if add else '')
+    return (rstr, rint)
 
 #===============================================================================
 def roll_str_spec(dice, sides, add):

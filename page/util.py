@@ -14,11 +14,20 @@ ID.__getstate__ = lambda *a, **k: None
 
 # Reply (in the same channel or by PM, as appropriate) to a message by `id'
 # sent to `target' with the message `msg', possibly prefixing the message with
-# their nick, unless `prefix' is given as False.
-def message_reply(bot, id, target, msg, prefix=True):
+# their nick, unless `prefix' is given as False. For `wrap', see util.send_msg.
+def message_reply(bot, id, target, msg, prefix=True, wrap=False):
     if prefix and target != None:
         msg = '%s: %s' % (id.nick, msg)
-    bot.send_msg(target or id.nick, msg)
+    send_msg(bot, target or id.nick, msg, wrap=wrap)
+
+# As bot.send_msg(target, msg), but sends multiple separate messages if wrap
+# is True and the message is too long to fit in a single IRC message.
+def send_msg(bot, target, msg, wrap=False):
+    WRAP_LEN, ELLIP = 400, '...'
+    while wrap and len(msg) > WRAP_LEN:
+        bot.send_msg(target, msg[:WRAP_LEN-len(ELLIP)] + ELLIP)
+        msg = ELLIP + msg[WRAP_LEN-len(ELLIP):]
+    bot.send_msg(target, msg)
 
 # Given a function and an instance, returns an instancemethod appearing as that
 # function as a method of the instnace's class, bound to the instance.
