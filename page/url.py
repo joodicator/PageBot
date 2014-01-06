@@ -128,11 +128,14 @@ def get_title(url):
 
     title = title or '(no title)'
     if final_url == url: url_info = abbrev_url(url)
-    else: url_info = '%s -> %s' % (abbrev_url(url), abbrev_url(final_url))
+    else: url_info = '%s -> %s' % (abbrev_url(url), abbrev_url_middle(final_url))
     return '%s [%s; %s]' % (title, type, url_info)
 
 def abbrev_url(url):
     return '...' + url[-31:] if len(url) > 34 else url
+
+def abbrev_url_middle(url):
+    return url[:15] + '...' + url[-15:] if len(url) > 34 else url
 
 def get_title_html(url):
     request = urllib2.Request(url)
