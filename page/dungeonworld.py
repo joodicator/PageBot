@@ -31,22 +31,29 @@ def h_missed_rolls(bot, id, target, args, full_msg):
     reply = lambda m: message.reply(bot, id, target, m, prefix=False, wrap=True)
     try: all_rolls = util.read_list(LOG_FILE)
     except IOError: all_rolls = []
-    rolls = filter(lambda (f,t,i,r): t==target, all_rolls)
+    rolls = filter(lambda (f,m,t,i,r): t==target, all_rolls)
 
-    if not rolls: return reply('Missed rolls: none.')
+    nick_move, nick_fail = Counter(), Counter()
+    for (f,m,t,(n,u,h),r) in rolls:
+        nick_fail[n] += f
+        nick_move[n] += m
 
-    nicks = Counter()
-    for (f,t,(n,u,h),r) in rolls: nicks[n] += f
-
-    nicks_text = ', '.join('\2%s: %d\2' % i for i in nicks.iteritems())
-    rolls_text = ''.join('%s (%d): %s\n' % (n,f,r) for (f,t,(n,u,h),r) in rolls)
+    if not nick_fail: return reply('Missed rolls: none.')
+    
+    nicks_text = ', '.join(
+        '\2%s: %d\2 of %d' % (n, f, nick_move[n])
+        for (n,f) in nick_fail.iteritems())
+    rolls_text = ''.join(
+        '%s (%d/%d): %s\n' % (n, f, m, r)
+        for (f,m,t,(n,u,h),r) in rolls if f)
     time = datetime.now().strftime('%Y-%m-%d %H:%M')
     rolls_url = pastebin.post(
         rolls_text,
         paste_expire    = pastebin.E_1WEEK,
         paste_name      = '%s %s Missed Rolls %s' % (bot.nick, target, time))
 
-    reply('Missed rolls: %s. Full list: <%s>.' % (nicks_text, rolls_url))
+    reply('Missed rolls (estimated): %s. Full list: <%s>.'
+        % (nicks_text, rolls_url))
 
     all_rolls = filter(lambda r: r not in rolls, all_rolls)
     with open(LOG_FILE, 'w') as file:
@@ -55,7 +62,14 @@ def h_missed_rolls(bot, id, target, args, full_msg):
 #-------------------------------------------------------------------------------
 @link('DICE_ROLLS')
 def h_dice_rolls(bot, id, target, rolls, result_msg):
-    failed = len(filter(lambda ((d,s,a),r): (d,s)==(2,6) and r<7, rolls))
-    if not (failed and target): return
+    move_rolls = filter(lambda ((d,s,a),r): (d,s) == (2,6), rolls)
+    fail_rolls = filter(lambda (t,r): r < 7, move_rolls)
+    if not move_rolls or not target: return
     with open(LOG_FILE, 'a') as file:
-        print((failed, target, tuple(id), result_msg), file=file)
+        print((
+            len(fail_rolls),
+            len(move_rolls),
+            target,
+            tuple(id),
+            result_msg
+        ), file=file)
