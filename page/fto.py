@@ -9,31 +9,12 @@ import message
 import channel
 import runtime
 
-link, l_install, uninstall = util.LinkSet().triple()
+link, install, uninstall = util.LinkSet().triple()
 
 #===============================================================================
-def install(bot):
-    link.install(bot)
-    evict_chanserv(bot)
-
-@link(('OTHER_JOIN', '#fto'), ('NAMES', '#fto'))
-def evict_chanserv(bot, *args):
-    names = map(str.lower, channel.track_channels['#fto'])
-    if 'ChanServ'.lower() not in names: return
-    with open('conf/fto_password.txt') as file:
-        fto_pass = file.read().strip()
-    bot.send_msg('ChanServ', 'IDENTIFY #fto %s' % fto_pass)
-    bot.send_msg('ChanServ', 'PART #fto')
-
-#===============================================================================
-@link(('MESSAGE', '#fto'))
+@link('MESSAGE')
 def h_message(bot, id, target, msg):
-    yield sign('FTO_MSG', bot, id, target, msg)
-
-@link(('MESSAGE', None))
-@link(('MESSAGE', '#page'))
-@auth.admin
-def h_message_admin(bot, id, target, msg):
+    if not target: return
     yield sign('FTO_MSG', bot, id, target, msg)
 
 #===============================================================================

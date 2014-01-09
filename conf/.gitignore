@@ -6,5 +6,6 @@ bridge.py
 admins.txt
 kakasi.txt
 auth_password.txt
-fto_password.txt
 pastebin_dev_key.txt
+chanserv_password.py
+chanserv_evict.txt
