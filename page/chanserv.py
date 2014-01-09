@@ -1,6 +1,8 @@
 import channel
 import util
 
+import re
+
 link, l_install, uninstall = util.LinkSet().triple()
 
 EVICT_FILE      = 'conf/chanserv_evict.txt'
