@@ -7,6 +7,7 @@ import auth
 import util
 import message
 import channel
+import runtime
 
 link, l_install, uninstall = util.LinkSet().triple()
 
@@ -110,6 +111,32 @@ def h_fto_msg(bot, id, target, msg):
             if time.clock() - start > 3600: return
 
         if remaining: reply('\2GIANT ASPARAGUS!')
+
+    #---------------------------------------------------------------------------
+    # http://www.youtube.com/watch?v=6GggY4TEYbk
+    elif strip('And he tries!') in strip(msg) \
+    and not any(strip(s) in strip(msg) for s in \
+    ['Oh my god', 'do I try', 'I try all the time', 'in this institution']):
+        reply('Oh my god, do I try?')
+        yield runtime.sleep(1)
+        reply('I try all the time... in this institution!')
+    
+    elif strip('And he prays!') in strip(msg) \
+    and not any(strip(s) in strip(msg) for s in \
+    ['Oh my god', 'do I pray', 'I pray every single day', 'REVOLUTION']) \
+    and not re.search(r'my[ea]+', strip(msg)):
+        reply('Oh my god, do I pray?')
+        yield runtime.sleep(1)
+        reply('I pray every single day...')
+        start = time.clock()
+        while time.clock() - start < 60:
+            (_, (bot, id, target, msg)) = yield hold(bot, 'FTO_MSG')
+            if strip('And he prays!') in strip(msg):
+                return
+            if re.search(r'my[ea]+', strip(msg)):
+                reply('\2...FOR REVOLUTION!')
+                return
+
 
 #===============================================================================
 def strip(text):
