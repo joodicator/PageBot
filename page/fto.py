@@ -1,3 +1,5 @@
+# coding: utf8
+
 from untwisted.magic import sign, hold
 
 import re
@@ -23,12 +25,14 @@ def h_fto_msg(bot, id, target, msg):
     reply = lambda rmsg: message.reply(bot, id, target, rmsg, prefix=False)
 
     #---------------------------------------------------------------------------
+    # Nichijou Opening 2
     # http://www.youtube.com/watch?v=kZn7i9rg3a0
     if strip('joujou yuujou! banji maji kaichou!') in strip(msg) \
     and strip('nanananana') not in strip(msg):
         reply('Nanananananana!')
 
     #---------------------------------------------------------------------------
+    # Rathergoodstuff - Agamemnon
     # http://www.youtube.com/watch?v=Kxp8qPEwSXM
     elif strip('I am mighty Agamemnon!') in strip(msg) \
     and strip('Legolambnon') not in strip(msg):
@@ -48,12 +52,23 @@ def h_fto_msg(bot, id, target, msg):
         reply('Why not have me with some peas?')
 
     #---------------------------------------------------------------------------
+    # 【MMD】With pleasant companions『Go!Go!Carlito!』【PV】
     # http://www.youtube.com/watch?v=1jJsYbVBnaE
     elif strip('me wanna you wanna everybody wanna') in strip(msg) \
     and strip('go go') not in strip(msg):
-        reply('Go! Go! Go!')
+        reply('\2Go! Go! Go!')
+
+    elif re.search(r'whos(the|that)boy(wanna|wantto)beamigo', strip(msg)) \
+    and strip('Carlito') not in strip(msg):
+        reply('\2Carlito! Carlito!')
+
+    elif strip("I can sing and I can dance, I'm very nice and hot and spicy!") \
+    in strip(msg) and not any(strip(s) in strip(msg) for s in [
+    'I have the looks', 'cook a TACO']):
+        reply('I have the looks and I can cook a TACO!')
 
     #---------------------------------------------------------------------------
+    # Dark Souls: The Wrath of the Darkwraith
     # http://www.youtube.com/watch?v=WqacyIaq27o
     elif strip('DRIVE HARD.') == strip(msg):
         reply('DRIVE MUSTANG.')
@@ -63,18 +78,21 @@ def h_fto_msg(bot, id, target, msg):
         reply('Why are you doing this?')
 
     #---------------------------------------------------------------------------
+    # The Hobbit (1977) - Down, Down to Goblin Town
     # http://www.youtube.com/watch?v=ogTDa-vG2MQ
     elif strip('You go, my lad!') == strip(msg) \
     or strip('Below, my lad!') == strip(msg):
         reply('Ho, ho! my lad!')
 
     #---------------------------------------------------------------------------
+    # The Muppet Show - Mahna Mahna
     # http://www.youtube.com/watch?v=8N_tupPBtWQ
     elif re.match(r'(doo+[dt]?){4}', strip(msg)) \
     and strip('mana') not in msg and strip('mahna') not in msg:
         reply('Mahna mahna!')
 
     #---------------------------------------------------------------------------
+    # Puni Puni Poemi, Episode 2
     # http://splicd.com/U-BwZA70ZCI/168/190
     elif strip('Banana! Banana!') in strip(msg):
         remaining = map(strip, 
@@ -94,19 +112,20 @@ def h_fto_msg(bot, id, target, msg):
         if remaining: reply('\2GIANT ASPARAGUS!')
 
     #---------------------------------------------------------------------------
+    # HEYYEYAAEYAAAEYAEYAA
     # http://www.youtube.com/watch?v=6GggY4TEYbk
     elif strip('And he tries!') in strip(msg) \
     and not any(strip(s) in strip(msg) for s in \
     ['Oh my god', 'do I try', 'I try all the time', 'in this institution']):
-        reply('Oh my god, do I try?')
+        reply('Oh my god, do I try!')
         yield runtime.sleep(1)
         reply('I try all the time... in this institution!')
     
     elif strip('And he prays!') in strip(msg) \
     and not any(strip(s) in strip(msg) for s in \
     ['Oh my god', 'do I pray', 'I pray every single day', 'REVOLUTION']) \
-    and not re.search(r'my[ea]+', strip(msg)):
-        reply('Oh my god, do I pray?')
+    and not re.search(r'[mn]y[ea]+', strip(msg)):
+        reply('Oh my god, do I pray!')
         yield runtime.sleep(1)
         reply('I pray every single day...')
         start = time.clock()
@@ -114,10 +133,41 @@ def h_fto_msg(bot, id, target, msg):
             (_, (bot, id, target, msg)) = yield hold(bot, 'FTO_MSG')
             if strip('And he prays!') in strip(msg):
                 return
-            if re.search(r'my[ea]+', strip(msg)):
+            if re.search(r'[mn]y[ea]+', strip(msg)):
                 reply('\2...FOR REVOLUTION!')
                 return
 
+    #---------------------------------------------------------------------------
+    # Murray Head - One Night In Bangkok
+    # http://www.youtube.com/watch?v=xqZCGTe5ISQ
+    elif strip("One town's very like another"
+    " when your head's down over your pieces, brother.") in strip(msg) \
+    and not any(strip(s) in strip(msg) for s in ["It's a drag", "it's a bore",
+    "it's really such a pity", "looking at the board", "looking at the city"]):
+        reply("It's a drag, it's a bore, it's really such a pity"
+        " to be looking at the board, not looking at the city!")
+
+    elif re.search(r'you(ve)?seen?onecrowdedpollutedstinking?town', strip(msg)):
+        reply('Tea, girls, warm and sweet!'
+        ' Some are set up in the Somerset Maugham suite!')
+
+    elif (strip("And if you're lucky then the god's a she") in strip(msg) 
+    or strip("A little flesh, a little history") in strip(msg)) \
+    and not any(strip(s) in strip(msg) for s in [
+    'I can feel', 'an angel', 'sliding up to me']):
+        reply('I can feel an angel sliding up to me~')
+
+    elif strip("Can't be too careful with your company") in strip(msg) \
+    and not any(strip(s) in strip(msg) for s in [
+    'I can feel', 'the devil', 'walking next to me']):
+        reply('I can feel the devil walking next to me~')
+
+    elif strip("I don't see you guys rating the kind of mate I'm contemplating"
+    ) in strip(msg) and not any(strip(s) in strip(msg) for s in [
+    "I'd let you watch", "I would invite you", "the queens we use",
+    "would not excite you"]):
+        reply("I'd let you watch, I would invite you,"
+        " but the queens \2we\2 use would not excite you.")
 
 #===============================================================================
 def strip(text):
