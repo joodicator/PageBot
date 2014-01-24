@@ -391,7 +391,10 @@ def h_tell_list(bot, id, target, args, full_msg):
     output = lambda msg: reply(bot, id, target, msg, prefix=False)
     state = get_state()
     lines = [('#', 'From', 'To', 'Channel', 'Time', 'Message')]
-    for (num, msg) in izip(count(1), state.msgs):
+    msgs = state.msgs
+    if target:
+        msgs = filter(lambda m: m.channel.lower() == target.lower(), msgs)
+    for (num, msg) in izip(count(1), msgs):
         lines.append((
             str(num),
             '%s!%s@%s' % tuple(msg.from_id),
@@ -432,11 +435,14 @@ def h_tell_add(bot, id, target, args, full_msg):
 @admin
 def h_tell_remove(bot, id, target, args, full_msg):
     state = get_state()
+    msgs = state.msgs
+    if target:
+        target = filter(lambda m: m.channel.lower() == target.lower(), msgs)
     remove_msgs = []
     try:
         for match in re.finditer(r'\S+', args):
             index = int(match.group()) - 1
-            remove_msgs.append(state.msgs[index])
+            remove_msgs.append(msgs[index])
         for msg in remove_msgs:
             state.msgs.remove(msg)
     except Exception as e:

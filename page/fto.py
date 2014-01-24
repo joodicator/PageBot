@@ -70,8 +70,11 @@ def h_fto_msg(bot, id, target, msg):
     #---------------------------------------------------------------------------
     # Dark Souls: The Wrath of the Darkwraith
     # http://www.youtube.com/watch?v=WqacyIaq27o
-    elif strip('DRIVE HARD.') == strip(msg):
+    elif cstrip('DRIVE HARD.') == cstrip(msg):
         reply('DRIVE MUSTANG.')
+    
+    elif strip('Drive hard.') == strip(msg):
+        reply('Drive Mustang.')
 
     elif strip('DRIVE HARD') in strip(msg) \
     and strip('DRIVE MUSTANG') in strip(msg):

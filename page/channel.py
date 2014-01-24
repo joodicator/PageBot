@@ -1,10 +1,19 @@
 from collections import defaultdict
 import re
 
-from untwisted.magic import sign
+from untwisted.magic import sign, hold
 
 import util
 link, install, uninstall = util.LinkSet().triple()
+
+
+ERR_NOTONCHAN   = '442'
+ERR_CHOPNEEDED  = '482'
+ERR_NOSUCHCHAN  = '403'
+RPL_NOTOPIC     = '331'
+RPL_TOPIC       = '332'
+RPL_CHANMODEIS  = '324'
+
 
 names_channels = defaultdict(list)
 track_channels = defaultdict(list)
@@ -13,6 +22,43 @@ def reload(prev):
     names_channels.update(prev.names_channels)
     track_channels.update(prev.track_channels)    
 
+
+#===============================================================================
+def topic(bot, chan):
+    return util.mcall('channel.topic', bot, chan)
+
+@link('channel.topic')
+def h_topic(bot, chan):
+    bot.send_cmd('TOPIC %s' % chan)
+    while True:
+        (event, data) = yield hold(bot, ERR_NOTONCHAN, RPL_NOTOPIC, RPL_TOPIC)
+        if data[3].lower() == chan.lower(): break
+    if event == RPL_TOPIC:
+        result = data[4]
+    elif event == RPL_NOTOPIC:
+        result = ''
+    else:
+        result = None
+    yield sign(('channel.topic', bot, chan), result)
+
+#===============================================================================
+def mode(bot, chan):
+    return util.mcall('channel.mode', bot, chan)
+
+@link('channel.mode')
+def h_mode(bot, chan):
+    bot.send_cmd('MODE %s' % chan)
+    while True:
+        (event, data) = yield hold(bot,
+            ERR_NOTONCHAN, ERR_NOSUCHCHAN, RPL_CHANMODEIS)
+        if data[3].lower() == chan.lower(): break
+    if event == RPL_CHANMODEIS:
+        result = data[4:]
+    else:
+        result = None
+    yield sign(('channel.mode', bot, chan), result)
+
+#===============================================================================
 def strip_names(names):
     return [re.sub(r'^[+%@~^]', '', n) for n in names]
 
@@ -22,7 +68,6 @@ def names(bot, chan):
 @link('channel.names')
 def h_names(bot, chan):
     bot.send_cmd('NAMES %s' % chan)
-
 
 @link('353')
 def h_rpl_namereply(bot, _1, _2, _3, chan, names):
@@ -44,6 +89,7 @@ def h_rpl_endofnames(bot, _1, _2, chan, *args):
     del names_channels[chan.lower()]
 
 
+#===============================================================================
 @link('SOME_JOIN')
 def h_self_join(bot, id, chan):
     chan = chan.lower()
