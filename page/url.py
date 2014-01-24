@@ -26,7 +26,7 @@ import runtime
 #==============================================================================#
 link, install, uninstall = util.LinkSet().triple()
 
-URL_RE = re.compile('(https?://.+?)[.,;:!?>)}\]]?(?:\s|$)', re.I)
+URL_RE = re.compile(r'(https?://.+?)[.,;:!?>)}\]]?(?:\s|[\x01-\x1f]|$)', re.I)
 AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:23.0) Gecko/20100101 Firefox/23.0'
 HISTORY_SIZE = 8
 TIMEOUT_SECONDS = 20
