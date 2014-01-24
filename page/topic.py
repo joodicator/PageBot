@@ -23,22 +23,34 @@ def h_help_topic_replace(bot, reply, args):
     'Replaces every instance of the string OLD in the channel\'s topic with'
     ' NEW. The sequence \\" must be used in place of any double quote'
     ' characters in either string. If the channel has mode +t, may only be'
-    ' used by channel operators, and if the bot is itself a channel operator.')
+    ' used by channel operators, and if the bot is itself a channel operator.',
+    'In addition, if just ^ or $ or * (without quotes) is given instead of'
+    ' "OLD", then NEW will be, respectively, prepended or appended to the'
+    ' topic (with no separator), or substituted for the whole topic.')
 
 @link('!topic-replace')
 def h_topic_replace(bot, id, target, args, full_msg):
     if not target: return
 
-    match = re.match(r'\s*"((?:\\.|[^"])*)"\s*"((?:\\.|[^"])*)"\s*$', args)
+    match = re.match(r'\s*(?P<old>("(\\.|[^"])*"|\^|\$|\*))'
+                     r'\s+(?P<new>"(\\.|[^"])*")\s*$', args)
     if not match:
-        reply(bot, id, target, 'Error: two double-quoted strings expected.')
+        reply(bot, id, target,
+        'Error: Invalid syntax. See "help topic-replace" for correct usage.')
         return
-    find_str = match.group(1).replace('\\"', '"')
-    repl_str = match.group(2).replace('\\"', '"')
+    old = match.group('old').replace('\\"', '"')
+    new = match.group('new').replace('\\"', '"')
 
-    if not find_str:
-        reply(bot, id, target, 'Error: string to replace may not be empty.')
+    if old == '""':
+        reply(bot, id, target, 'Error: OLD string may not be empty.')
         return
+
+    if old.startswith('\"') and old.endswith('\"'):
+        old = re.escape(old[1:-1])
+    else:
+        old = old.replace('*', '.*')
+    if new.startswith('\"') and new.endswith('\"'):
+        new = new[1:-1].replace('\\', '\\\\')
 
     mode = yield channel.mode(bot, target)
     if re.search(r'\+[a-z]*t', mode[0]):
@@ -52,7 +64,8 @@ def h_topic_replace(bot, id, target, args, full_msg):
             return
 
     topic = yield channel.topic(bot, target)
-    new_topic = topic.replace(find_str, repl_str)
+    new_topic = re.sub(old, new, topic)
+
     if new_topic == topic:
         reply(bot, id, target, 'Topic is unchanged.')
     elif len(new_topic) > 500:
