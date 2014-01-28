@@ -117,14 +117,14 @@ def h_fto_msg(bot, id, target, msg):
     #---------------------------------------------------------------------------
     # HEYYEYAAEYAAAEYAEYAA
     # http://www.youtube.com/watch?v=6GggY4TEYbk
-    elif strip('And he tries!') in strip(msg) \
+    elif re.search(r'ands?hetries', strip(msg)) \
     and not any(strip(s) in strip(msg) for s in \
     ['Oh my god', 'do I try', 'I try all the time', 'in this institution']):
         reply('Oh my god, do I try!')
         yield runtime.sleep(1)
         reply('I try all the time... in this institution!')
     
-    elif strip('And he prays!') in strip(msg) \
+    elif re.search(r'ands?heprays', strip(msg)) \
     and not any(strip(s) in strip(msg) for s in \
     ['Oh my god', 'do I pray', 'I pray every single day', 'REVOLUTION']) \
     and not re.search(r'[mn]y[ea]+', strip(msg)):

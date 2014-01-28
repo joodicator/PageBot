@@ -18,12 +18,15 @@ def h_other_join(bot, id, chan):
     evict_chanserv(bot, chan)
 
 @link('NAMES')
-def h_names(bot, chan):
+def h_names(bot, chan, *args):
     evict_chanserv(bot, chan)
 
 def evict_chanserv(bot, chan):
-    with open(EVICT_FILE) as file:
-        evict_channels = re.findall(r'\S+', file.read())
+    try:
+        with open(EVICT_FILE) as file:
+            evict_channels = re.findall(r'\S+', file.read())
+    except IOError:
+        return
     if chan not in evict_channels: return
 
     names = map(str.lower, channel.track_channels[chan])
