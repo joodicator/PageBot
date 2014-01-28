@@ -20,9 +20,12 @@ track_channels = defaultdict(list)
 invited = set()
 
 def reload(prev):
-    names_channels.update(prev.names_channels)
-    track_channels.update(prev.track_channels)
-    invited.update(prev.invited)
+    try: names_channels.update(prev.names_channels)
+    except: pass
+    try: track_channels.update(prev.track_channels)
+    except: pass
+    try: invited.update(prev.invited)
+    except: pass
 
 #===============================================================================
 def topic(bot, chan):
