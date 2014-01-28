@@ -109,6 +109,8 @@ class PageURLError(Exception):
     pass
 
 def get_title(url):
+    url = utf8_url_to_ascii(url)
+
     request = urllib2.Request(url)
     request.add_header('User-Agent', AGENT)
 
@@ -132,10 +134,18 @@ def get_title(url):
     return '%s [%s; %s]' % (title, type, url_info)
 
 def abbrev_url(url):
+    url = url_to_unicode(url)
     return '...' + url[-31:] if len(url) > 34 else url
 
 def abbrev_url_middle(url):
+    url = url_to_unicode(url)
     return url[:15] + '...' + url[-15:] if len(url) > 34 else url
+
+def url_to_unicode(url):
+    if type(url) == unicode: url = url.encode('utf8')
+    url = ascii_url_to_utf8(url)
+    try: return url.decode('utf8')
+    except UnicodeError: return url
 
 def get_title_html(url):
     request = urllib2.Request(url)
@@ -239,3 +249,54 @@ def inet6_tuple_base(addr):
     return tuple(int(part, 16) for part in addr.split(':')) if addr else ()
 
 #==============================================================================#
+URL_PART_RE = re.compile(
+    r'(?P<pref>.+?://(.+?@)?)'
+    r'(?P<host>.+?)'
+    r'(?P<suff>(:.+?)?)'
+    r'(?P<path>(/.*?)?)'
+    r'(?P<frag>(#.*)?)$')
+
+#-------------------------------------------------------------------------------
+def utf8_url_to_ascii(url):
+    m = URL_PART_RE.match(url)
+    if not m: return url
+    return m.group('pref') \
+         + utf8_host_to_ascii(m.group('host')) \
+         + m.group('suff') \
+         + utf8_path_to_ascii(m.group('path')) \
+         + m.group('frag')
+
+def utf8_host_to_ascii(host):
+    parts = host.split('.')
+    for i in xrange(len(parts)):
+        try: parts[i] = parts[i].decode('utf8')
+        except UnicodeError: continue
+        if parts[i].encode('ascii', 'ignore') == parts[i]: continue
+        parts[i] = 'xn--' + parts[i].lower().encode('punycode')
+    return '.'.join(parts)
+
+def utf8_path_to_ascii(path):
+    return path
+
+#-------------------------------------------------------------------------------
+def ascii_url_to_utf8(url):
+    m = URL_PART_RE.match(url)
+    if not m: return url
+    return m.group('pref') \
+         + ascii_host_to_utf8(m.group('host')) \
+         + m.group('suff') \
+         + ascii_path_to_utf8(m.group('path')) \
+         + m.group('frag')
+
+def ascii_host_to_utf8(host):
+    parts = host.split('.')
+    for i in xrange(len(parts)):
+        if not parts[i].startswith('xn--'): continue
+        try: parts[i] = parts[i][4:].decode('punycode').encode('utf8')
+        except UnicodeError: pass
+    return '.'.join(parts)
+
+def ascii_path_to_utf8(path):
+    return path
+
+#===============================================================================

@@ -68,6 +68,7 @@ class AmeliaBot(Mac):
     def registered(self, *args):
         for channel in self.conf['channels']:
             self.send_cmd('JOIN %s' % channel)
+        self.drive('AUTOJOIN', self)
 
     def mainloop(self):
         return gear.mainloop()
