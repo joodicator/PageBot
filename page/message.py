@@ -66,9 +66,17 @@ def privmsg(bot, source, target, msg, *args):
     if target == bot.nick: target = None
     if type(source) == tuple:
         id = ID(*source)
+
+        bot.activity = False
         yield sign('MESSAGE', bot, id, target, msg)
         yield sign(('MESSAGE', target and target.lower()),
             bot, id, target, msg)
+        if bot.activity: return
+
+        yield sign('MESSAGE_IGNORED', bot, id, target, msg)
+        yield sign(('MESSAGE_IGNORED', target and target.lower()),
+            bot, id, target, msg)
+
     elif type(source) == str:
         yield sign('SMESSAGE', bot, source, target, msg)
         yield sign(('SMESSAGE', target and target.lower()),
@@ -102,6 +110,7 @@ def message(bot, id, target, msg):
     body = match.group('body').strip()
     yield sign('COMMAND', bot, id, target, event, body, msg)
     yield sign(event, bot, id, target, body, msg)
+    bot.activity = True
     raise Stop
 
 

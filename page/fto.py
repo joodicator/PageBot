@@ -108,6 +108,7 @@ def h_fto_msg(bot, id, target, msg):
 
             if len(remaining) <= 1: break
 
+            bot.activity = True
             (_, (bot, id, target, msg)) = yield hold(bot, 'FTO_MSG')
             if strip('Banana! Banana!') in strip(msg): return
             if time.clock() - start > 3600: return
