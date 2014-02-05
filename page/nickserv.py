@@ -31,6 +31,7 @@ def h_mode(bot, source, target, modes):
 
 @link(('UNOTICE', None))
 def notice(bot, id, msg):
+    if not conf('nickserv'): return
     nickserv = conf('nickserv')
     if id.nick.lower() != nickserv.nick.lower(): return
     if (id.user, id.host) != (nickserv.user, nickserv.host):
@@ -40,7 +41,7 @@ def notice(bot, id, msg):
 
 @link('NICKSERV_NOTICE')
 def nickserv_notice(bot, id, msg):
-    if msg.startswith(conf('prompt')):
+    if conf('prompt') and conf('password') and msg.startswith(conf('prompt')):
         bot.send_msg(id.nick, 'IDENTIFY %s' % conf('password'))
         return
     final = conf('final')
