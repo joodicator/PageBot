@@ -4,8 +4,9 @@ import re
 from message import reply
 import util
 
-IFREQ   = 800
+MINLEN  = 5
 MAXLEN  = 100
+IFREQ   = 800
 
 link, install, uninstall = util.LinkSet().triple()
 
@@ -13,7 +14,7 @@ link, install, uninstall = util.LinkSet().triple()
 def h_message_ignored(bot, id, target, msg):
     if not target: return
     if random.randrange(IFREQ) != 0: return
-    if len(msg) > MAXLEN: return
+    if len(msg) > MAXLEN or len(msg) < MINLEN: return
 
     msg = re.split(r'(\W+)', msg, re.U | re.L)
     index = random.randrange(len(msg)) & ~1

@@ -49,7 +49,7 @@ def h_missed_rolls(bot, id, target, args, full_msg):
     time = datetime.now().strftime('%Y-%m-%d %H:%M')
     rolls_url = pastebin.post(
         rolls_text,
-        paste_expire    = pastebin.E_1WEEK,
+        paste_expire    = pastebin.E_1MONTH,
         paste_name      = '%s %s Missed Rolls %s' % (bot.nick, target, time))
 
     reply('Missed rolls (estimated): %s. Full list: <%s>.'
