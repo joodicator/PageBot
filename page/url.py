@@ -9,6 +9,7 @@
 #==============================================================================#
 from contextlib import closing
 from itertools import *
+from math import *
 import collections
 import traceback
 import urllib
@@ -137,9 +138,9 @@ def get_title(url):
     else:
         url_info[:0] = ['%s -> %s' % (abbrev_url(url), abbrev_url_middle(final_url))]
     if size:
-        url_info[:0] = bytes_to_human_size(size)
+        url_info[:0] = [bytes_to_human_size(size)]
     url_info[:0] = [type]
-    return '%s [%s]' % (title, url_info.join('; '))
+    return '%s [%s]' % (title, '; '.join(url_info))
 
 def abbrev_url(url):
     url = url_to_unicode(url)
@@ -181,6 +182,7 @@ def format_title(title):
     return title
 
 def bytes_to_human_size(bytes):
+    bytes = int(bytes)
     for (m,s) in (1,'B'),(2**10,'KiB'),(2**20,'MiB'),(2**30,'GiB'):
         units = ceil(bytes / m)
         if units >= 1024: continue
