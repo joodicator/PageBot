@@ -119,7 +119,9 @@ def get_title(url):
         'Access to this host is denied: %s.' % host)
 
     with closing(urllib2.urlopen(request, timeout=TIMEOUT_SECONDS)) as stream:
-        type = stream.info().gettype()
+        info = stream.info()
+        type = info.gettype()
+        size = info['Content-Length'] if 'Content-Length' in info else None
         final_url = stream.geturl()
 
     title = None
@@ -129,9 +131,15 @@ def get_title(url):
         title = get_title_image(url)
 
     title = title or '(no title)'
-    if final_url == url: url_info = abbrev_url(url)
-    else: url_info = '%s -> %s' % (abbrev_url(url), abbrev_url_middle(final_url))
-    return '%s [%s; %s]' % (title, type, url_info)
+    url_info = []
+    if final_url == url:
+        url_info[:0] = [abbrev_url(url)]
+    else:
+        url_info[:0] = ['%s -> %s' % (abbrev_url(url), abbrev_url_middle(final_url))]
+    if size:
+        url_info[:0] = bytes_to_human_size(size)
+    url_info[:0] = [type]
+    return '%s [%s]' % (title, url_info.join('; '))
 
 def abbrev_url(url):
     url = url_to_unicode(url)
@@ -171,6 +179,12 @@ def format_title(title):
         traceback.print_exc()
 
     return title
+
+def bytes_to_human_size(bytes):
+    for (m,s) in (1,'B'),(2**10,'KiB'),(2**20,'MiB'),(2**30,'GiB'):
+        units = ceil(bytes / m)
+        if units >= 1024: continue
+        return '%d %s' % (units, s)
 
 #==============================================================================#
 # Returns the "best guess" phrase that Google's reverse image search offers to
