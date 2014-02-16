@@ -24,7 +24,7 @@ def registered(bot, *rargs):
     yield sign(IDENTIFIED, bot, *rargs)
 
 @link('MODE')
-def h_mode(bot, source, target, modes):
+def h_mode(bot, source, target, modes, *args):
     if target.lower() != bot.nick.lower(): return
     if not re.search(r'\+[a-zA-Z]*r', modes): return
     yield sign('NICKSERV_REGISTERED', bot)

@@ -15,7 +15,7 @@
 #   also per recipient (if it's possible to identify "recipients"...)
 
 from message import reply
-from util import LinkSet, multi
+from util import LinkSet, multi, wc_to_re
 from auth import admin
 import channel
 import util
@@ -562,13 +562,3 @@ def match_id(query, id):
     id_str = '%s!%s@%s' % tuple(id) if re.search(r'!|@', query) else id.nick
     rexp = query if '$' in query else wc_to_re(query)
     return re.match(rexp, id_str, re.I) is not None
-
-#==============================================================================#
-# Returns a Python regular expression pattern string equivalent to the given
-# wildcard pattern (which accepts only the entire input, not part of it).
-def wc_to_re(wc):
-    def sub(match):
-        if match.group(1): return '.*'
-        elif match.group(2): return '.'
-        else: return re.escape(match.group(3))
-    return '^' + re.sub(r'(\*)|(\?)|([^*?]+)', sub, wc) + '$'

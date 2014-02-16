@@ -291,3 +291,14 @@ def gen_chain(*gens):
                 value = yield gen.send(value)
         except StopIteration:
             pass
+
+#==============================================================================#
+# Returns a Python regular expression pattern string equivalent to the given
+# wildcard pattern (which accepts only the entire input, not part of it).
+def wc_to_re(wc):
+    def sub(match):
+        if match.group(1): return '.*'
+        elif match.group(2): return '.'
+        else: return re.escape(match.group(3))
+    return '^' + re.sub(r'(\*)|(\?)|([^*?]+)', sub, wc) + '$'
+
