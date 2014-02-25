@@ -184,9 +184,9 @@ def format_title(title):
 def bytes_to_human_size(bytes):
     bytes = int(bytes)
     for (m,s) in (1,'B'),(2**10,'KiB'),(2**20,'MiB'),(2**30,'GiB'):
-        units = ceil(bytes / m)
+        units = bytes / m
         if units >= 1024: continue
-        return '%d %s' % (units, s)
+        return '%.1f %s' % (units, s)
 
 #==============================================================================#
 # Returns the "best guess" phrase that Google's reverse image search offers to
