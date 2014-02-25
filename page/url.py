@@ -59,7 +59,7 @@ def h_command(bot, id, target, cmd, args, full_msg):
     if cmd in ('!url', '!title'): return
     examine_message(args, target, id)
 
-def examine_message(message, channel, id):
+def examine_message(message, channel, id=None):
     channel = channel or ('%s!%s@%s' % id).lower()
     urls = re.findall(URL_RE, message)
     if urls:
