@@ -56,18 +56,29 @@ HISTORY_SIZE = 8
 # notification of new messages when the recipient is changing their nick.
 MIN_NICKCHANGE_NOTIFY_INTERVAL_S = 3600 # 1 hour
 
+# The maximum number of messages that may be sent by each user,
+# where users are identified according to same_sender().
+MAX_SENT = 12
 
-last_notify = dict()
+# The maximum number of messages that may be sent from any given user
+# to a single recipient (given by a wildcard expression).
+MAX_SENT_WC = 3
+
+# The maximum number of messages that may be sent from any given user
+# where the recipient is given as a regular expression.
+MAX_SENT_RE = 4
+
 # last_notify[msg] = time.time()
 # when msg's recipient was last notified of it.
+last_notify = dict()
 
-
+#-------------------------------------------------------------------------------
 # A saved message kept by the system.
 Message = namedtuple('Message',
     ('time_sent', 'channel', 'from_id', 'to_nick', 'message'))
 Message.__getstate__ = lambda *a, **k: None
 
-
+#-------------------------------------------------------------------------------
 # The plugin's persistent state object.
 class State(object):
     def __init__(self):
@@ -206,11 +217,33 @@ def h_tell(bot, id, target, args, full_msg):
             message     = msg)
         state.msgs.append(record)
 
+    sent_count = len(to_nicks)
+    same_sent = [m for m in state.msgs if same_sender(m.from_id, id)]
+    if len(same_sent) > MAX_SENT:
+        reply(bot, id, target,
+            'Error: you may leave no more than %d messages at once.' % MAX_SENT)
+        return
+    if to_nick.endswith('$'):
+        same_recv = [m for m in state.msgs if m.to_nick.endswith('$')]
+        if len(same_recv) > MAX_SENT_RE:
+            reply(bot, id, target,
+                'Error: you may leave no more than %d regex-addressed messages'
+                ' at once.' % (MAX_SENT_RE))
+            return
+    else:
+        norm_recv = lambda r: re.sub(r'\*+', r'*', r).lower()
+        norm_nicks = map(norm_recv, to_nicks)
+        same_recv = [m for m in state.msgs if norm_recv(m.to_nick) in norm_nicks]
+        if len(same_recv) > MAX_SENT_WC:
+            reply(bot, id, target,
+                'Error: you may leave no more than %d messages for "%s"'
+                ' at once.' % (MAX_SENT_WC, same_recv[0].to_nick))
+            return
+
     put_state(state)
 
-    count = len(to_nicks)
-    if count > 1: reply(bot, id, target,
-        'It shall be done (%s messages sent).' % count)
+    if sent_count > 1: reply(bot, id, target,
+        'It shall be done (%s messages sent).' % sent_count)
     else: reply(bot, id, target,
         'It shall be done (1 message sent to "%s").' % to_nick)
 
@@ -562,3 +595,12 @@ def match_id(query, id):
     id_str = '%s!%s@%s' % tuple(id) if re.search(r'!|@', query) else id.nick
     rexp = query if '$' in query else wc_to_re(query)
     return re.match(rexp, id_str, re.I) is not None
+
+#===============================================================================
+# Returns True iff the two given IDs are considered to belong to the same user,
+# i.e. if they have the same host and the same username, or they have the same
+# host and either username starts with a tilde.
+def same_sender(id1, id2):
+    return id1.host.lower() == id2.host.lower() and \
+           (id1.user.lower() == id2.user.lower() or \
+            id1.user.startswith('~') or id2.user.startswith('~'))
