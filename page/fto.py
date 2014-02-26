@@ -173,6 +173,19 @@ def h_fto_msg(bot, id, target, msg):
         reply("I'd let you watch, I would invite you,"
         " but the queens \2we\2 use would not excite you.")
 
+    #---------------------------------------------------------------------------
+    # Hanazawa Kana - Renai Circulation
+    # http://www.youtube.com/watch?v=lWTuzLz1C6o
+    elif strip(msg).startswith(strip('Se~ no')):
+        write = ['Se~ no', 'Demo sonnanja dame', 'Mou sonnanja hora~',
+                 'Kokoro wa shinka suru yo motto motto~']
+        read = ''
+        smsg = strip(msg)
+        while write and smsg.startswith(read + strip(write[0])):
+            read += strip(write.pop(0))
+        if smsg != read: return
+        for line in write: reply(line)
+
 #===============================================================================
 def strip(text):
     return cstrip(text.lower())
