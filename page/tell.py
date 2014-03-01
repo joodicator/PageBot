@@ -470,7 +470,7 @@ def h_tell_remove(bot, id, target, args, full_msg):
     state = get_state()
     msgs = state.msgs
     if target:
-        target = filter(lambda m: m.channel.lower() == target.lower(), msgs)
+        msgs = filter(lambda m: m.channel.lower() == target.lower(), msgs)
     remove_msgs = []
     try:
         for match in re.finditer(r'\S+', args):
