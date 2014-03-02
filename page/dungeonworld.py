@@ -33,18 +33,21 @@ def h_missed_rolls(bot, id, target, args, full_msg):
     except IOError: all_rolls = []
     rolls = filter(lambda (f,m,t,i,r): t==target, all_rolls)
 
+    nick_case = dict()
     nick_move, nick_fail = Counter(), Counter()
     for (f,m,t,(n,u,h),r) in rolls:
-        nick_fail[n] += f
-        nick_move[n] += m
+        n_key = n.lower()
+        if n_key not in nick_case: nick_case[n_key] = n
+        nick_fail[n_key] += f
+        nick_move[n_key] += m
 
     if not nick_fail: return reply('Missed rolls: none.')
     
     nicks_text = ', '.join(
-        '\2%s: %d\2 of %d' % (n, f, nick_move[n])
+        '\2%s: %d\2 of %d' % (nick_case[n], f, nick_move[n])
         for (n,f) in nick_fail.iteritems())
     rolls_text = ''.join(
-        '%s (%d/%d): %s\n' % (n, f, m, r)
+        '%s (%d/%d): %s\n' % (nick_case[n.lower()], f, m, r)
         for (f,m,t,(n,u,h),r) in rolls if f)
     time = datetime.now().strftime('%Y-%m-%d %H:%M')
     rolls_url = pastebin.post(
