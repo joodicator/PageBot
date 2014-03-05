@@ -19,7 +19,7 @@ DELAY_RAND_S = 3
 def h_other_join(bot, id, chan):
     if not has_aop_in(id, chan): return
     yield runtime.sleep(DELAY_BASE_S + random.uniform(0, DELAY_RAND_S))
-    give_op_in(id, chan)
+    give_op_in(bot, id, chan)
 
 #===============================================================================
 @link('HELP')
