@@ -5,10 +5,27 @@ import re
 from message import reply
 import util
 
-link, install, uninstalled = util.LinkSet().triple()
+link, install, uninstall = util.LinkSet().triple()
+
+#===============================================================================
+@link('HELP')
+def h_help(bot, reply, args):
+    reply('convert QUANTITY [to] UNIT',
+    'Convert between measurement systems.')
+
+@link(('HELP', 'convert'))
+def h_help_convert(bot, reply, args):
+    reply('convert QUANTITY [to] UNIT')
+    reply('cv QUANTITY [to] UNIT',
+    'Convert a quantity expressed in a certain unit to another unit of'
+    ' measurement. Currently, the following units are supported: metre, inch,'
+    ' foot, yard, mile, nautical mile, league, Planck length; gram, ounce,'
+    ' pound, stone, Planck mass; degree Celsius, Farenheit, Kelvin, Rankine.'
+    ' SI prefixes may be used with suitable metric units. Standard'
+    ' abbreviations may be used.')
 
 #-------------------------------------------------------------------------------
-@link('!convert')
+@link('!convert', '!cv')
 def h_convert(bot, id, target, args, full_msg):
     try:
         reply(bot, id, target, convert_report(args))
@@ -24,10 +41,10 @@ def convert_report(str):
 def convert(str):
     x_re = r'((\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?)'
 
-    m = re.match(r'(?!%s)(?P<u1>.*?)(?P<x>%s)(\s+(in|to)\s+)?(?P<u2>.+)'
+    m = re.match(r'(?i)(?!%s)(?P<u1>.*?)(?P<x>%s)(\s+to\s+)?(?P<u2>.+)'
             % (x_re, x_re), str) or \
-        re.match(r'(?P<x>%s)(?P<u1>.+)\s+(in|to)\s+(?P<u2>.+)' % x_re, str) or \
-        re.match(r'(?P<x>%s)\s*(?P<u1>\S+)\s+(?P<u2>\S+)\s*' % x_re, str)
+        re.match(r'(?i)(?P<x>%s)(?P<u1>.*)\s+to\s+(?P<u2>.+)' % x_re, str) or \
+        re.match(r'(?P<x>%s)\s*(?P<u1>\S*)\s+(?P<u2>\S+)\s*' % x_re, str)
     if m:
         x = float(m.group('x'))
         u1 = parse_unit_full(m.group('u1').strip())
@@ -48,28 +65,30 @@ def convert(str):
 #===============================================================================
 def convert_value(x, u1, u2):
     if u1.dim != u2.dim: raise UserError('cannot convert %s (%s) to %s (%s).'
-        % (u1.name, u1.dim, u2.name, u2.dim))
+        % (u1.format_unit(x), u1.dim, u2.name, u2.dim))
     return u1.convert_to(u2, x)
 
 # Returns (unit, str_remain)
 def parse_unit_part(str):
     result = parse_unit(str)
     if not result: raise UserError('unrecognised syntax.')
-    return result
+    return result[0]
 
 # Returns unit
 def parse_unit_full(str):
-    result = parse_unit(str)
-    if result:
+    if not str: return Number()
+    for result in parse_unit(str):
         (unit, rest) = result
         if not rest: return unit
     raise UserError('"%s" is not a recognised unit.' % str)
 
 # Returns (unit, str_remain)
 def parse_unit(str):
-    return Temp.parse_unit(str) or \
-           Dist.parse_unit(str) or \
-           Mass.parse_unit(str)
+    us = []
+    for U in Temp, Dist, Mass:
+        u = U.parse_unit(str)
+        if u: us.append(u)
+    return us
 
 #===============================================================================
 class UserError(Exception):
@@ -82,7 +101,7 @@ class Unit(object):
         return unit.fr_base(self.to_base(x))
 
     def format_value(self, x):
-        return '%.4G' % x
+        return '%.4g' % x
 
     def __repr__(self):
         return '<%s:%s>' % (self.dim, self.name)
@@ -91,8 +110,19 @@ class MUnit(Unit):
     def __init__(self, name, mult):
         self.name = name
         self.format_unit = lambda x: '%s %s' % (self.format_value(x), name)
-        self.to_base = lambda x: x*m1
-        self.fr_base = lambda x: x/m1
+        self.to_base = lambda x: x*mult
+        self.fr_base = lambda x: x/mult
+
+#===============================================================================
+class Number(Unit):
+    dim = 'dimensionless'
+    name = 'number'
+    def to_base(self, x):
+        return x
+    def fr_base(self, x):
+        return x    
+    def format_unit(self, x):
+        return self.format_value(x)
 
 #===============================================================================
 class Temp(Unit):
@@ -121,10 +151,11 @@ class Dist(MUnit):
 
     @classmethod
     def parse_unit(cls, str):
-        m = re.match(r'(?P<u>(in|ft|yds?|mi))', str) or \
-            re.match(r'(?i)(?P<u>(inch(es)?|f(oo|ee)t|yards?|miles?))', str) or \
-            re.match(r'(?P<p>%s)?(?P<u>m)' % SI_CS_RE, str) or \
-            re.match(r'(?i)(?P<p>%s)?\s*(?P<u>(met(re|er)s?))' % SI_CI_RE, str)
+        m = re.match(r'(?i)(?P<u>(inch(es)?|f(oo|ee)t|yards?|miles?'
+                r'|Planck lengths?|leagues?|nautical miles?))', str) or \
+            re.match(r'(?i)(?P<p>%s)?\s*(?P<u>(met(re|er)s?))' % SI_CI_RE, str) or \
+            re.match(r'(?P<u>(in|ft|yds?|mi|NM))', str) or \
+            re.match(r'(?P<p>%s)?\s*(?P<u>m)' % SI_CS_RE, str)
         if m:
             n = m.group('u')
             u = Dist('m', 1) if \
@@ -132,11 +163,17 @@ class Dist(MUnit):
                 Dist('in', 0.0254) if \
                     n.lower().startswith('in') else \
                 Dist('ft', 0.3048) if \
-                    n.lower().startswith('f') else \
+                    n.lower() in ('foot','feet','ft') else \
                 Dist('yd', 0.9144) if \
-                    n.lower().startswith('y') else \
+                    n.lower().startswith('yard') or n in ('yd','yds') else \
                 Dist('mi', 1609.344) if \
-                    n.lower().startswith('mi') else None
+                    n.lower().startswith('mi') else \
+                Dist('nautical mile(s)', 1852) if \
+                    n.lower().startswith('nautical') or n=='NM' else \
+                Dist('league(s)', 3*1609.344) if \
+                    n.lower().startswith('league') else \
+                Dist('Planck length(s)', 1.61619997e-35) if \
+                    n.lower().startswith('planck') else None
             if m.groupdict().get('p'): u = SI(u, *si_info(m.group('p')))
             if u: return (u, str[m.end():])
 
@@ -146,21 +183,21 @@ class Mass(MUnit):
 
     @classmethod
     def parse_unit(cls, str):
-        m = re.match(r'(?i)(?P<p>%s)?(?P<u>gram(me)?s?)' % SI_CI_RE, str) or \
-            re.match(r'(?P<p>%s)?(?P<u>g)' % SI_CS_RE, str) or \
+        m = re.match(r'(?i)(?P<p>%s)?\s*(?P<u>gram(me)?s?)' % SI_CI_RE, str) or \
             re.match(r'(?i)(?P<u>(ounces?|pounds?|stones?|planck mass(es)?))', str) or \
+            re.match(r'(?P<p>%s)?\s*(?P<u>g)' % SI_CS_RE, str) or \
             re.match(r'(?P<u>(oz|lbs?|st))', str)
         if m:
             n = m.group('u')
             if n.lower().startswith('g'):
                 u = Mass('g', 1)
-            if n.lower().startswith('o'):
+            elif n.lower().startswith('o'):
                 u = Mass('oz', 28.349523125)
-            if n.lower().startswith('Planck'):
+            elif n.lower().startswith('planck'):
                 u = Mass('Planck mass', 2.1765113e-5)
-            if n.lower().startswith('p') or n.startswith('lb'):
+            elif n.lower().startswith('p') or n.startswith('lb'):
                 u = Mass('lb', 0.45359237)
-            if n.lower().startswith('st'):
+            elif n.lower().startswith('st'):
                 u = Mass('st', 0.00635)
             if m.groupdict().get('p'): u = SI(u, *si_info(m.group('p')))
             if u: return (u, str[m.end():])
@@ -178,8 +215,8 @@ SI_PREFIXES = [
     ('centi', 'c',     -2),     ('hecto', 'h',  2),
     ('deci',  'd',     -1),     ('deca',  'da', 1)]
 
-SI_CS_RE = '|'.join(s for (i,s,e) in SI_PREFIXES)
-SI_CI_RE = '|'.join(i for (i,s,e) in SI_PREFIXES)
+SI_CS_RE = '(%s)' % '|'.join(s for (i,s,e) in SI_PREFIXES)
+SI_CI_RE = '(%s)' % '|'.join(i for (i,s,e) in SI_PREFIXES)
 
 # Returns (name, exponent)
 def si_info(prefix):
