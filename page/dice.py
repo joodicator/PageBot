@@ -18,7 +18,7 @@ def h_help(bot, reply, args):
     'Simulates the rolling of dice.')
 
 #===============================================================================
-@link(('HELP', 'dice'), ('HELP, roll'), ('HELP', 'd'), ('HELP', 'r'))
+@link(('HELP', 'dice'), ('HELP', 'roll'), ('HELP', 'd'), ('HELP', 'r'))
 def h_help_roll(bot, reply, args):
     reply('dice [MdN[+K|-K] ...]',
     'Simulates one or more dice rolls, listing for each roll its total result,'
