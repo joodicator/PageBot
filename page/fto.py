@@ -184,7 +184,9 @@ def h_fto_msg(bot, id, target, msg):
         while write and smsg.startswith(read + strip(write[0])):
             read += strip(write.pop(0))
         if smsg != read: return
-        for line in write: reply(line)
+        for line in write:
+            reply(line)
+            yield runtime.sleep(1)
 
 #===============================================================================
 def strip(text):

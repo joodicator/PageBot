@@ -1,3 +1,5 @@
+# coding=utf8
+
 import ctypes
 import re
 
@@ -23,11 +25,20 @@ def kakasi(text):
 
 def kakasi_unicode(text):
     if not text: return text
-    text = text.encode(backslash_escape(KAKASI_CODEC), 'backslashreplace')
+    text = pre_kakasi_unicode(text)
+    text = backslash_escape(text).encode(KAKASI_CODEC, 'backslashreplace')
     res_ptr = libkakasi.kakasi_do(text)
     res = ctypes.string_at(res_ptr).decode(KAKASI_CODEC)
     libkakasi.kakasi_free(res_ptr)
-    return backslash_unescape(res)
+    res = backslash_unescape(res)
+    res = post_kakasi_unicode(res)
+    return res
+
+def pre_kakasi_unicode(text):
+    return text.replace(u'ー', u'~')
+
+def post_kakasi_unicode(text):
+    return text
 
 def is_ja(text, threshold=0.5):
     return ja_quotient(text) > threshold
