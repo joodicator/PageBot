@@ -196,9 +196,9 @@ class Mass(MUnit):
             elif n.lower().startswith('planck'):
                 u = Mass('Planck mass', 2.1765113e-5)
             elif n.lower().startswith('p') or n.startswith('lb'):
-                u = Mass('lb', 0.45359237)
+                u = Mass('lb', 453.59237)
             elif n.lower().startswith('st'):
-                u = Mass('st', 0.00635)
+                u = Mass('st', 6350)
             if m.groupdict().get('p'): u = SI(u, *si_info(m.group('p')))
             if u: return (u, str[m.end():])
 
