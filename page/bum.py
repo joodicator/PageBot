@@ -2,6 +2,7 @@ import random
 import re
 
 from message import reply
+from channel import not_quiet
 import util
 
 MINLEN  = 5
@@ -11,6 +12,7 @@ IFREQ   = 800
 link, install, uninstall = util.LinkSet().triple()
 
 @link('MESSAGE_IGNORED')
+@not_quiet()
 def h_message_ignored(bot, id, target, msg):
     if not target: return
     if random.randrange(IFREQ) != 0: return

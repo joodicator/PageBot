@@ -12,15 +12,15 @@ DEFAULT_ROLL    = 2, 6, 0
 MAX_ROLL        = 99, 9999, 99999999
 
 #===============================================================================
-@link('HELP')
+@link('HELP*')
 def h_help(bot, reply, args):
-    reply('dice [MdN[+K|-K] ...]',
+    reply('roll [MdN[+K|-K] ...]',
     'Simulates the rolling of dice.')
 
 #===============================================================================
 @link(('HELP', 'dice'), ('HELP', 'roll'), ('HELP', 'd'), ('HELP', 'r'))
 def h_help_roll(bot, reply, args):
-    reply('dice [MdN[+K|-K] ...]',
+    reply('roll [MdN[+K|-K] ...]',
     'Simulates one or more dice rolls, listing for each roll its total result,'
     ' as well as the value of each individual die. '
     'Each roll is specified as "MdN", "MdN+K", or "MdN-K", where M is the'
@@ -30,11 +30,11 @@ def h_help_roll(bot, reply, args):
     ' the value of an MdN roll is the sum of M rolls of 1dN.')
     reply('',
     '"dN" may be used as shorthand for "1dN", "+K" or "-K" for "2d6+K" or'
-    ' "2d6-K", and "dice" for "dice 2d6". '
-    'For example, "dice 2d6" (or just "dice") simulates rolling two 6-sided'
-    ' dice at once, and "dice 1d6 2d6-1" (or "dice d6 -1") simulates two'
+    ' "2d6-K", and "roll" for "roll 2d6". '
+    'For example, "roll 2d6" (or just "roll") simulates rolling two 6-sided'
+    ' dice at once, and "roll 1d6 2d6-1" (or "roll d6 -1") simulates two'
     ' separate rolls as specified. '
-    'Finally, instead of "dice", the command names "roll", "r", or "d" may be'
+    'Finally, instead of "roll", the command names "dice", "d", or "r" may be'
     ' used. '
     'Any other text is repeated unchanged in the command\'s output.')
 

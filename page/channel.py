@@ -1,4 +1,5 @@
 from collections import defaultdict
+import inspect
 import re
 
 from untwisted.magic import sign, hold
@@ -152,3 +153,27 @@ def h_closing(bot):
     for chan, names in track_channels.iteritems():
         yield sign('CLOSING_CHAN', bot, chan)
         yield sign(('CLOSING_CHAN', chan), bot)
+
+#===============================================================================
+try:
+    with open('conf/quiet_channels.txt') as file:
+        chans = re.findall(r'\S+', file.read())
+        quiet_channels_list = map(str.lower, chans)
+except IOError:
+    quiet_channels_list = []
+
+# Returns a list of lowercase channel (including any '#' prefixes) name in
+# which the bot is configured to be particuarly quiet.
+def quiet_channels():
+    return quiet_channels_list
+
+# A function decorated with @not_quiet(chan_arg=a) will do nothing if it is
+# called with the argument named a set to a channel in quiet_channels().
+def not_quiet(chan_arg='target'):
+    def not_quiet_deco(func):
+        def not_quiet_func(*args, **kwds):
+            chan = inspect.getcallargs(func, *args, **kwds)[chan_arg]
+            if type(chan) is not str or chan.lower() not in quiet_channels():
+                return func(*args, **kwds)
+        return not_quiet_func
+    return not_quiet_deco
