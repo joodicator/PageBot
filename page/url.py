@@ -3,8 +3,6 @@
 #==============================================================================#
 # Possible Extensions:
 # - Recognise images tagged by the poster as NSFW.
-# - Show YouTube video descriptions, etc, for YT videos.
-# - Interpret imgur HTML URLs (etc) as images.
 
 #==============================================================================#
 from contextlib import closing
@@ -135,14 +133,18 @@ def get_title(url):
         size = info['Content-Length'] if 'Content-Length' in info else None
         final_url = stream.geturl()
 
-    (title, extra) = get_title_parts(final_url, type)
+    parts = get_title_parts(final_url, type)
+    if len(parts) == 2:
+        (title, extra) = parts
+    else:
+        (title, extra, final_url) = parts
 
     url_info = []
-    if final_url == url:
-        url_info[:0] = [abbrev_url(url)]
-    else:
+    if final_url != url:
         url_info[:0] = ['%s -> %s' % (abbrev_url(url),
             abbrev_url_middle(final_url))]
+    else:
+        url_info[:0] = [abbrev_url(url)]
     if size:
         url_info[:0] = [bytes_to_human_size(size)]
     if extra: url_info[:0] = [extra]
@@ -150,22 +152,87 @@ def get_title(url):
 
 #-------------------------------------------------------------------------------
 # Returns (body, extra), where body is the main title of the URL, and extra is
-# None, or a string with supplementary information.
+# None, or a string with supplementary information; or (body, extra, new_url)
+# where new_url is the URL of the examined resource, which has been derived in
+# some way from the original URL.
 def get_title_parts(url, type):
     match = URL_PART_RE.match(url)
     path, query = decode_url_path(match.group('path'))
-    #--- YouTube videos --------------------------------------------------------
-    if re.search(r'(^|\.)youtube\.com$', match.group('host')) \
-    and path == '/watch' and query.get('v') is not None:
-        return get_title_youtube(query['v'], url, type)
-    #--- HTML pages ------------------------------------------------------------
+    # YouTube
+    if re.search(r'(^|\.)youtube\.com$', match.group('host')):
+        res = get_title_youtube(url, type)
+        if res: return res
+    # imgur
+    if re.search(r'(^|\.)imgur\.com', match.group('host')):
+        res = get_title_imgur(url, type)
+        if res: return res
+    # HTML
     if 'html' in type:
         return get_title_html(url, type)
-    #--- Images ----------------------------------------------------------------
+    # image files
     if type.startswith('image/'):
         return get_title_image(url, type)
-    #--- Other resources -------------------------------------------------------
+    # Other
     return ('(no title)', type)
+
+#-------------------------------------------------------------------------------
+def get_title_html(url, type):
+    request = urllib2.Request(url)
+    request.add_header('User-Agent', AGENT)
+    with closing(urllib2.urlopen(request, timeout=TIMEOUT_SECONDS)) as stream:
+        soup = BeautifulSoup(stream.read(READ_BYTES_MAX))
+    title = soup.find('title')
+    title = format_title(title.text.strip())
+    return (title, type)
+
+#-------------------------------------------------------------------------------
+def get_title_image(url, type):
+    title = google_image_best_guess(url)
+    title = 'Best guess: %s' % (format_title(title) if title else '(none)')
+    return (title, type)
+
+#-------------------------------------------------------------------------------
+def get_title_youtube(url, type):
+    match = URL_PART_RE.match(url)
+    path, query = decode_url_path(match.group('path'))
+    if path != '/watch' or not query.get('v'): return
+    video_id = query['v']
+    try:
+        from youtube import youtube
+        result = youtube.videos().list(id=video_id,
+            part='snippet,statistics,contentDetails').execute()['items'][0]
+        title = result['snippet']['title']
+        desc = result['snippet']['description']
+        views = result['statistics']['viewCount']
+        likes = result['statistics']['likeCount']
+        dislikes = result['statistics']['dislikeCount']
+        duration = result['contentDetails']['duration']
+
+        desc = re.sub(r'\r\n|\r|\n', ' ', desc)
+        desc = '%s(...)' % desc[:MAX_YT_DESC] \
+               if len(desc) > MAX_YT_DESC else desc
+        duration = iso8601_period_human(duration)
+
+        return (format_title(title),
+            'Duration: %s; Views: %s; Likes/Dislikes: %s/%s; Description: "%s"'
+            % (duration, views, likes, dislikes, desc))
+    except Exception as e:
+        traceback.print_exc(e)
+
+#-------------------------------------------------------------------------------
+def get_title_imgur(url, type):
+    match = URL_PART_RE.match(url)
+    path, query = decode_url_path(match.group('path'))
+    path_match = re.match(r'/(gallery/)?(?P<id>[a-zA-Z0-9]+)', path)
+    if match.group('host') != 'imgur.com' or not path_match: return
+    try:
+        import imgur
+        info = imgur.image_info(path_match.group('id'))
+        img_url, img_type = info['link'], info['type']
+    except:
+        traceback.print_exc()
+        return
+    return get_title_image(img_url, img_type) + (img_url,)
 
 #-------------------------------------------------------------------------------
 def abbrev_url(url):
@@ -193,47 +260,6 @@ def bytes_to_human_size(bytes):
         units = bytes / m
         if units >= 1024: continue
         return '%.1f %s' % (units, s)
-
-#-------------------------------------------------------------------------------
-def get_title_html(url, type):
-    request = urllib2.Request(url)
-    request.add_header('User-Agent', AGENT)
-    with closing(urllib2.urlopen(request, timeout=TIMEOUT_SECONDS)) as stream:
-        soup = BeautifulSoup(stream.read(READ_BYTES_MAX))
-    title = soup.find('title')
-    title = format_title(title.text.strip())
-    return (title, type)
-
-#-------------------------------------------------------------------------------
-def get_title_image(url, type):
-    title = google_image_best_guess(url)
-    title = 'Best guess: %s' % (format_title(title) if title else '(none)')
-    return (title, type)
-
-#-------------------------------------------------------------------------------
-def get_title_youtube(video_id, url, type):
-    try:
-        from youtube import youtube
-        result = youtube.videos().list(id=video_id,
-            part='snippet,statistics,contentDetails').execute()['items'][0]
-        title = result['snippet']['title']
-        desc = result['snippet']['description']
-        views = result['statistics']['viewCount']
-        likes = result['statistics']['likeCount']
-        dislikes = result['statistics']['dislikeCount']
-        duration = result['contentDetails']['duration']
-
-        desc = re.sub(r'\r\n|\r|\n', ' ', desc)
-        desc = '%s(...)' % desc[:MAX_YT_DESC] \
-               if len(desc) > MAX_YT_DESC else desc
-        duration = iso8601_period_human(duration)
-
-        return (format_title(title),
-            'Duration: %s; Views: %s; Likes/Dislikes: %s/%s; Description: "%s"'
-            % (duration, views, likes, dislikes, desc))
-    except Exception as e:
-        traceback.print_exc(e)
-        return get_title_html(url, type)
 
 #===============================================================================
 # Returns the "best guess" phrase that Google's reverse image search offers to
