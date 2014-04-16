@@ -11,7 +11,7 @@ import channel
 link, install, uninstall = util.LinkSet().triple()
 
 CONF_PATH = 'conf/aop.txt'
-DELAY_BASE_S = 3
+DELAY_BASE_S = 6
 DELAY_RAND_S = 3
 
 #===============================================================================
