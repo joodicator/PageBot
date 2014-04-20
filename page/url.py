@@ -1,10 +1,6 @@
 # coding=utf8
 
 #==============================================================================#
-# Possible Extensions:
-# - Recognise images tagged by the poster as NSFW.
-
-#==============================================================================#
 from contextlib import closing
 from itertools import *
 from math import *
@@ -32,8 +28,8 @@ TIMEOUT_SECONDS = 20
 READ_BYTES_MAX = 1024*1024
 CMDS_PER_LINE_MAX = 4
 
-MAX_AURL = 30
-MAX_YT_DESC = 90
+MAX_AURL = 20
+MAX_YT_DESC = 50
 
 URL_PART_RE = re.compile(
     r'(?P<pref>.+?://(.+?@)?)'
@@ -69,10 +65,17 @@ def h_command(bot, id, target, cmd, args, full_msg):
 
 def examine_message(message, channel, id=None):
     channel = channel or ('%s!%s@%s' % id).lower()
+    urls = extract_urls(message)
+    if not urls: return
+
+    history[channel].append(urls)
+    del history[channel][:-HISTORY_SIZE]
+
+def extract_urls(message):
     urls = re.findall(URL_RE, message)
-    if urls:
-        history[channel].append(urls)
-        del history[channel][:-HISTORY_SIZE]
+    if re.search(r'NSFW', message, re.I):
+        urls = map(lambda u: ('NSFW',u), urls)
+    return urls    
 
 #==============================================================================#
 @link('HELP*')
@@ -96,7 +99,7 @@ def h_url(bot, id, target, args, full_msg, reply):
     channel = target or ('%s!%s@%s' % id).lower()
 
     if args:
-        urls = re.findall(URL_RE, args)
+        urls = extract_urls(args)
     elif history[channel]:
         urls = history[channel].pop(-1)
     else:
@@ -118,6 +121,11 @@ class PageURLError(Exception):
     pass
 
 def get_title(url):
+    is_nsfw = False
+    if type(url) is tuple:
+        if url[0] == 'NSFW': is_nsfw = True
+        url = url[1]
+
     url = utf8_url_to_ascii(url)
 
     request = urllib2.Request(url)
@@ -129,11 +137,11 @@ def get_title(url):
 
     with closing(urllib2.urlopen(request, timeout=TIMEOUT_SECONDS)) as stream:
         info = stream.info()
-        type = info.gettype()
+        ctype = info.gettype()
         size = info['Content-Length'] if 'Content-Length' in info else None
         final_url = stream.geturl()
 
-    parts = get_title_parts(final_url, type)
+    parts = get_title_parts(final_url, ctype)
     if len(parts) == 2:
         (title, extra) = parts
     else:
@@ -148,7 +156,11 @@ def get_title(url):
     if size:
         url_info[:0] = [bytes_to_human_size(size)]
     if extra: url_info[:0] = [extra]
-    return '%s [%s]' % (title, '; '.join(url_info))
+    
+    url_info = '; '.join(url_info)
+    if is_nsfw: url_info = '%s \2NSFW\2' % url_info
+
+    return '%s [%s]' % (title, url_info)
 
 #-------------------------------------------------------------------------------
 # Returns (body, extra), where body is the main title of the URL, and extra is
@@ -203,19 +215,13 @@ def get_title_youtube(url, type):
             part='snippet,statistics,contentDetails').execute()['items'][0]
         title = result['snippet']['title']
         desc = result['snippet']['description']
-        views = result['statistics']['viewCount']
-        likes = result['statistics']['likeCount']
-        dislikes = result['statistics']['dislikeCount']
         duration = result['contentDetails']['duration']
 
         desc = re.sub(r'\r\n|\r|\n', ' ', desc)
-        desc = '%s(...)' % desc[:MAX_YT_DESC] \
-               if len(desc) > MAX_YT_DESC else desc
+        desc = '%s...' % desc[:MAX_YT_DESC] if len(desc) > MAX_YT_DESC else desc
         duration = iso8601_period_human(duration)
 
-        return (format_title(title),
-            'Duration: %s; Views: %s; Likes/Dislikes: %s/%s; Description: "%s"'
-            % (duration, views, likes, dislikes, desc))
+        return (format_title(title), '%s; %s' % (duration, desc))
     except Exception as e:
         traceback.print_exc(e)
 
