@@ -5,16 +5,18 @@ from untwisted.magic import sign, hold
 import re
 import time
 
-import auth
-import util
+from channel import not_quiet
 import message
 import channel
 import runtime
+import auth
+import util
 
 link, install, uninstall = util.LinkSet().triple()
 
 #===============================================================================
 @link('MESSAGE')
+@not_quiet()
 def h_message(bot, id, target, msg):
     if not target: return
     yield sign('FTO_MSG', bot, id, target, msg)

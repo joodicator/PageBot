@@ -26,7 +26,7 @@ def h_help_missedrolls(bot, reply, args):
     ' was invoked.')
 
 #-------------------------------------------------------------------------------
-@link('!missed-rolls', '!failed-rolls')
+@link('!missed-rolls')
 def h_missed_rolls(bot, id, target, args, full_msg):
     reply = lambda m: message.reply(bot, id, target, m, prefix=False, wrap=True)
     try: all_rolls = util.read_list(LOG_FILE)
@@ -46,17 +46,20 @@ def h_missed_rolls(bot, id, target, args, full_msg):
     nicks_text = ', '.join(
         '\2%s: %d\2 of %d' % (nick_case[n], f, nick_move[n])
         for (n,f) in nick_fail.iteritems())
+    reply_msg = 'Missed rolls (estimated): %s.' % nicks_text
+
     rolls_text = ''.join(
         '%s (%d/%d): %s\n' % (nick_case[n.lower()], f, m, r)
         for (f,m,t,(n,u,h),r) in rolls if f)
-    time = datetime.now().strftime('%Y-%m-%d %H:%M')
-    rolls_url = pastebin.post(
-        rolls_text,
-        paste_expire    = pastebin.E_1MONTH,
-        paste_name      = '%s %s Missed Rolls %s' % (bot.nick, target, time))
+    if rolls_text:
+        time = datetime.now().strftime('%Y-%m-%d %H:%M')
+        rolls_url = pastebin.post(
+            rolls_text,
+            paste_expire = pastebin.E_1MONTH,
+            paste_name   = '%s %s Missed Rolls %s' % (bot.nick, target, time))
+        reply_msg += ' Full list: <%s>.' % rolls_url
 
-    reply('Missed rolls (estimated): %s. Full list: <%s>.'
-        % (nicks_text, rolls_url))
+    reply(reply_msg)
 
     all_rolls = filter(lambda r: r not in rolls, all_rolls)
     with open(LOG_FILE, 'w') as file:

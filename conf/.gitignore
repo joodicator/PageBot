@@ -4,9 +4,11 @@ minecraft.py
 terraria.py
 bridge.py
 admins.txt
-kakasi.txt
 auth_password.txt
 pastebin_dev_key.txt
 chanserv_password.py
 chanserv_evict.txt
 aop.txt
+quiet_channels.txt
+youtube_api_key.txt
+imgur_client_id.txt

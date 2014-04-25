@@ -120,7 +120,6 @@ def h_reload(bot, id, target, hard):
     local = filter(util.module_is_local, sys.modules.values())
     local.sort(key=order)
     names = [m.__name__ for m in local]
-    echo(bot, id, target, 'Reloading: ' + repr(names))
     
     old_modules = dict()
     expns = dict()
