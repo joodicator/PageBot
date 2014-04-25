@@ -1,22 +1,20 @@
 #===============================================================================
 import re
 
-import util
+from channel import not_quiet
 import message
+import util
 
 import kakasi_lib
 
-#===============================================================================
 link, install, uninstall = util.LinkSet().triple()
-
-with open('conf/kakasi.txt') as file:
-    auto_targets = set(re.findall(r'\S+', file.read().lower()))
 
 #===============================================================================
 @link('MESSAGE')
+@not_quiet()
 def h_message(bot, id, target, msg):
-    if (target or 'PRIVMSG').lower() not in auto_targets: return
-    if kakasi_lib.is_ja(msg): kakasi(bot, id, target, msg, target is not None)
+    if kakasi_lib.is_ja(msg):
+        kakasi(bot, id, target, msg, target is not None)
 
 #===============================================================================
 @link('HELP')

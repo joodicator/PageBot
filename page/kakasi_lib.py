@@ -46,7 +46,7 @@ def is_ja(text, threshold=0.5):
 def ja_quotient(text):
     if type(text) is not unicode: text = text.decode('utf8')
     ja_len = len(filter(lambda c: kakasi_unicode(c) != c, text))
-    return float(ja_len)/len(text)
+    return float(5*ja_len)/(4*len(text)+ja_len)
 
 def backslash_escape(str):
     return re.sub(r'\\', r'\\\\', str)
@@ -54,5 +54,5 @@ def backslash_escape(str):
 def backslash_unescape(str):
     def sub(m):
         s = m.group(1)
-        return unichr(int(s[1:], 16)) if s[0]=='u' else s
-    return re.sub(r'\\(\\|u[0-9a-f]{4})', sub, str, re.I)
+        return unichr(int(s[1:], 16)) if s[0] in 'xu' else s
+    return re.sub(r'\\(\\|x[0-9a-f]{2}|u[0-9a-f]{4})', sub, str, re.I)

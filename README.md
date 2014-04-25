@@ -30,6 +30,9 @@ Files
     <dt>state/</dt>
     <dd>Persistent data and runtime files.</dd>
 
+    <dt>static/</dt>
+    <dd>Data files that do not change and are not program code.</dd>
+
     <dt>page/</dt>
     <dd>Plugins and support modules that are original components of
         PageBot.</dd>
