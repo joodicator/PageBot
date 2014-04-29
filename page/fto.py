@@ -72,6 +72,10 @@ def h_fto_msg(bot, id, target, msg):
     and strip('Carlito') not in strip(msg):
         reply('\2Carlito! Carlito! Carli-Carlito!')
 
+    elif re.search(r'whos(the|that)boytakeachanceonmenow', strip(msg)) \
+    and not re.search(r'señorita|carlita', strip(msg)):
+        reply(u'\2Eyy, Señorita, where you going? You wanna be my Carlita?!')
+
     elif re.search(r'icansingandicandanceia?mveryniceandhotandspicy', \
     strip(msg)) and not any(strip(s) in strip(msg) for s in [
     'I have the looks', 'cook a TACO']):

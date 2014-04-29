@@ -221,7 +221,7 @@ def get_title_youtube(url, type):
         desc = '%s...' % desc[:MAX_YT_DESC] if len(desc) > MAX_YT_DESC else desc
         duration = iso8601_period_human(duration)
 
-        return (format_title(title), '%s; %s' % (duration, desc))
+        return (format_title(title), 'Duration: %s; Description: "%s"' % (duration, desc))
     except Exception as e:
         traceback.print_exc(e)
 
