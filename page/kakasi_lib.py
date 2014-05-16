@@ -29,7 +29,7 @@ def kakasi_unicode(text):
     text = backslash_escape(text).encode(KAKASI_CODEC, 'backslashreplace')
     res_ptr = libkakasi.kakasi_do(text)
     res = ctypes.string_at(res_ptr).decode(KAKASI_CODEC)
-    libkakasi.kakasi_free(res_ptr)
+    if res: libkakasi.kakasi_free(res_ptr)
     res = backslash_unescape(res)
     res = post_kakasi_unicode(res)
     return res
