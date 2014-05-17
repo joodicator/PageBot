@@ -29,7 +29,7 @@ READ_BYTES_MAX = 1024*1024
 CMDS_PER_LINE_MAX = 4
 
 MAX_AURL = 20
-MAX_YT_DESC = 50
+MAX_YT_DESC = 70
 
 URL_PART_RE = re.compile(
     r'(?P<pref>.+?://(.+?@)?)'
@@ -213,15 +213,22 @@ def get_title_youtube(url, type):
         from youtube import youtube
         result = youtube.videos().list(id=video_id,
             part='snippet,statistics,contentDetails').execute()['items'][0]
+
         title = result['snippet']['title']
         desc = result['snippet']['description']
+        channel = result['snippet']['channelTitle']
+        #views = result['statistics']['viewCount']
+        #likes = result['statistics']['likeCount']
+        #dislikes = result['statistics']['dislikeCount']
         duration = result['contentDetails']['duration']
 
         desc = re.sub(r'\r\n|\r|\n', ' ', desc)
         desc = '%s...' % desc[:MAX_YT_DESC] if len(desc) > MAX_YT_DESC else desc
         duration = iso8601_period_human(duration)
 
-        return (format_title(title), 'Duration: %s; Description: "%s"' % (duration, desc))
+        return (format_title(title),
+            'Duration: %s; Channel: %s; Description: "%s"'
+            % (duration, channel, desc))
     except Exception as e:
         traceback.print_exc(e)
 
