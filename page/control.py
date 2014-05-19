@@ -105,7 +105,7 @@ def _unload(bot, id, target, args, full_msg):
 def h_soft_reload(bot, id, target, args, full_msg):
     h_reload(bot, id, target, hard=False)
 
-@link('!hard_reload')
+@link('!hard-reload')
 @admin
 def h_hard_reload(bot, id, target, args, full_msg):
     h_reload(bot, id, target, hard=True)
