@@ -53,6 +53,10 @@ def h_fto_msg(bot, id, target, msg):
     and strip('with some peas') not in strip(msg):
         reply('Why not have me with some peas?')
 
+    elif strip('All Achaeans bow to me!') in strip(msg) \
+    and strip('rosemary') not in strip(msg):
+        reply('I taste great with rosemary-hee!')
+
     #---------------------------------------------------------------------------
     # 【MMD】With pleasant companions『Go!Go!Carlito!』【PV】
     # http://www.youtube.com/watch?v=1jJsYbVBnaE
