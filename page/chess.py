@@ -35,6 +35,21 @@ ab_mode = None
 ab_link = util.LinkSet()
 
 
+@ab_link(('HELP', 'chess'))
+def h_help(bot, reply, args):
+    reply('chess start',
+        'Starts a new game of chess.')
+    reply('chess rf RF',
+        'Moves the piece at rank r file f to rank R file F.')
+    reply('chess M [r|f|rf] RF',
+        'Moves a piece of type M to rank R file F'
+        ' (moving from rank r and/or file f, if specified).')
+    reply('chess [r|f] RF',
+        'Moves a pawn to rank R file F'
+        ' (moving from rank r or file f, if specified).')
+    reply('chess stop',
+        'Cancels the current game of chess.')
+
 def init_work(address):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     work = Work(ch_mode, sock)
