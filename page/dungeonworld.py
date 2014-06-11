@@ -2,9 +2,11 @@ from __future__ import print_function
 from collections import Counter
 from datetime import datetime
 
+from util import multi
 import pastebin
 import message
 import util
+import re
 
 link, install, uninstall = util.LinkSet().triple()
 
@@ -49,7 +51,7 @@ def h_missed_rolls(bot, id, target, args, full_msg):
     reply_msg = 'Missed rolls (estimated): %s.' % nicks_text
 
     rolls_text = ''.join(
-        '%s (%d/%d): %s\n' % (nick_case[n.lower()], f, m, r)
+        '%s (%d/%d)%s\n' % (nick_case[n.lower()], f, m, r and ': %s' % r)
         for (f,m,t,(n,u,h),r) in rolls if f)
     if rolls_text:
         time = datetime.now().strftime('%Y-%m-%d %H:%M')
@@ -64,6 +66,73 @@ def h_missed_rolls(bot, id, target, args, full_msg):
     all_rolls = filter(lambda r: r not in rolls, all_rolls)
     with open(LOG_FILE, 'w') as file:
         for roll in all_rolls: print(roll, file=file)
+
+#-------------------------------------------------------------------------------
+@link('HELP')
+def h_help(bot, reply, args):
+    reply('insert-missed-roll [NICK [COMMENT ...]]',
+    'Inserted a synthetic missed dice roll.')
+
+@link(('HELP', 'insert-missed-roll'))
+def h_help_insert_missed_roll(bot, reply, args):
+    reply('insert-missed-roll [NICK [COMMENT ...]] [!insert-missed-roll ...]',
+    'Inserts into the record of dice rolls an entry meaning that NICK (or the'
+    ' nick giving the command) missed a single roll according to'
+    ' "missed-rolls".')
+
+@link('!insert-missed-roll')
+@multi('!insert-missed-roll', limit=4, prefix=False)
+def h_insert_missed_roll(bot, id, target, args, full_msg, reply):
+    if not target: return
+
+    nick, label = re.match(r'(\S*)\s*(.*)', args).groups()
+    r_id = (nick,'*','*') if nick else id
+    label = label or '(inserted by %s)' % id.nick
+    
+    with open(LOG_FILE, 'a') as file:
+        print((1,1,target,r_id,label), file=file)
+
+    reply('Inserted 1 missed roll by %s.' % r_id[0])
+
+#-------------------------------------------------------------------------------
+@link('HELP')
+def h_help(bot, reply, args):
+    reply('delete-missed-roll [NICK]',
+    'Deletes the last missed dice roll.')
+
+@link(('HELP', 'delete-missed-roll'))
+def h_help_insert_missed_roll(bot, reply, args):
+    reply('delete-missed-roll [NICK] [!delete-missed-roll ...]',
+    'Deletes from the record of dice rolls the last roll by NICK (or, if not'
+    ' specified, by anyone) which was missed according to "missed-rolls".')
+
+@link('!delete-missed-roll')
+@multi('!delete-missed-roll', limit=4, prefix=False)
+def h_delete_missed_roll(bot, id, target, args, full_msg, reply):
+    if not target: return
+    nick = re.match(r'\S*', args).group()
+
+    try: all_rolls = util.read_list(LOG_FILE)
+    except IOError: all_rolls = []
+
+    delete_index = None
+    for index in range(len(all_rolls)):
+        (_,_,r_target,(r_nick,_,_),_) = all_rolls[index]
+        if r_target.lower() != target.lower(): continue
+        if nick and r_nick.lower() != nick.lower(): continue
+        delete_index = index
+
+    if delete_index is None: return reply(
+        'There are no missed rolls%s to delete.' % (nick and ' by "%s"' % nick))
+
+    (_,_,_,r_id,label) = all_rolls.pop(delete_index)
+
+    with open(LOG_FILE, 'w') as file:
+        for roll in all_rolls:
+            print(roll, file=file)
+
+    reply('Deleted 1 missed roll by %s%s.'
+        % (r_id[0], label and ': "%s"' % label))
 
 #-------------------------------------------------------------------------------
 @link('DICE_ROLLS')
