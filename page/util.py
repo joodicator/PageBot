@@ -250,7 +250,7 @@ class LinkSet(object):
 def multi(*cmds, **kwds): # limit=None, prefix=True
     limit = kwds.get('limit', None)
     prefix = kwds.get('prefix', True)
-    cre = '|'.join(re.escape(cmd) for cmd in cmds)
+    cre = '|'.join(re.escape(cmd) for cmd in sorted(cmds, key=len, reverse=True))
     cre = re.compile('(?:%s)(?:\s|$)'%cre, re.I)
     def multi_deco(func):
         def multi_func(bot, id, target, args, *extra):
