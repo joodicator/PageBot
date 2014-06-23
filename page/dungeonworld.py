@@ -117,7 +117,8 @@ def h_delete_missed_roll(bot, id, target, args, full_msg, reply):
 
     delete_index = None
     for index in range(len(all_rolls)):
-        (_,_,r_target,(r_nick,_,_),_) = all_rolls[index]
+        (failed,_,r_target,(r_nick,_,_),_) = all_rolls[index]
+        if not failed: continue
         if r_target.lower() != target.lower(): continue
         if nick and r_nick.lower() != nick.lower(): continue
         delete_index = index
