@@ -264,7 +264,7 @@ def url_to_unicode(url):
     except UnicodeError: return url
 
 def format_title(title):
-    title = '\2%s\2' % title
+    title = '\2%s\2' % re.sub(r'\r\n|\r|\n', ' ', title)
     return title
 
 def bytes_to_human_size(bytes):
