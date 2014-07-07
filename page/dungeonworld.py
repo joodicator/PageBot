@@ -33,7 +33,7 @@ def h_missed_rolls(bot, id, target, args, full_msg):
     reply = lambda m: message.reply(bot, id, target, m, prefix=False, wrap=True)
     try: all_rolls = util.read_list(LOG_FILE)
     except IOError: all_rolls = []
-    rolls = filter(lambda (f,m,t,i,r): t==target, all_rolls)
+    rolls = filter(lambda (f,m,t,i,r): t.lower()==target.lower(), all_rolls)
 
     nick_case = dict()
     nick_move, nick_fail = Counter(), Counter()
