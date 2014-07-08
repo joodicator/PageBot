@@ -18,64 +18,19 @@ from util import multi
 import util
 import runtime
 
+from url_collect import URL_PART_RE
+import url_collect
+
 #==============================================================================#
 link, install, uninstall = util.LinkSet().triple()
 
-URL_RE = re.compile(r'(https?://.+?)[.,;:!?>)}\]]?(?:\s|[\x01-\x1f]|$)', re.I)
 AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:23.0) Gecko/20100101 Firefox/23.0'
-HISTORY_SIZE = 8
 TIMEOUT_SECONDS = 20
 READ_BYTES_MAX = 1024*1024
-CMDS_PER_LINE_MAX = 4
+CMDS_PER_LINE_MAX = 6
 
 MAX_AURL = 20
 MAX_YT_DESC = 70
-
-URL_PART_RE = re.compile(
-    r'(?P<pref>.+?://(.+?@)?)'
-    r'(?P<host>.+?)'
-    r'(?P<suff>(:.+?)?)'
-    r'(?P<path>(/.*?)?)'
-    r'(?P<frag>(#.*)?)$')
-
-history = collections.defaultdict(lambda: [])
-
-#==============================================================================#
-def reload(prev):
-    if hasattr(prev, 'history') and isinstance(prev.history, dict):
-        history.update(prev.history)
-
-#==============================================================================#
-@link('MESSAGE', 'UNOTICE', 'OTHER_PART', 'OTHER_QUIT')
-def h_message(bot, id, target, message):
-    examine_message(message, target, id)
-
-@link('OTHER_KICKED')
-def h_other_kicked(bot, other_nick, op_id, channel, message):
-    examine_message(message, channel)
-
-@link('TELL_DELIVERY')
-def h_tell_delivery(bot, from_id, to_id, channel, message):
-    examine_message(message, channel)
-
-@link('COMMAND')
-def h_command(bot, id, target, cmd, args, full_msg):
-    if cmd in ('!url', '!title'): return
-    examine_message(args, target, id)
-
-def examine_message(message, channel, id=None):
-    channel = channel or ('%s!%s@%s' % id).lower()
-    urls = extract_urls(message)
-    if not urls: return
-
-    history[channel].append(urls)
-    del history[channel][:-HISTORY_SIZE]
-
-def extract_urls(message):
-    urls = re.findall(URL_RE, message)
-    if re.search(r'NSFW', message, re.I):
-        urls = map(lambda u: ('NSFW',u), urls)
-    return urls    
 
 #==============================================================================#
 @link('HELP*')
@@ -96,12 +51,12 @@ def h_help_url(bot, reply, args):
 @link('!url', '!title')
 @multi('!url', '!title', limit=CMDS_PER_LINE_MAX, prefix=False)
 def h_url(bot, id, target, args, full_msg, reply):
-    channel = target or ('%s!%s@%s' % id).lower()
+    channel = target.lower() or ('%s!%s@%s' % id).lower()
 
     if args:
-        urls = extract_urls(args)
-    elif history[channel]:
-        urls = history[channel].pop(-1)
+        urls = url_collect.extract_urls(args)
+    elif url_collect.history[channel]:
+        urls = url_collect.history[channel].pop(-1)
     else:
         urls = None
 
