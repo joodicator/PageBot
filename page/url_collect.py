@@ -45,7 +45,7 @@ def h_command(bot, id, target, cmd, args, full_msg):
 
 @link('URL_COLLECT_MSG')
 def examine_message(bot, message, channel, id=None):
-    source = channel.lower() or ('%s!%s@%s' % id).lower()
+    source = (channel or ('%s!%s@%s' % id)).lower()
     urls = extract_urls(message)
     if not urls: return
 
