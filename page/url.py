@@ -51,7 +51,7 @@ def h_help_url(bot, reply, args):
 @link('!url', '!title')
 @multi('!url', '!title', limit=CMDS_PER_LINE_MAX, prefix=False)
 def h_url(bot, id, target, args, full_msg, reply):
-    channel = target.lower() or ('%s!%s@%s' % id).lower()
+    channel = (target or ('%s!%s@%s' % id)).lower()
 
     if args:
         urls = url_collect.extract_urls(args)
