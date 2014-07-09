@@ -191,7 +191,7 @@ def get_title_youtube(url, type):
 def get_title_imgur(url, type):
     match = URL_PART_RE.match(url)
     path, query = decode_url_path(match.group('path'))
-    path_match = re.match(r'/(gallery/)?(?P<id>[a-zA-Z0-9]+)', path)
+    path_match = re.match(r'/(gallery/)?(?P<id>[a-zA-Z0-9]+)$', path)
     if match.group('host') != 'imgur.com' or not path_match: return
     try:
         import imgur
