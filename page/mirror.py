@@ -77,7 +77,7 @@ def get_mirror_url(url, chan):
 
     return mirror_url
 
-@link('URL_COLLECT_URLS')
+@link('URL_COLLECT_URLS', 'URL_CMD_URLS')
 def h_url_collect_urls(bot, urls, chan, id, orig_msg):
     if not chan: return
     chan = chan.lower()
