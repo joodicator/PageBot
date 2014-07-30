@@ -98,11 +98,11 @@ def message(bot, id, target, msg):
     while True:
         # !CMD [ARGS...]
         if bot.conf['bang_cmd']:
-            match = re.match(r'!(?P<head>\S+)\s*(?P<body>.*)', msg)
+            match = re.match(r'!(?P<head>\S*)\s*(?P<body>.*)', msg)
             if match: break
 
         # NICK: CMD [ARGS...]
-        match = re.match(r'(?P<addr>\S+):\s+!?(?P<head>\S+)\s*(?P<body>.*)', msg)
+        match = re.match(r'(?P<addr>\S+):\s*!?(?P<head>\S*)\s*(?P<body>.*)', msg)
         if match and match.group('addr').lower() == bot.nick.lower(): break
 
         return
