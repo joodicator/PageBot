@@ -38,8 +38,7 @@ def h_help(bot, reply, args):
     reply('url [URL ...]',
     'Shows the titles of recently mentioned URLs, or of a specific URL.')
 
-@link(('HELP', 'url'))
-@link(('HELP', 'title'))
+@link(('HELP', 'url'), ('HELP', 'title'))
 def h_help_url(bot, reply, args):
     reply('url [URL ...]',
     'If URL is given, shows the title of the HTML page or image it locates;'
@@ -55,6 +54,7 @@ def h_url(bot, id, target, args, full_msg, reply):
 
     if args:
         urls = url_collect.extract_urls(args)
+        yield sign('URL_CMD_URLS', bot, urls, target, id, full_msg)
     elif url_collect.history[channel]:
         urls = url_collect.history[channel].pop(-1)
     else:
