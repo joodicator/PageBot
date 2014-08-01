@@ -2,6 +2,7 @@
 # upoopia.py - an IRC implementation of http://www.unicorn7.org/games/game/553
 
 from untwisted.magic import sign
+
 from message import reply
 import util
 import modal
