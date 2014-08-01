@@ -113,17 +113,25 @@ def pad_left(str, n):
 def pad_right(str, n):
     return ' '*(n - len(str)) + str
 
-# Given a sequence of sequences of strings, representing the rows of a table, each
+# Given some sequences of strings, representing the rows of a table, each
 # row of which contains a number of cells, returns a list of strings representing
 # the rows of the table where spaces have been added so that all columns in the
 # table are left-aligned and separated by two spaces, or the given separator.
-def align_table(lines, sep='  ', align='l'):
-    pad = {'l': pad_left, 'r': pad_right}[align]
-    widths = (imap(len, r) for r in lines)
+def join_rows(*rows, **kwds):
+    sep = kwds.get('sep','  ')
+    pad = pad_left if kwds.get('align','l') == 'l' else pad_right
+    widths = (imap(len, r) for r in rows)
     widths = [max(t) for t in izip_longest(*widths, fillvalue=0)]
-    lines = ((pad(*t) for t in izip(l, widths)) for l in lines)
-    return [sep.join(l).rstrip() for l in lines]
+    rows = ((pad(*t) for t in izip(l, widths)) for l in rows)
+    return [sep.join(l).rstrip() for l in rows]
 
+# Alias for join_rows included for back-compatibility.
+def align_table(lines, **kwds):
+    return join_rows(*lines, **kwds)
+
+# As join_rows, but takes a sequence of columns rather than of rows.
+def join_cols(*cols, **kwds):
+    return join_rows(*izip_longest(*cols, fillvalue=''), **kwds)
 
 # Returns an object which may be yielded in an untwisted event handler to obtain
 # just the given argument, with no other effects.
