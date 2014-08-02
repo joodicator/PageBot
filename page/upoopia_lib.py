@@ -56,7 +56,7 @@ class Upoopia(object):
         self.player = first_player
         self.winner = None
         self.worm = { WHITE:(17,8), BLACK:(03,8) }
-        self.direction = { BLACK:LEFT, WHITE:RIGHT }
+        self.direction = { BLACK:RIGHT, WHITE:LEFT }
         self.dice = { BLACK:[], WHITE:[] }
         self.galaxies = { BLACK:[], WHITE:[] }
         self.xray = { BLACK:False, WHITE:False }
@@ -113,13 +113,13 @@ class Upoopia(object):
         for i in range(length):
             self.board[x, y] = POOP[colour]
             x, y = x+dx, y+dy
-            target = self.board.get((x,y))
+            target = self.board.get((x,y), EMPTY)
             if target in GLXY.itervalues():
                 # Pick up a galaxy.
                 self.galaxies[colour].add(target)
             elif target != EMPTY:
                 # Run into an obstacle.
-                self.loss(colour)
+                self._loss(colour)
                 break
             self.board[x, y] = WORM[colour]
 
@@ -194,8 +194,14 @@ class UpoopiaText(Upoopia):
             for y in xrange(HEIGHT) ]
 
     def status_lines(self, viewer=None):
-        return [
-            '%s to play (round %s, started by %s)'
+        if self.winner: return [
+            '',
+            'Game over!',
+            ''
+            '%s wins.' % self.winner,
+            '']
+        else: return [
+            '%s to play (round %s, started by %s).'
                 % (self.player, self.round_number, self.round_beginner),
             '',
             '%s: %s' % (BLACK, ', '.join(self.item_names(BLACK, viewer))),

@@ -22,6 +22,7 @@ def h_names(bot, chan, *args):
     evict_chanserv(bot, chan)
 
 def evict_chanserv(bot, chan):
+    chan = chan.lower()
     try:
         with open(EVICT_FILE) as file:
             evict_channels = re.findall(r'\S+', file.read())

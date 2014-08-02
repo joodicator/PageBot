@@ -111,7 +111,7 @@ def h_other_kick(bot, other_nick, op_id, chan, msg):
     yield sign('IRC', bot, chan, cmsg)
 
 @link('OTHER_QUIT_CHAN')
-def h_other_quit(bot, id, chan, msg):
+def h_other_quit(bot, id, msg, chan):
     cmsg = '%s quit the network%s.' % \
         (id.nick, (' (%s)' % msg) if msg else '')
     yield sign('IRC', bot, chan, cmsg)
