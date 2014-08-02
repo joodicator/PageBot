@@ -183,6 +183,34 @@ def mcall(event, *args):
         raise StopIteration
     return act
 
+# As mmcall, but takes several tuples (event, *args) giving multiple calls
+# to perform concurrently, their results returned in a list.
+def mmcall_all(mode, *calls):
+    from untwisted.magic import hold
+    token = ('mmcall_all', object())
+
+    def mmcall_wait():
+        mode.unlink(token, mmcall_wait)
+        wait_calls = list(calls)
+        results = [None for c in wait_calls]
+        complete = [False for c in wait_calls]
+        while not all(complete):
+            wait_call, (result,) = yield hold(mode, *filter(id, wait_calls))
+            i = wait_calls.index(wait_call)
+            results[wait_calls.index(wait_call)] = result
+            complete[i] = True
+            wait_calls[i] = None
+        yield msign(mode, (token,), results)
+    mode.link(token, mmcall_wait)
+
+    def mmcall_send():
+        mode.unlink(token, mmcall_send)
+        for call in calls:
+            yield msign(mode, *call)
+    mode.link(token, mmcall_send)
+
+    return mmcall(mode, token)
+
 # A LinkSet maintains a list of bindings between events and event handlers,
 # providing some convenience methods for changing and using this list.
 class LinkSet(object):

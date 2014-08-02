@@ -1,6 +1,8 @@
 #===============================================================================
 # upoopia.py - an IRC implementation of http://www.unicorn7.org/games/game/553
 
+__depends__ = 'chan_link',
+
 from untwisted.magic import sign
 
 from message import reply
