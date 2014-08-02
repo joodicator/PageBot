@@ -1,6 +1,7 @@
 from importlib import import_module
 from socket import *
 import sys
+import re
 
 from plugins.standard import head
 from untwisted.core import gear
@@ -10,6 +11,10 @@ from untwisted.usual import Kill
 import utils.misc
 import stdlog as std
 import xirclib
+
+RPL_WELCOME         = '001'
+RPL_ISUPPORT        = '005'
+ERR_NICKNAMEINUSE   = '433'
 
 default_conf = {
     'server':       'irc.freenode.net',
@@ -41,11 +46,17 @@ class AmeliaBot(Mac):
         sock.setblocking(0)
         sock.connect_ex((address, self.conf['port']))
 
+        # Initialise miscellaneous attributes
+        self.isupport = {
+            'PREFIX':    ('ohv','@%+'),
+            'CHANMODES': ('be','k','l','') }
+
         # Initialise events
         std.install(self)
         xirclib.install(self)
-        self.link('433', self.err_nicknameinuse)
-        self.link('001', self.registered)
+        self.link(ERR_NICKNAMEINUSE,    self.h_err_nicknameinuse)
+        self.link(RPL_WELCOME,          self.h_rpl_welcome)
+        self.link(RPL_ISUPPORT,         self.h_rpl_isupport)
         
         # Load plugins
         self.conf['plugins'][0:0] = ['plugins.standard.head']
@@ -61,11 +72,22 @@ class AmeliaBot(Mac):
         self.send_cmd('NICK %s' % self.nick)
         self.send_cmd('USER %(user)s %(host)s %(server)s :%(name)s' % self.conf) 
 
-    def err_nicknameinuse(self, bot, *args):
+    def h_err_nicknameinuse(self, bot, *args):
         self.nick += "_"
         self.send_cmd('NICK %s' % self.nick)
 
-    def registered(self, *args):
+    def h_rpl_isupport(self, bot, pre, target, *args):
+        for arg in args[:-1]:
+            match = re.match(r'-?(?P<key>[^=]+)(=(?P<val>.*))?', arg)
+            key, val = match.group('key', 'val')
+            if key == 'PREFIX' and val:
+                match = re.match(r'(\((?P<ms>[^)]*)\))?(?P<ps>.*)', val)
+                val = match.group('ms', 'ps')
+            elif key == 'CHANMODES' and val:
+                val = tuple(val.split(','))
+            bot.isupport[key] = val
+
+    def h_rpl_welcome(self, *args):
         for channel in self.conf['channels']:
             self.send_cmd('JOIN %s' % channel)
         self.drive('AUTOJOIN', self)

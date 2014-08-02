@@ -1,4 +1,5 @@
 from collections import defaultdict
+from itertools import *
 import inspect
 import re
 
@@ -14,147 +15,322 @@ ERR_NOSUCHCHAN  = '403'
 RPL_NOTOPIC     = '331'
 RPL_TOPIC       = '332'
 RPL_CHANMODEIS  = '324'
+RPL_NAMEREPLY   = '353'
+RPL_ENDOFNAMES  = '366'
 
-
+# names_channels[chan.lower()]
+# list of NAMES query results collected so far, including prefixes.
 names_channels = defaultdict(list)
+
+# track_channels[chan.lower()]
+# list of nicks known to be in chan.
 track_channels = defaultdict(list)
 
+# umode_channels[chan.lower()][nick.lower()]
+# list of modes that nick is known to have on chan.
+umode_channels = defaultdict(dict)
+
+# cmode_channels[chan.lower()][mode_char]
+# set if mode_char is set on chan; None if set with no parameter; else, a string.
+cmode_channels = defaultdict(dict)
+
+# topic_channels[chan.lower()]
+# the topic in channel, or None if there is no topic.
+topic_channels = dict()
+
 def reload(prev):
-    try: names_channels.update(prev.names_channels)
-    except: pass
-    try: track_channels.update(prev.track_channels)
-    except: pass
+    if hasattr(prev,'names_channels') and isinstance(prev.names_channels,dict):
+        names_channels.update(prev.names_channels)
+    if hasattr(prev,'track_channels') and isinstance(prev.track_channels,dict):
+        track_channels.update(prev.track_channels)
+    if hasattr(prev,'umode_channels') and isinstance(prev.umode_channels,dict):
+        umode_channels.update(prev.umode_channels)
+    if hasattr(prev,'cmode_channels') and isinstance(prev.cmode_channels,dict):
+        cmode_channels.update(prev.cmode_channels)
+    if hasattr(prev,'topic_channels') and isinstance(prev.topic_channels,dict):
+        topic_channels.update(prev.topic_channels)
 
 #===============================================================================
+# Provision of TOPIC query.
 def topic(bot, chan):
     return util.mcall('channel.topic', bot, chan)
 
 @link('channel.topic')
 def h_topic(bot, chan):
+    ret = lambda r: sign(('channel.topic', bot, chan), r)
+    # Return the cached topic if it exists.
+    if chan.lower() in topic_channels:
+        yield ret(topic_channels[chan.lower()])
+        return
+    # Otherwise, retrieve the topic from the server.
     bot.send_cmd('TOPIC %s' % chan)
     while True:
-        (event, data) = yield hold(bot, ERR_NOTONCHAN, RPL_NOTOPIC, RPL_TOPIC)
-        if data[3].lower() == chan.lower(): break
-    if event == RPL_TOPIC:
-        result = data[4]
-    elif event == RPL_NOTOPIC:
-        result = ''
-    else:
-        result = None
-    yield sign(('channel.topic', bot, chan), result)
+        (event, data) = yield hold(bot, ERR_NOTONCHAN, 'CHAN_TOPIC')
+        if event == 'CHAN_TOPIC':
+            e_bot, e_chan, e_topic = data[:3]
+            if e_chan.lower() != chan.lower(): continue
+            yield ret(e_topic)
+        else:
+            e_bot, e_src, e_tgt, e_chan = data[:4]
+            if e_chan.lower() != chan.lower(): continue
+            yield ret(None)
+        break
+
+@link(RPL_TOPIC,   a=lambda src, tgt, chan, topic: (chan, topic))
+@link(RPL_NOTOPIC, a=lambda src, tgt, chan, *args: (chan, None))
+@link('TOPIC',     a=lambda src, chan, topic:      (chan, topic))
+def h_rpl_topic(bot, *args, **kwds):
+    chan, topic = kwds['a'](*args)
+    yield sign('CHAN_TOPIC', bot, chan, topic)
 
 #===============================================================================
+# Provision of MODE query.
 def mode(bot, chan):
     return util.mcall('channel.mode', bot, chan)
 
 @link('channel.mode')
 def h_mode(bot, chan):
+    ret = lambda r: sign(('channel.mode', bot, chan), r)
+    # Return the cached mode if it exists.
+    if chan.lower() in cmode_channels:
+        yield ret(cmode_channels[chan.lower()])
+        return
+    # Otherwise, retrieve the mode from the server.
     bot.send_cmd('MODE %s' % chan)
     while True:
-        (event, data) = yield hold(bot,
-            ERR_NOTONCHAN, ERR_NOSUCHCHAN, RPL_CHANMODEIS)
-        if data[3].lower() == chan.lower(): break
-    if event == RPL_CHANMODEIS:
-        result = data[4:]
-    else:
-        result = None
-    yield sign(('channel.mode', bot, chan), result)
+        event, data = yield hold(bot,
+            ERR_NOTONCHAN, ERR_NOSUCHCHAN, 'CHAN_MODE_SYNC')
+        if event == 'CHAN_MODE_SYNC':
+            e_bot, e_chan, e_mode = data[:3]
+            if e_chan.lower() != chan.lower(): continue
+            yield ret(e_mode)
+        else:
+            e_bot, e_src, e_tgt, e_chan = data[:4]
+            if e_chan.lower() != chan.lower(): continue
+            yield ret(None)
+        break
+
+@link(RPL_CHANMODEIS)
+def h_rpl_chanmodeis(bot, src, tgt, chan, *args):
+    yield sign('CHAN_MODE_IS', bot, chan, parse_mode(bot, *args))
+
+@link('MODE')
+def h_mode(bot, src, chan, *args):
+    if not chan.startswith('#'): return
+    yield sign('CHAN_MODE', bot, src, chan, parse_mode(bot, *args))
+
+# Given a list of arguments to MODE or RPL_CHANMODEIS, returns a list of tuples
+# ('+',m,arg) or ('-',m,arg) where m is a mode character, and arg may be None.
+def parse_mode(bot, *args):
+    modes, params = [], []
+    for arg in args:
+        if re.match(r'[+-]', arg):
+            for part in re.finditer(r'(?P<pm>[+-])(?P<ms>[^+-]*)', arg):
+                modes.extend((part.group('pm'), m) for m in part.group('ms'))
+        else:
+            params.append(arg)
+    
+    # See http://www.irc.org/tech_docs/draft-brocklesby-irc-isupport-03.txt
+    adr_ms, par_ms, set_ms, nul_ms = bot.isupport['CHANMODES']
+    pre_ms, pre_cs = bot.isupport['PREFIX']
+    pmodes = []
+    for pm, m in modes:
+        if m in (adr_ms + par_ms + pre_ms) or m in set_ms and pm=='+':
+            param = params.pop(0) if params else None
+        else:
+            param = None
+        pmodes.append((pm, m, param))
+    return pmodes
 
 #===============================================================================
-def strip_names(names):
-    return [re.sub(r'^[+%@~^]', '', n) for n in names]
-
-def names(bot, chan):
-    return util.mcall('channel.names', bot, chan.lower())
+# Provision of NAMES query.
+def names(bot, chan, include_prefix=True):
+    return util.mcall('channel.names', bot, chan, include_prefix)
 
 @link('channel.names')
-def h_names(bot, chan):
-    bot.send_cmd('NAMES %s' % chan)
+def h_names(bot, chan, include_prefix):
+    if chan.lower() in track_channels and chan.lower() in umode_channels:
+        # Return the cached names if they exist.
+        nicks = track_channels[chan.lower()]
+        umode = umode_channels[chan.lower()]
+    else:
+        # Otherwise, retrieves the names from the server.
+        bot.send_cmd('NAMES %s' % chan)
+        while True:
+            event, data = yield hold(bot, 'NAMES_SYNC')
+            e_bot, e_chan, nicks, umode = data
+            if e_chan.lower() == chan.lower(): break
+    # Reconstruct the nick prefixes from the nicks and their modes.
+    pre_ms, pre_cs = bot.isupport['PREFIX']
+    names = []
+    for nick in nicks:
+        for pre_m, pre_c in izip(pre_ms, pre_cs):
+            if pre_m in umode[nick.lower()]:
+                prefix, sort_key = pre_c, (-pre_cs.index(pre_c), nick.lower())
+                break
+        else:
+            prefix, sort_key = '', (None, nick.lower())
+        names.append((sort_key, prefix+nick if include_prefix else nick))
+    names = [n for (_,n) in sorted(names, reverse=True)]
+    yield sign(('channel.names', bot, chan, include_prefix), names)
 
-@link('353')
+@link(RPL_NAMEREPLY)
 def h_rpl_namereply(bot, _1, _2, _3, chan, names):
     names = re.findall(r'\S+', names)
     names_channels[chan.lower()] += names
 
-    track_names = track_channels[chan.lower()]
-    for name in strip_names(names):
-        if name.lower() in map(str.lower, track_names): continue
-        track_names.append(name)
-    track_channels[chan.lower()] = track_names
-
-@link('366')
+@link(RPL_ENDOFNAMES)
 def h_rpl_endofnames(bot, _1, _2, chan, *args):
     names = names_channels[chan.lower()]
-    yield sign(('channel.names', bot, chan.lower()), names)
-    yield sign(('NAMES', chan.lower()), bot, names)
-    yield sign('NAMES', bot, chan.lower(), names)
+    yield sign('NAMES', bot, chan, names)
     del names_channels[chan.lower()]
 
+# Strips channel-mode prefixes from a list of nicks returned by NAMES.
+# e.g. ['@n1', '+n2', 'n3'] -> ['n1', 'n2', 'n3']
+def strip_names(bot, names):
+    return [split_name(bot,n)[1] for n in names]
+
+# Splits a nick returned by NAMES into its prefix(es) and its main part.
+# e.g. '@n1' -> '@', 'n1'
+def split_name(bot, name):
+    modes, prefs = bot.isupport['PREFIX']
+    r = r'(?P<pre>[%s]*)(?P<nick>.*)' % re.escape(prefs)
+    return re.match(r, name).group('pre', 'nick')
 
 #===============================================================================
+# Updating track_channels, umode_channels, cmode_channels and topic_channels.
+
+@link('NAMES')
+def h_names(bot, chan, new_names):
+    chan = chan.lower()
+    track_names = track_channels[chan]
+    umode_names = umode_channels[chan]
+
+    pre_ms, pre_cs = bot.isupport['PREFIX']
+    for prefix, nick in (split_name(bot,n) for n in new_names):
+        # Update track_channels
+        if nick.lower() not in map(str.lower, track_names):
+            track_names.append(nick)
+
+        # Update umode_channels
+        if len(prefix)==1 and nick.lower() in umode_names and prefix in pre_cs:
+            # Add the mode and remove all known higher modes.
+            i = pre_cs.index(prefix)
+            umode_names[nick.lower()] = pre_ms[i] + ''.join(
+                m for m in umode_names[nick.lower()] if m not in pre_ms[:i])
+        else:
+            # Set to exactly the given modes.
+            umode_names[nick.lower()] = ''.join(
+                m for c in prefix if c in pre_cs
+                  for i in [pre_cs.index(c)]
+                  for m in pre_ms[i:i+1])
+
+    track_channels[chan] = track_names
+    umode_channels[chan] = umode_names
+    yield sign('NAMES_SYNC', bot, chan, track_names, umode_names)
+
+@link('CHAN_TOPIC')
+def h_chan_topic(bot, chan, topic):
+    topic_channels[chan.lower()] = topic
+
+@link('CHAN_MODE_IS', a=lambda      ch, ms: (ch, ms, True))
+@link('CHAN_MODE',    a=lambda src, ch, ms: (ch, ms, False))
+def h_mode_is_change(bot, *args, **kwds):
+    chan, modes, sync = kwds['a'](*args)
+    chan = chan.lower()
+
+    if sync and chan in cmode_channels:
+        del cmode_channels[chan]
+    cmodes = cmode_channels[chan]
+    umodes = umode_channels[chan]
+
+    adr_ms, par_ms, set_ms, nul_ms = bot.isupport['CHANMODES']
+    pre_ms, pre_cs = bot.isupport['PREFIX']
+    for (pm, m, param) in modes:
+        if m in pre_ms:
+            # Set or unset a channel user-mode on a certain nick.
+            umode = umodes.get(param.lower(), '')
+            if pm == '+' and m not in umode:
+                umode += m
+            elif pm == '-' and m in umode:
+                umode = ''.join(um for um in umode if um != m)
+            umodes[param.lower()] = umode
+        elif m in adr_ms:
+            # Set or unset a channel mode on a certain hostmask.
+            cmode = cmodes.get(m, [])
+            if type(cmode) is not list: cmode = []
+            if pm == '+':
+                if param.lower() not in map(str.lower, cmode): cmode.append(param)
+            elif pm == '-':
+                cmode = [ad for ad in cmode if ad.lower() != param.lower()]
+            cmodes[m] = cmode
+        else:
+            # Set or unset a channel mode with 0 or 1 parameters.
+            if pm == '+':
+                cmodes[m] = param
+            elif pm == '-' and m in cmodes:
+                del cmodes[m]
+            
+    cmode_channels[chan] = cmodes
+    umode_channels[chan] = umodes
+
+    if sync:
+        yield sign('CHAN_MODE_SYNC', bot, chan, cmodes)
+
 @link('SOME_JOIN')
 def h_some_join(bot, id, chan):
-    chan = chan.lower()
     names = track_channels[chan.lower()]
     if id.nick.lower() in map(str.lower, names): return
     names.append(id.nick)
     track_channels[chan.lower()] = names
 
+@link('SOME_NICK_CHAN')
+def h_some_nick_chan(bot, id, new_nick, chan):
+    chan, old_nick, new_nick = chan.lower(), id.nick.lower(), new_nick.lower()
+    if chan in track_channels:
+        names = track_channels[chan]
+        names = [(new_nick if n.lower() == old_nick else n) for n in names]
+        track_channels[chan] = names
+    if chan in umode_channels and old_nick in umode_channels[chan]:
+        umode_channels[chan][new_nick] = umode_channels[chan].pop(old_nick)
+
+@link('OTHER_PART',      a=lambda id, chan, msg:           (id.nick, chan))
+@link('OTHER_KICKED',    a=lambda onick, op_id, chan, msg: (onick, chan))
+@link('OTHER_QUIT_CHAN', a=lambda nick, chan:              (nick, chan))
+def h_other_exit_chan(bot, *args, **kwds):
+    nick, chan = map(str.lower, kwds['a'](args))
+    if chan in track_channels:
+        names = track_channels[chan]
+        names = [n for n in names if n.lower() != nick]
+        track_channels[chan] = names
+    if chan in umode_channels and nick in umode_channels[chan]:
+        del umode_channels[chan][nick]
+
 @link('SELF_PART')
 @link('SELF_KICKED')
-@link('SELF_QUIT_CHAN')
-def h_self_part_kicked_quit(bot, chan, *args):
-    del track_channels[chan.lower()]
-
-@link('OTHER_PART')
-def h_other_part(bot, id, chan, *args):
+def h_self_part_kicked(bot, chan, *args):
     chan = chan.lower()
-    names = track_channels[chan.lower()]
-    names = [n for n in names if n.lower() != id.nick.lower()]
-    track_channels[chan.lower()] = names
-
-@link('OTHER_KICKED')
-def h_other_kicked(bot, nick, op_id, chan, *args):
-    chan = chan.lower()
-    names = track_channels[chan.lower()]
-    names = [n for n in names if n.lower() != nick.lower()]
-    track_channels[chan.lower()] = names
-
-@link('SELF_QUIT')
-def h_self_quit(bot, msg):
-    for chan, names in track_channels.iteritems():
-        yield sign('SELF_QUIT_CHAN', bot, chan, msg)
-        yield sign(('SELF_QUIT_CHAN', chan), bot, msg)
-
-@link('OTHER_QUIT')
-def h_other_quit(bot, id, msg):
-    for chan, names in track_channels.iteritems():
-        if id.nick.lower() not in map(str.lower, names): continue
-        names = [n for n in names if n.lower() != id.nick.lower()]  
-        track_channels[chan.lower()] = names
-        yield sign('OTHER_QUIT_CHAN', bot, id, chan, msg)
-        yield sign(('OTHER_QUIT_CHAN', chan), bot, id, msg)
-
-@link('SOME_NICK')
-def h_other_nick(bot, id, new_nick):
-    old_nick = id.nick.lower()
-    for chan, names in track_channels.iteritems():
-        if old_nick not in map(str.lower, names): continue
-        names = map(lambda n: new_nick if n.lower() == old_nick else n, names)
-        track_channels[chan.lower()] = names
-        yield sign('SOME_NICK_CHAN', bot, id, new_nick, chan)
-        yield sign(('SOME_NICK_CHAN', chan), bot, id, new_nick)
-        if old_nick != bot.nick.lower():
-            yield sign('OTHER_NICK_CHAN', bot, id, new_nick, chan)
-            yield sign(('OTHER_NICK_CHAN', chan), bot, id, new_nick)
-
-@link('CLOSING')
-def h_closing(bot):
-    for chan, names in track_channels.iteritems():
-        yield sign('CLOSING_CHAN', bot, chan)
-        yield sign(('CLOSING_CHAN', chan), bot)
+    if chan in track_channels: del track_channels[chan]
+    if chan in umode_channels: del umode_channels[chan]
+    if chan in cmode_channels: del cmode_channels[chan]
+    if chan in topic_channels: del topic_channels[chan]
 
 #===============================================================================
+# Rebroadcast channel-specific events.
+
+@link('OTHER_QUIT', e='OTHER_QUIT_CHAN', a=lambda id, msg:   id)
+@link('SOME_NICK',  e='SOME_NICK_CHAN',  a=lambda id, nnick: id)
+@link('OTHER_NICK', e='OTHER_NICK_CHAN', a=lambda id, nnick: id)
+@link('CLOSING',    e='CLOSING_CHAN',    a=lambda:           None)
+def h_general(*args, **kwds):
+    e, id = kwds['e'], kwds['a'](args)
+    for chan, names in track_channels.iteritems():
+        if id and id.nick.lower() not in map(str.lower, names): continue
+        yield sign(e, *(args + (chan,)))
+
+#===============================================================================
+# Management of "quiet" channels.
+
 try:
     with open('conf/quiet_channels.txt') as file:
         chans = re.findall(r'\S+', file.read())

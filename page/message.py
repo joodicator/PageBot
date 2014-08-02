@@ -14,13 +14,10 @@ def join(bot, source, chans, *args):
     id = ID(*source)
     for chan in chans.split(','):
         yield sign('SOME_JOIN', bot, id, chan)
-        yield sign(('SOME_JOIN', chan), bot, id)
         if (id.nick.lower() == bot.nick.lower()):
             yield sign('SELF_JOIN', bot, chan)
-            yield sign(('SELF_JOIN', chan), bot)
         else:
             yield sign('OTHER_JOIN', bot, id, chan)
-            yield sign(('OTHER_JOIN', chan), bot, id)
 
 @link('PART')
 def part(bot, source, chans, msg=None, *args):
@@ -28,20 +25,16 @@ def part(bot, source, chans, msg=None, *args):
     for chan in chans.split(','):
         if (id.nick.lower() == bot.nick.lower()):
             yield sign('SELF_PART', bot, chan, msg)
-            yield sign(('SELF_PART', chan), bot, msg)
         else:
             yield sign('OTHER_PART', bot, id, chan, msg)
-            yield sign(('OTHER_PART', chan), bot, id, msg)
 
 @link('KICK')
 def kicked(bot, op_id, chan, other_nick, msg=None, *args):
     op_id = ID(*op_id)
     if (other_nick.lower() == bot.nick.lower()):
         yield sign('SELF_KICKED', bot, chan, op_id, msg)
-        yield sign(('SELF_KICKED', chan), bot, op_id, msg)
     else:
         yield sign('OTHER_KICKED', bot, other_nick, op_id, chan, msg)
-        yield sign(('OTHER_KICKED', chan), bot, other_nick, op_id, msg)
 
 @link('QUIT')
 def quit(bot, source, msg=None, *args):
@@ -66,21 +59,12 @@ def privmsg(bot, source, target, msg, *args):
     if target == bot.nick: target = None
     if type(source) == tuple:
         id = ID(*source)
-
         bot.activity = False
         yield sign('MESSAGE', bot, id, target, msg)
-        yield sign(('MESSAGE', target and target.lower()),
-            bot, id, target, msg)
         if bot.activity: return
-
         yield sign('MESSAGE_IGNORED', bot, id, target, msg)
-        yield sign(('MESSAGE_IGNORED', target and target.lower()),
-            bot, id, target, msg)
-
     elif type(source) == str:
         yield sign('SMESSAGE', bot, source, target, msg)
-        yield sign(('SMESSAGE', target and target.lower()),
-            bot, source, target, msg)
 
 @link('NOTICE')
 def notice(bot, source, target, msg, *args):
@@ -88,10 +72,8 @@ def notice(bot, source, target, msg, *args):
     if type(source) == tuple:
         id = ID(*source)
         yield sign('UNOTICE', bot, id, target, msg)
-        yield sign(('UNOTICE', target), bot, id, msg)
     elif type(source) == str:
         yield sign('SNOTICE', bot, source, target, msg)
-        yield sign(('SNOTICE', target), bot, source, msg)
 
 @link('MESSAGE')
 def message(bot, id, target, msg):

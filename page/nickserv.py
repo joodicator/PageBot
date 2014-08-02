@@ -29,8 +29,9 @@ def h_mode(bot, source, target, modes, *args):
     if not re.search(r'\+[a-zA-Z]*r', modes): return
     yield sign('NICKSERV_REGISTERED', bot)
 
-@link(('UNOTICE', None))
-def notice(bot, id, msg):
+@link('UNOTICE')
+def notice(bot, id, target, msg):
+    if target is not None: return
     if not conf('nickserv'): return
     nickserv = conf('nickserv')
     if id.nick.lower() != nickserv.nick.lower(): return
