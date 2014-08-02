@@ -38,6 +38,10 @@ cmode_channels = defaultdict(dict)
 # the topic in channel, or None if there is no topic.
 topic_channels = dict()
 
+# capitalisation[chan.lower()]
+# the canonical capitalisation of chan, according to certain server messages.
+capitalisation = dict()
+
 def reload(prev):
     if hasattr(prev,'names_channels') and isinstance(prev.names_channels,dict):
         names_channels.update(prev.names_channels)
@@ -49,6 +53,8 @@ def reload(prev):
         cmode_channels.update(prev.cmode_channels)
     if hasattr(prev,'topic_channels') and isinstance(prev.topic_channels,dict):
         topic_channels.update(prev.topic_channels)
+    if hasattr(prev,'capitalisation') and isinstance(prev.capitalisation,dict):
+        capitalisation.update(prev.capitalisation)
 
 #===============================================================================
 # Provision of TOPIC query.
@@ -165,7 +171,7 @@ def h_names(bot, chan, include_prefix):
     names = []
     for nick in nicks:
         for pre_m, pre_c in izip(pre_ms, pre_cs):
-            if pre_m in umode[nick.lower()]:
+            if pre_m in umode.get(nick.lower(), ''):
                 prefix, sort_key = pre_c, (-pre_cs.index(pre_c), nick.lower())
                 break
         else:
@@ -197,8 +203,17 @@ def split_name(bot, name):
     r = r'(?P<pre>[%s]*)(?P<nick>.*)' % re.escape(prefs)
     return re.match(r, name).group('pre', 'nick')
 
+# Adds a suitable prefix to "nick" based on the modes it possesses in "chan".
+# e.g. 'n1', '#n1' -> '@n1'
+def prefix_nick(bot, nick, chan):
+    pre_ms, pre_cs = bot.isupport['PREFIX']
+    umodes = umode_channels[chan.lower()].get(nick.lower(), '')
+    for pre_m, pre_c in izip(pre_ms, pre_cs):
+        if pre_m in umodes: return pre_c + nick
+    return nick
+
 #===============================================================================
-# Updating track_channels, umode_channels, cmode_channels and topic_channels.
+# Updating channel data.
 
 @link('NAMES')
 def h_names(bot, chan, new_names):
@@ -277,6 +292,10 @@ def h_mode_is_change(bot, *args, **kwds):
     if sync:
         yield sign('CHAN_MODE_SYNC', bot, chan, cmodes)
 
+@link('SELF_JOIN')
+def h_self_join(bot, chan):
+    capitalisation[chan.lower()] = chan
+
 @link('SOME_JOIN')
 def h_some_join(bot, id, chan):
     names = track_channels[chan.lower()]
@@ -284,7 +303,7 @@ def h_some_join(bot, id, chan):
     names.append(id.nick)
     track_channels[chan.lower()] = names
 
-@link('SOME_NICK_CHAN')
+@link('SOME_NICK_CHAN_FINAL')
 def h_some_nick_chan(bot, id, new_nick, chan):
     chan, old_nick, new_nick = chan.lower(), id.nick.lower(), new_nick.lower()
     if chan in track_channels:
@@ -294,9 +313,9 @@ def h_some_nick_chan(bot, id, new_nick, chan):
     if chan in umode_channels and old_nick in umode_channels[chan]:
         umode_channels[chan][new_nick] = umode_channels[chan].pop(old_nick)
 
-@link('OTHER_PART',      a=lambda id, chan, msg:           (id.nick, chan))
-@link('OTHER_KICKED',    a=lambda onick, op_id, chan, msg: (onick, chan))
-@link('OTHER_QUIT_CHAN', a=lambda nick, chan:              (nick, chan))
+@link('OTHER_PART_FINAL',      a=lambda id, chan, *a:           (id.nick, chan))
+@link('OTHER_KICKED_FINAL',    a=lambda onick, op_id, chan, *a: (onick, chan))
+@link('OTHER_QUIT_CHAN_FINAL', a=lambda nick, chan, *a:         (nick, chan))
 def h_other_exit_chan(bot, *args, **kwds):
     nick, chan = map(str.lower, kwds['a'](args))
     if chan in track_channels:
@@ -322,11 +341,13 @@ def h_self_part_kicked(bot, chan, *args):
 @link('SOME_NICK',  e='SOME_NICK_CHAN',  a=lambda id, nnick: id)
 @link('OTHER_NICK', e='OTHER_NICK_CHAN', a=lambda id, nnick: id)
 @link('CLOSING',    e='CLOSING_CHAN',    a=lambda:           None)
-def h_general(*args, **kwds):
-    e, id = kwds['e'], kwds['a'](args)
+def h_general(bot, *args, **kwds):
+    e, id = kwds['e'], kwds['a'](*args)
     for chan, names in track_channels.iteritems():
         if id and id.nick.lower() not in map(str.lower, names): continue
-        yield sign(e, *(args + (chan,)))
+        eargs = args + (chan,)
+        yield sign(e,            bot, *eargs)
+        yield sign(e + '_FINAL', bot, *eargs)
 
 #===============================================================================
 # Management of "quiet" channels.

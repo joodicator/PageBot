@@ -23,18 +23,22 @@ def join(bot, source, chans, *args):
 def part(bot, source, chans, msg=None, *args):
     id = ID(*source)
     for chan in chans.split(','):
+        yield sign('SOME_PART', bot, id, chan, msg)
         if (id.nick.lower() == bot.nick.lower()):
             yield sign('SELF_PART', bot, chan, msg)
         else:
             yield sign('OTHER_PART', bot, id, chan, msg)
+            yield sign('OTHER_PART_FINAL', bot, id, chan, msg)
 
 @link('KICK')
 def kicked(bot, op_id, chan, other_nick, msg=None, *args):
     op_id = ID(*op_id)
+    yield sign('SOME_KICKED', bot, other_nick, op_id, chan, msg)
     if (other_nick.lower() == bot.nick.lower()):
         yield sign('SELF_KICKED', bot, chan, op_id, msg)
     else:
         yield sign('OTHER_KICKED', bot, other_nick, op_id, chan, msg)
+        yield sign('OTHER_KICKED_FINAL', bot, other_nick, op_id, chan, msg)
 
 @link('QUIT')
 def quit(bot, source, msg=None, *args):

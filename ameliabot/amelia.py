@@ -59,18 +59,33 @@ class AmeliaBot(Mac):
         self.link(RPL_ISUPPORT,         self.h_rpl_isupport)
         
         # Load plugins
-        self.conf['plugins'][0:0] = ['plugins.standard.head']
-        def plugins():
-            for name in self.conf['plugins']:
-                print '! plugin: %s' % name
-                yield import_module(name)
-        for plugin in plugins():
-            plugin.install(self)
+        self.conf['plugins'][:0] = ['plugins.standard.head']
+        self.load_plugins()
 
         # Start registration
         self.nick = self.conf['nick']
         self.send_cmd('NICK %s' % self.nick)
         self.send_cmd('USER %(user)s %(host)s %(server)s :%(name)s' % self.conf) 
+
+    def load_plugins(self):
+        loaded_plugins = []
+        def load_plugin(name, level):
+            plugin = import_module(name)
+            if plugin in loaded_plugins: return
+
+            loaded_plugins.append(plugin)
+            arrow = ' ' + level*'--' + '>' if level else ''
+            print '! plugin:%s %s' % (arrow, name)
+
+            if hasattr(plugin, '__depends__'):
+                for dep_name in plugin.__depends__:
+                    load_plugin(dep_name, level+1)
+
+        for name in self.conf['plugins']:
+            load_plugin(name, 0)
+
+        for plugin in loaded_plugins:
+            plugin.install(self)
 
     def h_err_nicknameinuse(self, bot, *args):
         self.nick += "_"

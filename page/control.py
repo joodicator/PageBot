@@ -48,7 +48,7 @@ def _part(bot, id, target, args, full_msg):
 @admin
 def _eval(bot, id, target, args, full_msg):
     try:
-        result = eval(args)
+        result = eval(args, sys.modules, {'bot':bot})
     except Exception as e:
         result = e
     echo(bot, id, target, repr(result))
@@ -57,7 +57,7 @@ def _eval(bot, id, target, args, full_msg):
 @admin
 def _exec(bot, id, target, args, full_msg):
     try:
-        exec args
+        exec args in sys.modules, {'bot':bot}
     except Exception as e:
         echo(bot, id, target, repr(e))
 
@@ -65,7 +65,7 @@ def _exec(bot, id, target, args, full_msg):
 @admin
 def _mcall(bot, id, target, args, full_msg):
     try:
-        result = yield eval(args)
+        result = yield eval(args, sys.modules, {'bot':bot})
     except Exception as e:
         result = e
     echo(bot, id, target, repr(result))
