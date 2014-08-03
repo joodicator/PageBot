@@ -68,12 +68,14 @@ def h_missed_rolls(bot, id, target, args, full_msg):
         for roll in all_rolls: print(roll, file=file)
 
 #-------------------------------------------------------------------------------
+'''
 @link('HELP')
 def h_help(bot, reply, args):
     reply('insert-missed-roll [NICK [COMMENT ...]]',
     'Inserted a synthetic missed dice roll.')
+'''
 
-@link(('HELP', 'insert-missed-roll'))
+@link(('HELP', 'missed-rolls'))
 def h_help_insert_missed_roll(bot, reply, args):
     reply('insert-missed-roll [NICK [COMMENT ...]] [!insert-missed-roll ...]',
     'Inserts into the record of dice rolls an entry meaning that NICK (or the'
@@ -95,12 +97,14 @@ def h_insert_missed_roll(bot, id, target, args, full_msg, reply):
     reply('Inserted 1 missed roll by %s.' % r_id[0])
 
 #-------------------------------------------------------------------------------
+'''
 @link('HELP')
 def h_help(bot, reply, args):
     reply('delete-missed-roll [NICK]',
     'Deletes the last missed dice roll.')
+'''
 
-@link(('HELP', 'delete-missed-roll'))
+@link(('HELP', 'missed-rolls'))
 def h_help_insert_missed_roll(bot, reply, args):
     reply('delete-missed-roll [NICK] [!delete-missed-roll ...]',
     'Deletes from the record of dice rolls the last roll by NICK (or, if not'

@@ -317,7 +317,7 @@ def h_some_nick_chan(bot, id, new_nick, chan):
 @link('OTHER_KICKED_FINAL',    a=lambda knick, opid, chan, msg: (knick, chan))
 @link('OTHER_QUIT_CHAN_FINAL', a=lambda id, msg, chan:          (id.nick, chan))
 def h_other_exit_chan(bot, *args, **kwds):
-    nick, chan = map(str.lower, kwds['a'](args))
+    nick, chan = map(str.lower, kwds['a'](*args))
     if chan in track_channels:
         names = track_channels[chan]
         names = [n for n in names if n.lower() != nick]

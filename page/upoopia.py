@@ -112,8 +112,9 @@ def h_upoopia(bot, id, target, args, full_msg):
         # Record the challenge.
         if modal.get_mode(target) == 'upoopia' \
         and target.lower() in challenges:
+            old_opp_chan, colour = challenges[target.lower()]
             del challenges[target.lower()]
-            bot.send_msg(target, 'Challenge to %s cancelled.')
+            bot.send_msg(target, 'Challenge to %s cancelled.' % old_opp_chan)
         elif modal.get_mode(target):
             yield sign('CONTEND_MODE', bot, id, target)
             return
@@ -145,10 +146,8 @@ def start_game(bot, chan1, chan2, colour1, colour2):
 @link(('HELP', 'upoopia'))
 def h_help_upoopia(bot, reply, *args):
     reply('[move] b[lack]|w[hite] l[eft]|r[ight]|u[p]|d[own] 1|2|3|4|5|6',
-    '    Move the worm of the given colour over the given distance--which must'
-    ' be the value of a die of your own colour if moving your own worm or'
-    ' otherwise half the value (rounding up) of a die of the opponent\'s colour'
-    '--in the given direction.')
+    'Use a die of the given colour and value to move the worm of the same'
+    ' colour over the same distance, in the given direction.')
 
 @link('!b', '!black', a=lambda args: 'b ' + args)
 @link('!w', '!white', a=lambda args: 'w ' + args)
@@ -183,14 +182,6 @@ def h_move(bot, id, chan, args, full_msg, **kwds):
     else: reply(bot, id, chan,
         'Error: "%s" is not a valid direction.' % direction); return
 
-    if colour != game.player:
-        dice = [v for (c,v) in game.dice[game.player]
-                if c == colour and v/2+v%2 == value]
-        if not dice: reply(bot, id, chan,
-            'Error: %s does not possess a %s die half of whose value'
-            ' (rounded up) is %s.' % (game.player, colour, value)); return
-        value = dice[0]
-
     try:
         game.move(colour, value, direction)
     except IllegalMove as e:
@@ -211,7 +202,7 @@ def end_move(bot, game):
 # !xray
 @link(('HELP', 'upoopia'))
 def h_help_upoopia(bot, reply, *args):
-    reply('xray [1|2|3|4|5|6]',
+    reply('xray [1|2|3]',
     '    Sacrifice one of your dice of the opponent\'s colour in exchange'
     ' for the ability to see their dice for the remainder of this round.')
 
@@ -226,9 +217,9 @@ def h_xray(bot, id, chan, args, full_msg):
     args = args.split()
     if args:
         value = args[0]
-        if value in '123456': value = int(value)
+        if value in '123': value = int(value)
         else: reply(bot, id, chan,
-            'Error: "%s" is not a valid 6-sided die value.' % value); return
+            'Error: "%s" is not a valid 3-sided die value.' % value); return
     else:
         player, opponent = game.player, other_colour(game.player)
         values = [dv for (dc,dv) in game.dice[player] if dc == opponent]
