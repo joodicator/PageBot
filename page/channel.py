@@ -313,9 +313,9 @@ def h_some_nick_chan(bot, id, new_nick, chan):
     if chan in umode_channels and old_nick in umode_channels[chan]:
         umode_channels[chan][new_nick] = umode_channels[chan].pop(old_nick)
 
-@link('OTHER_PART_FINAL',      a=lambda id, chan, *a:           (id.nick, chan))
-@link('OTHER_KICKED_FINAL',    a=lambda onick, op_id, chan, *a: (onick, chan))
-@link('OTHER_QUIT_CHAN_FINAL', a=lambda nick, chan, *a:         (nick, chan))
+@link('OTHER_PART_FINAL',      a=lambda id, chan, msg:          (id.nick, chan))
+@link('OTHER_KICKED_FINAL',    a=lambda knick, opid, chan, msg: (knick, chan))
+@link('OTHER_QUIT_CHAN_FINAL', a=lambda id, msg, chan:          (id.nick, chan))
 def h_other_exit_chan(bot, *args, **kwds):
     nick, chan = map(str.lower, kwds['a'](args))
     if chan in track_channels:

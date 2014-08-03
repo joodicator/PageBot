@@ -13,9 +13,6 @@ import chan_link
 
 link = util.LinkSet()
 
-# chan.lower() in mode_chans if 'upoopia' mode is active in chan.
-mode_chans = set()
-
 # challenges[ch1.lower()] = (ch2, WHITE or BLACK or None)
 challenges = dict()
 
@@ -37,25 +34,20 @@ def uninstall(bot):
     link.uninstall(bot)
 
 def reload(prev):
-    if hasattr(prev, 'mode_chans') and isinstance(prev.mode_chans, set):
-        mode_chans.update(prev.mode_chans)
-        for chan in mode_chans: modal.set_mode(chan, 'upoopia')
     if hasattr(prev, 'challenges') and isinstance(prev.challenges, dict):
-        challenges.update(prev.challenges)
+        for chan, challenge in prev.challenges.iteritems():
+            challenges[chan] = challenge
+            modal.set_mode(chan, 'upoopia')
     if hasattr(prev, 'games') and isinstance(games, dict):
         new_games = dict()
         for chan, game in prev.games.iteritems():
             if game not in new_games:
                 new_games[game] = UpoopiaText(prev=game)
             games[chan] = new_games[game]
+            modal.set_mode(chan, 'upoopia')
 
 #-------------------------------------------------------------------------------
-def send_msgs(bot, targets, *msgs):
-    for msg in msgs:
-        for target in targets:
-            bot.send_msg(target, msg)
-
-#-------------------------------------------------------------------------------
+# !upoopia
 @link('HELP')
 def h_help(bot, reply, *args):
     reply('upoopia #CHANNEL [black|white]',
@@ -84,7 +76,7 @@ def h_upoopia(bot, id, target, args, full_msg):
             colour = WHITE
         else:
             reply(bot, id, target,
-                'Error: "%s" is not recognised as "black" or "white".' % colour)
+                'Error: "%s" is not a valid colour.' % colour)
             return
     elif len(args) >= 1:
         opp_chan, colour = args[0], None
@@ -101,32 +93,45 @@ def h_upoopia(bot, id, target, args, full_msg):
                 'A game of Upoopia against %s is currently in session.' % opp)
         else:
             bot.send_msg(target,
-                'No game of Upoopia is active. See "help upoopia" to start one.')
+                'No game of Upoopia is active.'
+                ' See \2!help upoopia\2 for starting a game.')
+        return
 
     if not opp_chan.startswith('#'):
         reply(bot, id, target,  
             'Error: "%s" is not a valid channel name.' % opp_chan)
         return
-
-    # Enter 'upoopia' mode in this channel.
-    if modal.get_mode(target):
-        yield sign('CONTEND_MODE', bot, id, target)
+    elif opp_chan.lower() == target.lower():
+        reply(bot, id, target,
+            'Error: your opponent must be in a different channel!')
         return
-    modal.set_mode(target, 'upoopia')
-    mode_chans.add(target.lower())
 
-    # Initiate the game, if a reciprocating challenge exists.
     if opp_chan.lower() in challenges:
+        # A reciprocating challenge exists; start the game.
+        if modal.get_mode(target):
+            yield sign('CONTEND_MODE', bot, id, target)
+            return
+        modal.set_mode(target, 'upoopia')
+
         opp_opp_chan, opp_colour = challenges[opp_chan.lower()]
         if opp_opp_chan.lower() == target.lower():
             del challenges[opp_chan.lower()]
+            yield chan_link.add_link(bot, target, opp_chan)
             yield util.sub(start_game(bot, target, opp_chan, colour, opp_colour))
+    else:
+        # Record the challenge.
+        if modal.get_mode(target) == 'upoopia' \
+        and target.lower() in challenges:
+            del challenges[target.lower()]
+            bot.send_msg(target, 'Challenge to %s cancelled.')
+        elif modal.get_mode(target):
+            yield sign('CONTEND_MODE', bot, id, target)
             return
+        modal.set_mode(target, 'upoopia')
 
-    # Record the challenge.
-    challenges[target.lower()] = (opp_chan, colour)
-    bot.send_msg(target,
-        'Challenge issued: waiting for %s to reciprocate.' % opp_chan)
+        challenges[target.lower()] = (opp_chan, colour)
+        bot.send_msg(target,
+            'Challenge issued: waiting for %s to reciprocate.' % opp_chan)
 
 def start_game(bot, chan1, chan2, colour1, colour2):
     # Decide colours.
@@ -143,32 +148,107 @@ def start_game(bot, chan1, chan2, colour1, colour2):
         black_name = chan1 if colour1 == BLACK else chan2,
         white_name = chan1 if colour1 == WHITE else chan2)
     games[chan1] = games[chan2] = game
-    yield util.sub(show_board(bot, game))
+    yield util.sub(show_board(bot, game, priority=BLACK))
 
 #-------------------------------------------------------------------------------
+# !move
 @link(('HELP', 'upoopia'))
 def h_help_upoopia(bot, reply, *args):
     reply('[move] b[lack]|w[hite] l[eft]|r[ight]|u[p]|d[own] 1|2|3|4|5|6',
-    '    Move the given worm in the given direction by the given number of steps.')
+    '    Use a die to move the worm of the same colour by the value of the die'
+    ' in the given direction.')
 
-@link('!move', '!')
+@link('!b', '!black', a=lambda args: 'b ' + args)
+@link('!w', '!white', a=lambda args: 'w ' + args)
+@link('!', '!move',   a=lambda args: args)
 @modal.when_mode('upoopia')
-def h_move(bot, id, target, args, full_msg):
-    raise NotImplemented
+def h_move(bot, id, chan, args, full_msg, **kwds):
+    if chan.lower() not in games: return
+    game = games[chan.lower()]
+    if chan.lower() != game.names[game.player].lower(): reply(bot, id, chan,
+        'Error: it is not your turn.'); return
+
+    args = kwds['a'](args).split()
+    if len(args) < 3: reply(bot, id, chan,
+        'Error: 3 parameters expected. See "help upoopia".'); return
+
+    colour, direction, value = args[:3]
+    if direction in '123456': value, direction = direction, value
+
+    if   'black'.startswith(colour.lower()): colour = BLACK
+    elif 'white'.startswith(colour.lower()): colour = WHITE
+    else: reply(bot, id, chan,
+        'Error: "%s" is not a valid colour.' % colour); return
+
+    if value in '123456': value = int(value)
+    else: reply(bot, id, chan,
+        'Error: "%s" is not a valid 6-sided die value.' % value); return
+
+    if    'left'.startswith(direction.lower()): direction = LEFT
+    elif 'right'.startswith(direction.lower()): direction = RIGHT
+    elif    'up'.startswith(direction.lower()): direction = UP
+    elif  'down'.startswith(direction.lower()): direction = DOWN
+    else: reply(bot, id, chan,
+        'Error: "%s" is not a valid direction.' % direction); return
+
+    try:
+        game.move(colour, value, direction)
+    except IllegalMove as exc:
+        reply(bot, id, chan, 'Error: %s' % exc)
+        return
+
+    yield util.sub(end_move(bot, game))
+
+def end_move(bot, game):
+    yield util.sub(show_board(bot, game, priority=game.winner or game.player))
+    if game.winner:
+        chan1, chan2 = game.names.values()
+        del games[chan1]
+        del games[chan2]
+        yield util.sub(end_session(bot, chan1, chan2))
 
 #-------------------------------------------------------------------------------
+# !xray
 @link(('HELP', 'upoopia'))
 def h_help_upoopia(bot, reply, *args):
     reply('xray [1|2|3|4|5|6]',
-    '    Sacrifice one of your dice of the opponent\'s colour in exchange for the'
-    ' ability to see their dice for the remainder of this round.')
+    '    Sacrifice one of your dice of the opponent\'s colour in exchange'
+    ' for the ability to see their dice for the remainder of this round.')
 
 @link('!xray')
 @modal.when_mode('upoopia')
-def h_xray(bot, id, target, args, full_msg):
-    raise NotImplemented
+def h_xray(bot, id, chan, args, full_msg):
+    if chan.lower() not in games: return
+    game = games[chan.lower()]
+    if chan.lower() != game.names[game.player].lower(): reply(bot, id, chan,
+        'Error: it is not your turn.'); return
+
+    args = args.split()
+    if args:
+        value = args[0]
+        if value in '123456': value = int(value)
+        else: reply(bot, id, chan,
+            'Error: "%s" is not a valid 6-sided die value.' % value); return
+    else:
+        player, opponent = game.player, other_colour(game.player)
+        values = [dv for (dc,dv) in game.dice[player] if dc == opponent]
+        if not values: reply(bot, id, chan,
+            'Error: %s does not possess any %s dice.'
+            % (player, opponent.lower())); return
+        if not all(v == values[0] for v in values[1:]): reply(bot, id, chan,
+            'Error: %s has %s dice with different values; you must specify'
+            ' the value to sacrifice.' % (player, opponent.lower())); return
+        value = values[0]
+
+    try:
+        game.xray(value)
+    except IllegalMove as exc:
+        reply(bot, id, chan, 'Error: %s' % exc)
+        return
+    yield util.sub(end_move(bot, game))
 
 #-------------------------------------------------------------------------------
+# !resign
 @link(('HELP', 'upoopia'))
 def h_help_upoopia(bot, reply, *args):
     reply('resign',
@@ -176,10 +256,20 @@ def h_help_upoopia(bot, reply, *args):
 
 @link('!resign')
 @modal.when_mode('upoopia')
-def h_resign(bot, id, target, args, full_msg):
-    raise NotImplemented
+def h_resign(bot, id, chan, args, full_msg):
+    if chan.lower() not in games: return
+    game = games[chan.lower()]
+    if chan.lower() != game.names[game.player].lower(): reply(bot, id, chan,
+        'Error: it is not your turn.'); return
+    try:
+        game.resign()
+    except IllegalMove as exc:
+        reply(bot, id, chan, 'Error: %s' % exc)
+        return
+    yield util.sub(end_move(bot, game))
 
 #-------------------------------------------------------------------------------
+# !board
 @link(('HELP', 'upoopia'))
 def h_help_upoopia(bot, reply, *args):
     reply('board',
@@ -190,22 +280,25 @@ def h_help_upoopia(bot, reply, *args):
 def h_board(bot, id, chan, args, full_msg):
     if chan.lower() not in games: return
     game = games[chan.lower()]
-    yield util.sub(show_board(bot, game))
+    colour = WHITE if game.names[WHITE].lower() == chan.lower() else BLACK
+    yield util.sub(show_board(bot, game, priority=colour))
 
-def show_board(bot, game):
-    for colour in game.player, other_colour(game.player):
+def show_board(bot, game, priority=None):
+    lines = { BLACK:[], WHITE:[] }
+    for colour in BLACK, WHITE:
         chan = game.names[colour]
-        for line in game.game_lines(viewer=colour):
-            bot.send_msg(chan, line)
-        if colour == game.player:
-            bot.send_msg(chan,
-                '\2%s, it is your move. You are playing as %s.\2'
-                    % (chan, colour))
-        else:
-            bot.send_msg(chan,
-                'Waiting for %s to move.' % game.names[game.player])
+        lines[colour].extend(game.game_lines(viewer=colour))
+    if priority:
+        for colour in priority, other_colour(priority):
+            for line in lines[colour]:
+                bot.send_msg(game.names[colour], line, no_link=True)
+    else:
+        for b_line, w_line in izip_longest(lines[BLACK], lines[WHITE]):
+            if b_line: bot.send_msg(game.names[BLACK], b_line, no_link=True)
+            if w_line: bot.send_msg(game.names[WHITE], w_line, no_link=True)
 
 #-------------------------------------------------------------------------------
+# !cancel
 @link(('HELP', 'upoopia'))
 def h_help_upoopia(bot, reply, *args):
     reply('cancel',
@@ -219,19 +312,33 @@ def h_cancel(bot, id, chan, args, full_msg):
         opp_chan, colour = challenges.pop(chan.lower())
         reply(bot, id, chan,
             'Challenge to %s cancelled.' % opp_chan, prefix=False)
+        yield util.sub(end_session(bot, chan))
     # Cancel any existing game.
     if chan.lower() in games:
         game = games[chan.lower()]
+        [opp_chan] = [c for c in game.names.values() if c.lower()!=chan.lower()]
         for game_chan in game.names.itervalues():
             del games[game_chan.lower()]
-            bot.send_msg(game_chan, 'The game of Upoopia has been cancelled.')
-    # Release the channel mode.
+            bot.send_msg(game_chan,
+                'The game of Upoopia has been cancelled.', no_link=True)
+        yield util.sub(end_session(bot, chan, opp_chan))
+
+def end_session(bot, chan, opp_chan=None):
+    if opp_chan:
+        chan_link.decay_link(bot, chan, opp_chan)
+        modal.clear_mode(opp_chan)
     modal.clear_mode(chan)
-    mode_chans.remove(chan.lower())
 
 #-------------------------------------------------------------------------------
 @link('CONTEND_MODE')
 @modal.when_mode('upoopia')
 def h_contend_mode(bot, id, target):
     reply(bot, id, target,
-        'A game of Upoopia is currently in progress. Use !cancel to end it.')
+        'A game of Upoopia is currently in progress.'
+        ' Use \2!cancel\2 to end it.')
+
+@link('SELF_PART', 'SELF_KICKED')
+def h_self_exit(bot, chan, *args):
+    if chan.lower() in challenges:
+        del challenges[chan.lower()]
+        yield util.sub(end_session(bot, chan))

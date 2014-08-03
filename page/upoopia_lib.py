@@ -16,7 +16,7 @@ WIDTH, HEIGHT = 19, 10
 WORM = { BLACK:'X', WHITE:'O' }
 POOP = { BLACK:'x', WHITE:'o' }
 GLXY = { BLACK:'+', WHITE:'=' }
-DIE = { BLACK:'b', WHITE:'w' }
+DIE  = { BLACK:'B', WHITE:'W' }
 BHOLE, EMPTY = '@', '.'
 
 #-------------------------------------------------------------------------------
@@ -42,11 +42,12 @@ class Upoopia(object):
         'names',          # names[c] in {string,None}, c in {BLACK,WHITE}
         'player',         # player in {BLACK, WHITE}
         'winner',         # winner in {BLACK, WHITE, NONE}
+        'resigned',       # resigned in {True, False}
         'worm',           # worm[colour] == x,y --> board[x,y] == WORM[colour]
         'direction',      # direction[colour] in {LEFT, RIGHT, UP, DOWN}
         'dice',           # dice[colour] == [(die_colour,value), ...]
         'galaxies',       # galaxies[colour] == [GLXY[galaxy_colour], ...]
-        'xray',           # xray[colour] in {True,False}
+        'has_xray',       # xray[colour] in {True,False}
         'board' )         # board.get((x,y), EMPTY)
                           #   in {WORM[c], POOP[c], GLXY[c], BHOLE, EMPTY}
                           #   for 1<=x<=WIDTH, 1<=y<=HEIGHT, c in {BLACK,WHITE}
@@ -69,11 +70,12 @@ class Upoopia(object):
         self.names = { BLACK:black_name, WHITE:white_name }
         self.player = first_player
         self.winner = None
+        self.resigned = False
         self.worm = { WHITE:(17,8), BLACK:(03,8) }
         self.direction = { BLACK:RIGHT, WHITE:LEFT }
         self.dice = { BLACK:[], WHITE:[] }
         self.galaxies = { BLACK:[], WHITE:[] }
-        self.xray = { BLACK:False, WHITE:False }
+        self.has_xray = { BLACK:False, WHITE:False }
         self.board = {
             self.worm[BLACK]:WORM[BLACK],
             self.worm[WHITE]:WORM[WHITE],
@@ -91,10 +93,10 @@ class Upoopia(object):
         if self.winner:
             raise IllegalMove('the game is over.')
         if (colour,length) not in self.dice[self.player]:
-            raise IllegalMove('%s does not possess a %s die showing %s.'
+            raise IllegalMove('%s does not possess a %s die of value %s.'
                 % (self.player, colour.lower(), length))
-        self.dice[self.player].remove((colour,length))
         self._just_move(colour, length, direction)
+        self.dice[self.player].remove((colour,length))
         self._end_turn()
 
     #---------------------------------------------------------------------------
@@ -102,13 +104,18 @@ class Upoopia(object):
     # player, of the opposite colour to them, and with the given value,
     # in exchange for allowing them to see their opponents' dice.
     def xray(self, die_value):
-        die = (other_colour(self.player), value)
+        die = (other_colour(self.player), die_value)
         if die not in self.dice[self.player]:
             raise IllegalMove('%s does not possess a %s die showing %s.'
-                % (self.player, other_colour(self.player).lower(), value))
+                % (self.player, other_colour(self.player).lower(), die_value))
         self.dice[self.player].remove(die)
-        self.xray[self.player] = True
+        self.has_xray[self.player] = True
         self._end_turn()
+
+    #---------------------------------------------------------------------------
+    # Cause the current player to lose the game by resignation.
+    def resign(self):
+        self._loss(self.player, resign=True)
 
     #---------------------------------------------------------------------------
     # If this constitutes a legal move (ignoring the current player and their
@@ -130,7 +137,7 @@ class Upoopia(object):
             target = self.board.get((x,y), EMPTY)
             if target in GLXY.itervalues():
                 # Pick up a galaxy.
-                self.galaxies[colour].add(target)
+                self.galaxies[colour].append(target)
             elif target != EMPTY:
                 # Run into an obstacle.
                 self._loss(colour)
@@ -156,6 +163,7 @@ class Upoopia(object):
                 for galaxy_colour in BLACK, WHITE:
                     if galaxy != GLXY[galaxy_colour]: continue
                     self.dice[colour].append(roll_die(galaxy_colour))
+                    break
                 else: raise Exception('invalid galaxy: %s' % galaxy)
             self.galaxies[colour] = []
 
@@ -165,8 +173,8 @@ class Upoopia(object):
         self.round_beginner = other_colour(self.round_beginner)
         self.player = self.round_beginner
         self.round_number += 1
-        self.xray[BLACK] = False
-        self.xray[WHITE] = False
+        self.has_xray[BLACK] = False
+        self.has_xray[WHITE] = False
         self._start_round()
 
     #---------------------------------------------------------------------------
@@ -181,8 +189,9 @@ class Upoopia(object):
             self._end_round()
     
     #---------------------------------------------------------------------------
-    # Cause the given player to lose the game.
-    def _loss(self, colour):
+    # Cause the given player to lose the game, possibly by resignation.
+    def _loss(self, colour, resign=False):
+        self.resigned = resign
         self.winner = other_colour(colour)
 
 
@@ -210,24 +219,30 @@ class UpoopiaText(Upoopia):
     def status_lines(self, viewer=None):
         if self.winner: return [
             '',
-            'Game over!',
-            ''
-            '%s wins.' % self.names[colour] or colour,
+            '\2Game over!\2',
+            '',
+            '\2%s%s wins%s.\2' % (
+                self.winner,
+                ' (%s)' % self.names[self.winner]
+                    if self.names[self.winner] else '',
+                ' by resignation' if self.resigned else ''),
             '']
         else: return [
-            '%s to play (round %s, started by %s).' % (
-                self.names[self.player] or self.player,
-                self.round_number,
-                self.names[self.round_beginner] or self.round_beginner),
+            '%(pl)s to play (round %(rn)s, started by %(rb)s)' % {
+                'pl': self.player,
+                'rn': self.round_number,
+                'rb': self.round_beginner },
             '',
-            '%s: %s' % (
-                '%s (%s)' % (self.names[BLACK], BLACK.lower())
-                    if self.names[BLACK] else BLACK,
-                ', '.join(self.item_names(BLACK, viewer))),
-            '%s: %s' % (
-                '%s (%s)' % (self.names[WHITE], WHITE.lower())
-                    if self.names[WHITE] else WHITE,
-                ', '.join(self.item_names(WHITE, viewer))),
+            '%(bo)s%(pl)s%(pn)s: %(is)s%(bo)s' % {
+                'bo': '\2' if viewer == self.player == BLACK else '',
+                'pl': BLACK,
+                'pn': ' (%s)' % self.names[BLACK] if self.names[BLACK] else '',
+                'is': ', '.join(self.item_names(BLACK, viewer)) },
+            '%(bo)s%(pl)s%(pn)s: %(is)s%(bo)s' % {
+                'bo': '\2' if viewer == self.player == WHITE else '',
+                'pl': WHITE,
+                'pn': ' (%s)' % self.names[WHITE] if self.names[WHITE] else '',
+                'is': ', '.join(self.item_names(WHITE, viewer)) },
             '']
 
     def legend_lines(self, viewer=None):
@@ -239,12 +254,14 @@ class UpoopiaText(Upoopia):
             ['%s black hole'   % BHOLE,       '%s empty'        % EMPTY] )
 
     def item_names(self, player, viewer=None):
-        for (die_colour, value) in self.dice[player]:
-            if viewer is None or viewer == player or self.xray[viewer]:
+        sorted_dice = sorted(self.dice[player],
+            key=lambda (dc,dv): (0 if dc == player else 1, dv))
+        for (die_colour, value) in sorted_dice:
+            if viewer is None or viewer == player or self.has_xray[viewer]:
                 yield '%s(%s)' % (DIE[die_colour], value)
             else:
                 yield '%s(?)' % DIE[die_colour]
         for galaxy in self.galaxies[player]:
             yield galaxy
-        if viewer is not None and self.xray[viewer]:
+        if self.has_xray[player]:
             yield 'x-ray vision'
