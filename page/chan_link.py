@@ -58,7 +58,8 @@ def h_introduce(bot, chan, lchan):
     topic, names = yield util.mmcall_all(bot,
         ('channel.topic', bot, chan),
         ('channel.names', bot, chan, True))
-    bot.send_msg(lchan, '%s: Topic: %s' % (chan, topic))
+    if topic:
+        bot.send_msg(lchan, '%s: Topic: %s' % (chan, topic))
     for row in util.join_cols(*(names[i::9] for i in range(9))):
         bot.send_msg(lchan, '%s: Users: \2%s\2' % (chan, row))
 
