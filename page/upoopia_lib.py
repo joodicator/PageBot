@@ -39,6 +39,7 @@ class Upoopia(object):
     __slots__ = (
         'round_beginner', # round_beginner in {BLACK,WHITE}
         'round_number',   # round_number >= 1, or 0 if not started.
+        'names',          # names[c] in {string,None}, c in {BLACK,WHITE}
         'player',         # player in {BLACK, WHITE}
         'winner',         # winner in {BLACK, WHITE, NONE}
         'worm',           # worm[colour] == x,y --> board[x,y] == WORM[colour]
@@ -50,9 +51,22 @@ class Upoopia(object):
                           #   in {WORM[c], POOP[c], GLXY[c], BHOLE, EMPTY}
                           #   for 1<=x<=WIDTH, 1<=y<=HEIGHT, c in {BLACK,WHITE}
 
-    def __init__(self, first_player=BLACK):
+    def __init__(self, *args, **kwds):
+        if 'prev' in kwds:
+            self.init_reload(*args, **kwds)
+        else:
+            self.init_normal(*args, **kwds)
+
+    def init_reload(self, prev):
+        self.init_normal()
+        for attr in Upoopia.__slots__:
+            if hasattr(prev, attr):
+                setattr(self, attr, getattr(prev, attr))
+
+    def init_normal(self, black_name=None, white_name=None, first_player=BLACK ):
         self.round_beginner = first_player
         self.round_number = 1
+        self.names = { BLACK:black_name, WHITE:white_name }
         self.player = first_player
         self.winner = None
         self.worm = { WHITE:(17,8), BLACK:(03,8) }
@@ -198,14 +212,22 @@ class UpoopiaText(Upoopia):
             '',
             'Game over!',
             ''
-            '%s wins.' % self.winner,
+            '%s wins.' % self.names[colour] or colour,
             '']
         else: return [
-            '%s to play (round %s, started by %s).'
-                % (self.player, self.round_number, self.round_beginner),
+            '%s to play (round %s, started by %s).' % (
+                self.names[self.player] or self.player,
+                self.round_number,
+                self.names[self.round_beginner] or self.round_beginner),
             '',
-            '%s: %s' % (BLACK, ', '.join(self.item_names(BLACK, viewer))),
-            '%s: %s' % (WHITE, ', '.join(self.item_names(WHITE, viewer))),
+            '%s: %s' % (
+                '%s (%s)' % (self.names[BLACK], BLACK.lower())
+                    if self.names[BLACK] else BLACK,
+                ', '.join(self.item_names(BLACK, viewer))),
+            '%s: %s' % (
+                '%s (%s)' % (self.names[WHITE], WHITE.lower())
+                    if self.names[WHITE] else WHITE,
+                ', '.join(self.item_names(WHITE, viewer))),
             '']
 
     def legend_lines(self, viewer=None):
