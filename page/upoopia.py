@@ -11,7 +11,7 @@ import util
 import modal
 import chan_link
 
-link = util.LinkSet()
+link, install, uninstall = util.LinkSet().triple()
 
 # challenges[ch1.lower()] = (ch2, WHITE or BLACK or None)
 challenges = dict()
@@ -23,16 +23,6 @@ challenges = dict()
 games = dict()
 
 #-------------------------------------------------------------------------------
-def install(bot):
-    try:
-        chan_link.install(bot)
-    except util.AlreadyInstalled:
-        pass
-    link.install(bot)
-
-def uninstall(bot):
-    link.uninstall(bot)
-
 def reload(prev):
     if hasattr(prev, 'challenges') and isinstance(prev.challenges, dict):
         for chan, challenge in prev.challenges.iteritems():
@@ -155,8 +145,10 @@ def start_game(bot, chan1, chan2, colour1, colour2):
 @link(('HELP', 'upoopia'))
 def h_help_upoopia(bot, reply, *args):
     reply('[move] b[lack]|w[hite] l[eft]|r[ight]|u[p]|d[own] 1|2|3|4|5|6',
-    '    Use a die to move the worm of the same colour by the value of the die'
-    ' in the given direction.')
+    '    Move the worm of the given colour over the given distance--which must'
+    ' be the value of a die of your own colour if moving your own worm or'
+    ' otherwise half the value (rounding up) of a die of the opponent\'s colour'
+    '--in the given direction.')
 
 @link('!b', '!black', a=lambda args: 'b ' + args)
 @link('!w', '!white', a=lambda args: 'w ' + args)
@@ -182,7 +174,7 @@ def h_move(bot, id, chan, args, full_msg, **kwds):
 
     if value in '123456': value = int(value)
     else: reply(bot, id, chan,
-        'Error: "%s" is not a valid 6-sided die value.' % value); return
+        'Error: "%s" is not a valid distance.' % value); return
 
     if    'left'.startswith(direction.lower()): direction = LEFT
     elif 'right'.startswith(direction.lower()): direction = RIGHT
@@ -191,10 +183,18 @@ def h_move(bot, id, chan, args, full_msg, **kwds):
     else: reply(bot, id, chan,
         'Error: "%s" is not a valid direction.' % direction); return
 
+    if colour != game.player:
+        dice = [v for (c,v) in game.dice[game.player]
+                if c == colour and v/2+v%2 == value]
+        if not dice: reply(bot, id, chan,
+            'Error: %s does not possess a %s die half of whose value'
+            ' (rounded up) is %s.' % (game.player, colour, value)); return
+        value = dice[0]
+
     try:
         game.move(colour, value, direction)
-    except IllegalMove as exc:
-        reply(bot, id, chan, 'Error: %s' % exc)
+    except IllegalMove as e:
+        reply(bot, id, chan, 'Error: %s' % e)
         return
 
     yield util.sub(end_move(bot, game))
