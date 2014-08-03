@@ -101,7 +101,7 @@ def h_self_exit(bot, chan, *args):
     chan = chan.lower()
     if chan not in links: return
     if chan not in decay_links: return
-    for lchan in links[chan]:
+    for lchan in list(links[chan]):
         if lchan.lower() in channel.track_channels: continue
         yield del_link(bot, chan, lchan)
 
