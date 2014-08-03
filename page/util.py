@@ -214,10 +214,11 @@ def mmcall_all(mode, *calls):
 # A LinkSet maintains a list of bindings between events and event handlers,
 # providing some convenience methods for changing and using this list.
 class LinkSet(object):
-    __slots__ = 'links', 'modules'
+    __slots__ = 'links', 'modules', 'installed_modes'
     
     def __init__(self):
         self.links = []
+        self.installed_modes = set()
     
     # When called, a LinkSet produces a decorator that just adds a given handler
     # bound to each of the the given events, to its list.
@@ -244,6 +245,8 @@ class LinkSet(object):
 
     # Installs all the current event bindings into the given Mode instance.
     def install(self, mode):
+        from control import AlreadyInstalled
+        if mode in self.installed_modes: raise AlreadyInstalled
         for link in self.links:
             if link[0] == 'link':
                 (_, args, kwds) = link
@@ -251,9 +254,12 @@ class LinkSet(object):
             elif link[0] == 'link_module':
                 (_, mod, args, kwds) = link
                 mod.install(mode, *args, **kwds)
+        self.installed_modes.add(mode)
     
     # Uninstalls the current event bindings from the given Mode instance.
     def uninstall(self, mode):
+        from control import NotInstalled
+        if mode not in self.installed_modes: raise NotInstalled
         for link in self.links:
             if link[0] == 'link':
                 (_, args, kwds) = link
@@ -261,6 +267,7 @@ class LinkSet(object):
             elif link[0] == 'link_module':
                 (_, mod, args, kwds) = link
                 mod.uninstall(mode)
+        self.installed_modes.remove(mode)
     
     # Syntactic sugar for one-line inclusion in modules.
     def triple(self):

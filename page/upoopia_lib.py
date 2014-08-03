@@ -87,16 +87,17 @@ class Upoopia(object):
 
     #---------------------------------------------------------------------------
     # If this constitutes a legal move, and the player possesses a corresponding
-    # die, move the "colour" worm "length" units in "direction", remove the die,
-    # and end the current player's turn.
-    def move(self, colour, length, direction):
+    # die, move the "colour" worm "length" units (or half, as appropriate) in
+    # "direction", remove the die, and end the current player's turn.
+    def move(self, colour, value, direction):
         if self.winner:
             raise IllegalMove('the game is over.')
-        if (colour,length) not in self.dice[self.player]:
+        if (colour,value) not in self.dice[self.player]:
             raise IllegalMove('%s does not possess a %s die of value %s.'
-                % (self.player, colour.lower(), length))
+                % (self.player, colour.lower(), value))
+        length = value if colour == self.player else value/2 + value%2
         self._just_move(colour, length, direction)
-        self.dice[self.player].remove((colour,length))
+        self.dice[self.player].remove((colour,value))
         self._end_turn()
 
     #---------------------------------------------------------------------------
@@ -106,7 +107,7 @@ class Upoopia(object):
     def xray(self, die_value):
         die = (other_colour(self.player), die_value)
         if die not in self.dice[self.player]:
-            raise IllegalMove('%s does not possess a %s die showing %s.'
+            raise IllegalMove('%s does not possess a %s die of value %s.'
                 % (self.player, other_colour(self.player).lower(), die_value))
         self.dice[self.player].remove(die)
         self.has_xray[self.player] = True
