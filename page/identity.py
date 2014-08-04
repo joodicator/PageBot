@@ -3,7 +3,9 @@ import channel
 import util
 import re
 
-link, link_install, uninstall = util.LinkSet().triple()
+link, install, uninstall = util.LinkSet().triple()
+install, uninstall = util.depend(install, uninstall,
+    'channel', 'nickserv')
 
 credentials = {
     name.lower(): creds
@@ -13,12 +15,6 @@ has_host = dict()
 has_access = dict()
 
 #===============================================================================
-def install(bot):
-    for dep in 'channel', 'nickserv',:
-        try: __import__(dep).install(bot)
-        except util.AlreadyInstalled: pass 
-    link_install(bot)
-
 def add_credentials(name, *creds):
     old_creds = credentials.get(name.lower(), [])
     credentials[name.lower()] = old_creds + list(creds)

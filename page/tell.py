@@ -36,13 +36,9 @@ import auth
 
 
 #==============================================================================#
-link, link_install, uninstall = util.LinkSet().triple()
-
-def install(bot):
-   for dep in 'auth', 'identity':
-        try: __import__(dep).install(bot)
-        except util.AlreadyInstalled: pass
-   link_install(bot)
+link, install, uninstall = util.LinkSet().triple()
+install, uninstall = util.depend(install, uninstall,
+    'auth', 'identity')
 
 #==============================================================================#
 # Memory-cached plugin state.
