@@ -183,6 +183,35 @@ def mcall(event, *args):
         raise StopIteration
     return act
 
+
+#   @mfun(link, event_name)
+#   def func(*args, **kwds):
+#       ...
+#       yield kwds['ret'](return_value)
+#       ...
+#
+# -is equivalent to-
+#
+#   def func(*args):
+#       return mcall(event_name, *args)
+#
+#   @link(event_name)
+#   def h_func(*args):
+#       ...
+#       yield sign((event_name,)+args, return_value)
+#       ...
+def mfun(link, event_name):
+    def mfun_dec(fun):
+        @link(event_name)
+        def mfun_han(*args):
+            from untwisted.magic import sign
+            ret = lambda r: sign((event_name,)+args, r)
+            return fun(*args, ret=ret)
+        def mfun_fun(*args):
+            return mcall(event_name, *args)
+        return mfun_fun
+    return mfun_dec
+
 # As mmcall, but takes several tuples (event, *args) giving multiple calls
 # to perform concurrently, their results returned in a list.
 def mmcall_all(mode, *calls):

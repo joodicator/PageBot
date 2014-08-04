@@ -1,4 +1,5 @@
 from untwisted.magic import sign, hold
+from untwisted.event import TICK
 import util
 import re
 
@@ -55,14 +56,27 @@ def nickserv_notice(bot, id, msg):
         yield sign(('NICKSERV_STATUS', nick), bot, id, int(code))
 
 
-# Returns an object that may be yielded in an untwisted event handler to obtain
-# the integer returned by NickServ's STATUS command for the given nick.
-def status(bot, nick):
-    return util.mcall('nickserv.status', bot, nick)
-
-@link('nickserv.status')
-def h_nickserv_status(bot, nick):
-    ret = lambda a: sign(('nickserv.status', bot, nick), a)
+#-------------------------------------------------------------------------------
+# yield status(bot, nick) - the NickServ STATUS of nick, or None.
+@util.mfun(link, 'nickserv.status')
+def status(bot, nick, ret):
     bot.send_msg(conf('nickserv').nick, 'STATUS %s' % nick)
     (_, [_, _, code]) = yield hold(bot, ('NICKSERV_STATUS', nick))
     yield ret(code)
+
+#-------------------------------------------------------------------------------
+# yield acc_name(bot, id) - the account name of id, or None.
+@util.mfun(link, 'nickserv.acc_name')
+def acc_name(bot, id, ret):
+    bot.send_msg(conf('nickserv').nick, 'INFO %s' % id.nick)
+    timeout = yield runtime.set_timeout(5)
+    result = None
+    while True:
+        event, args = yield hold('NICKSERV_NOTICE', timeout)
+        if event is timeout: break
+        e_bot, e_id, e_msg = args
+        match = re.match(r'%s is (?P<acc_name>\S+)$' % id.nick, e_msg, re.I)
+        if not match: continue
+        result = match.group('acc_name')
+        break
+    yield ret(result)
