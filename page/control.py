@@ -9,13 +9,9 @@ from auth import admin
 import util
 import auth
 
-link, link_install, uninstall = LinkSet().triple()
-
-def install(bot):
-    for dep in 'auth',:
-        try: __import__(dep).install(bot)
-        except AlreadyInstalled: pass
-    link_install(bot)
+link, install, uninstall = LinkSet().triple()
+install, uninstall = util.depend(install, uninstall,
+    'auth')
 
 @link('!echo')
 @admin
@@ -130,9 +126,10 @@ def h_reload(bot, id, target, hard):
                 if not hard and hasattr(module, 'reload_uninstall'):
                     module.reload_uninstall(bot)
                 else:
-                    try: module.uninstall(bot)
-                    except NotInstalled: pass
-                    except sys.modules['util'].NotInstalled: pass
+                    try:
+                        module.uninstall(bot)
+                    except NotInstalled:
+                        names.remove(module.__name__)
                 old_modules[module.__name__] = module
             except Exception as e:
                 expns[module.__name__] = e
@@ -150,9 +147,10 @@ def h_reload(bot, id, target, hard):
             if hasattr(module, 'reload') and not hard:
                 module.reload(old_modules[name])
             if hasattr(module, 'install'):
-                try: module.install(bot)
-                except AlreadyInstalled: pass
-                except sys.modules['util'].AlreadyInstalled: pass
+                try:
+                    module.install(bot)
+                except AlreadyInstalled:
+                    pass
         except Exception as e:
             expns[name] = e
             traceback.print_exc()

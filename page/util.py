@@ -12,11 +12,7 @@ import re
 ID = namedtuple('ID', ('nick', 'user', 'host'))
 ID.__getstate__ = lambda *a, **k: None
 
-class NotInstalled(Exception):
-    pass
-
-class AlreadyInstalled(Exception):
-    pass
+from amelia import NotInstalled, AlreadyInstalled
 
 # Reply (in the same channel or by PM, as appropriate) to a message by `id'
 # sent to `target' with the message `msg', possibly prefixing the message with
@@ -378,3 +374,27 @@ def wc_to_re(wc):
         else: return re.escape(match.group(3))
     return '^' + re.sub(r'(\*)|(\?)|([^*?]+)', sub, wc) + '$'
 
+
+#===============================================================================
+# Given a module install and uninstall function, returns a new pair of such
+# functions which enforce the given module names as dependencies, to be
+# installed first.
+def depend(install, uninstall, *deps):
+    installed = [False]
+
+    def depend_install(mode):
+        if installed[0]: raise AlreadyInstalled
+        for dep in deps:
+            try: __import__(dep).install(mode)
+            except AlreadyInstalled: pass
+        try: install(mode)
+        except AlreadyInstalled: pass
+        installed[0] = True
+
+    def depend_uninstall(mode):
+        if not installed[0]: raise NotInstalled
+        try: uninstall(mode)
+        except NotInstalled: pass
+        installed[0] = False
+
+    return depend_install, depend_uninstall

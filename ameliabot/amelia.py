@@ -16,6 +16,9 @@ RPL_WELCOME         = '001'
 RPL_ISUPPORT        = '005'
 ERR_NICKNAMEINUSE   = '433'
 
+class NotInstalled(Exception): pass
+class AlreadyInstalled(Exception): pass
+
 default_conf = {
     'server':       'irc.freenode.net',
     'port':         6667,
