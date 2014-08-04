@@ -1,5 +1,4 @@
 from untwisted.magic import sign
-from untwisted.usual import Stop
 from util import LinkSet, ID
 from util import message_reply as reply
 import util
@@ -60,7 +59,7 @@ def nick(bot, id, new_nick, *args):
 
 @link('PRIVMSG')
 def privmsg(bot, source, target, msg, *args):
-    if target == bot.nick: target = None
+    if target.lower() == bot.nick.lower(): target = None
     if type(source) == tuple:
         id = ID(*source)
         bot.activity = False
@@ -97,6 +96,8 @@ def message(bot, id, target, msg):
     yield sign('COMMAND', bot, id, target, event, body, msg)
     yield sign(event, bot, id, target, body, msg)
     bot.activity = True
+
+    from untwisted.usual import Stop
     raise Stop
 
 
