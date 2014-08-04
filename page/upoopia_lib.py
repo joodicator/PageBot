@@ -24,8 +24,9 @@ BHOLE, EMPTY = '@', '.'
 def other_colour(colour):
     return WHITE if colour == BLACK else BLACK
 
-def roll_die(colour):
-    return (colour, random.randint(1, 6))
+def roll_die(die_colour, owner_colour):
+    sides = 6 if die_colour == owner_colour else 3
+    return (die_colour, random.randint(1, sides))
 
 #-------------------------------------------------------------------------------
 # Hierarcy of exceptions related to Upoopia.
@@ -87,16 +88,16 @@ class Upoopia(object):
 
     #---------------------------------------------------------------------------
     # If this constitutes a legal move, and the player possesses a corresponding
-    # die, move the "colour" worm "length" units in "direction", remove the die,
-    # and end the current player's turn.
-    def move(self, colour, length, direction):
+    # die, move the "colour" worm "length" units (or half, as appropriate) in
+    # "direction", remove the die, and end the current player's turn.
+    def move(self, colour, value, direction):
         if self.winner:
             raise IllegalMove('the game is over.')
-        if (colour,length) not in self.dice[self.player]:
+        if (colour,value) not in self.dice[self.player]:
             raise IllegalMove('%s does not possess a %s die of value %s.'
-                % (self.player, colour.lower(), length))
-        self._just_move(colour, length, direction)
-        self.dice[self.player].remove((colour,length))
+                % (self.player, colour.lower(), value))
+        self._just_move(colour, value, direction)
+        self.dice[self.player].remove((colour,value))
         self._end_turn()
 
     #---------------------------------------------------------------------------
@@ -106,7 +107,7 @@ class Upoopia(object):
     def xray(self, die_value):
         die = (other_colour(self.player), die_value)
         if die not in self.dice[self.player]:
-            raise IllegalMove('%s does not possess a %s die showing %s.'
+            raise IllegalMove('%s does not possess a %s die of value %s.'
                 % (self.player, other_colour(self.player).lower(), die_value))
         self.dice[self.player].remove(die)
         self.has_xray[self.player] = True
@@ -127,23 +128,20 @@ class Upoopia(object):
             raise IllegalMove('worms may not move backwards.')
 
         x, y = self.worm[colour]
-        final_x, final_y = x+length*dx, y+length*dy
-        if not (1<=final_x<=WIDTH and 1<=final_y<= HEIGHT):
-            raise IllegalMove('worms may not move outside the board.')
-
         for i in range(length):
             self.board[x, y] = POOP[colour]
-            x, y = x+dx, y+dy
+            x, y = (x+dx-1)%WIDTH+1, (y+dy-1)%HEIGHT+1
             target = self.board.get((x,y), EMPTY)
             if target in GLXY.itervalues():
                 # Pick up a galaxy.
                 self.galaxies[colour].append(target)
             elif target != EMPTY:
                 # Run into an obstacle.
+                x, y = (x-dx-1)%WIDTH+1, (y-dy-1)%HEIGHT+1
                 self._loss(colour)
                 break
-            self.board[x, y] = WORM[colour]
 
+        self.board[x, y] = WORM[colour]
         self.worm[colour] = x, y
         self.direction[colour] = dx, dy
 
@@ -154,15 +152,15 @@ class Upoopia(object):
         for colour in BLACK, WHITE:
             # Roll standard dice.
             self.dice[colour][:] = [
-                roll_die(colour),
-                roll_die(colour),
-                roll_die(other_colour(colour)) ]
+                roll_die(colour, colour),
+                roll_die(colour, colour),
+                roll_die(other_colour(colour), colour) ]
 
             # Roll dice for any galaxies held.
             for galaxy in self.galaxies[colour]:
                 for galaxy_colour in BLACK, WHITE:
                     if galaxy != GLXY[galaxy_colour]: continue
-                    self.dice[colour].append(roll_die(galaxy_colour))
+                    self.dice[colour].append(roll_die(galaxy_colour, colour))
                     break
                 else: raise Exception('invalid galaxy: %s' % galaxy)
             self.galaxies[colour] = []

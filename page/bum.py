@@ -35,8 +35,17 @@ def h_message_ignored(bot, id, target, msg):
 def bum_replace(msg):
     msg = bum_split(msg)
     indices = range(0, len(msg), 2)
-    indices = filter(lambda i: msg[i] and not is_ignored(msg[i]), indices)
-    if not indices: return
+
+    if msg.startswith('\1'):
+        if msg.startswith('\1ACTION '):
+            del indices[0]
+        else:
+            return
+
+    indices = filter(lambda i:  
+        msg[i] and not is_ignored(msg[i]), indices)
+    if not indices:
+        return
     index = random.choice(indices)
 
     msg[index] = \

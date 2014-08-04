@@ -170,8 +170,8 @@ def h_fto_msg(bot, id, target, msg):
         " to be looking at the board, not looking at the city!")
 
     elif re.search(r'you(ve)?seen?onecrowdedpollutedstinking?town', strip(msg)):
-        reply('Tea, girls, warm and sweet!'
-        ' Some are set up in the Somerset Maugham suite!')
+        reply('Tea girls, warm and sweet (warm! sweet!),'
+        ' some are set up in the Somerset Maugham suite!')
 
     elif (strip("And if you're lucky then the god's a she") in strip(msg) 
     or strip("A little flesh, a little history") in strip(msg)) \
