@@ -251,7 +251,7 @@ def h_tell(bot, id, target, args, full_msg):
 
     put_state(state)
 
-    father = yield identity.check_access(bot, id.nick, 'Broose')
+    father = yield identity.check_access(bot, id, 'Broose')
     affirm = 'Yes, father' if father else 'It shall be done'
 
     if sent_count > 1: reply(bot, id, target,

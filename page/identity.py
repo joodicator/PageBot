@@ -28,10 +28,10 @@ add_credentials('Broose',
     ('prev_hosts', 3))
 
 #===============================================================================
-# yield check_access(bot, nick, name) --> True iff nick has access to name.
+# yield check_access(bot, id, name) --> True iff id has access to name.
 @util.mfun(link, 'identity.check_access')
-def check_access(bot, nick, name, ret):
-    nick, name = nick.lower(), name.lower()
+def check_access(bot, id, name, ret):
+    nick, name = id.nick.lower(), name.lower()
     if name in has_access.get(nick, []):
         yield ret(True); return
 
@@ -39,7 +39,7 @@ def check_access(bot, nick, name, ret):
         if cred[0] == 'hostmask' and len(cred) > 1:
             # Authenticate using a hostmask with wildcards.
             pattern = util.wc_to_re(cred[1])
-            host = has_host.get(nick, '')
+            host = '%s!%s@%s' % id
             if re.match(pattern, host, re.I):
                 yield ret(True); return
         elif cred[0] == 'nickserv' and len(cred) > 1:
