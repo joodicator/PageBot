@@ -27,7 +27,7 @@ def reload(prev):
 
 #==============================================================================#
 @link('MESSAGE', 'UNOTICE', 'OTHER_PART', 'OTHER_QUIT')
-def h_message(bot, id, target, message):
+def h_message(bot, id, target, message, *args):
     yield sign('URL_COLLECT_MSG', bot, message, target, id)
 
 @link('OTHER_KICKED')
