@@ -67,3 +67,10 @@ def h_exception(bot, e):
     bot.destroy()
     yield sleep(EXIT_DELAY_SECONDS)
     raise e
+
+@util.mfun(b_link, 'runtime.set_timeout')
+def set_timeout(delta, ret):
+    token = object()
+    ret(token)    
+    yield sleep(delta)
+    yield sign(token)
