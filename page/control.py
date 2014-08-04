@@ -3,11 +3,11 @@ import traceback
 import sys
 import re
 
-import util
-import auth
-from util import LinkSet
+from util import LinkSet, AlreadyInstalled, NotInstalled
 from message import reply as echo
 from auth import admin
+import util
+import auth
 
 link, link_install, uninstall = LinkSet().triple()
 
@@ -76,13 +76,6 @@ def _mcall(bot, id, target, args, full_msg):
         result = e
     echo(bot, id, target, repr(result))
 
-
-class NotInstalled(Exception):
-    pass
-
-class AlreadyInstalled(Exception):
-    pass
-
 @link('!load')
 @admin
 def _load(bot, id, target, args, full_msg):
@@ -137,10 +130,10 @@ def h_reload(bot, id, target, hard):
                 if not hard and hasattr(module, 'reload_uninstall'):
                     module.reload_uninstall(bot)
                 else:
-                    module.uninstall(bot)
+                    try: module.uninstall(bot)
+                    except NotInstalled: pass
+                    except sys.modules['util'].NotInstalled: pass
                 old_modules[module.__name__] = module
-            except NotInstalled:
-                pass
             except Exception as e:
                 expns[module.__name__] = e
                 traceback.print_exc()
@@ -157,7 +150,9 @@ def h_reload(bot, id, target, hard):
             if hasattr(module, 'reload') and not hard:
                 module.reload(old_modules[name])
             if hasattr(module, 'install'):
-                module.install(bot)
+                try: module.install(bot)
+                except AlreadyInstalled: pass
+                except sys.modules['util'].AlreadyInstalled: pass
         except Exception as e:
             expns[name] = e
             traceback.print_exc()

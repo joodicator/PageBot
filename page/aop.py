@@ -11,10 +11,9 @@ import channel
 link, link_install, uninstall = util.LinkSet().triple()
 
 def install(bot):
-    from control import AlreadyInstalled
     for dep in 'channel',:
         try: __import__(dep).install(bot)
-        except AlreadyInstalled: pass
+        except util.AlreadyInstalled: pass
     link_install(bot)
 
 CONF_PATH = 'conf/aop.txt'

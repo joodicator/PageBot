@@ -17,7 +17,7 @@ import util
 import debug
 import runtime
 import bridge
-from control import NotInstalled, AlreadyInstalled
+from util import NotInstalled, AlreadyInstalled
 
 
 RECONNECT_DELAY_SECONDS = 1

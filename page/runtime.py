@@ -38,6 +38,14 @@ def reinstall(prev):
         mode = prev.mode
 
 
+@util.mfun(b_link, 'runtime.timeout')
+def timeout(delta, ret):
+    token = ('TIMEOUT',object())
+    yield ret(token)    
+    yield sleep(delta)
+    yield sign(token)
+
+
 def sleep(delta):
     return util.mmcall(mode, 'runtime.sleep', time.time() + delta)
 
@@ -67,10 +75,3 @@ def h_exception(bot, e):
     bot.destroy()
     yield sleep(EXIT_DELAY_SECONDS)
     raise e
-
-@util.mfun(b_link, 'runtime.set_timeout')
-def set_timeout(delta, ret):
-    token = object()
-    ret(token)    
-    yield sleep(delta)
-    yield sign(token)

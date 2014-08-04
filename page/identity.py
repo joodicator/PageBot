@@ -1,6 +1,7 @@
+import nickserv
 import channel
-import control
 import util
+import re
 
 link, link_install, uninstall = util.LinkSet().triple()
 
@@ -13,23 +14,25 @@ has_access = dict()
 
 #===============================================================================
 def install(bot):
-    for dependency in 'channel', 'nickserv',:
-        try:
-            __import__(dependency).install(bot)
-        except control.AlreadyInstalled:
-            pass 
+    for dep in 'channel', 'nickserv',:
+        try: __import__(dep).install(bot)
+        except util.AlreadyInstalled: pass 
     link_install(bot)
 
-def add_credentials(priv, *creds):
+def add_credentials(name, *creds):
     old_creds = credentials.get(name.lower(), [])
-    credentials[name.lower()] = old_creds + creds
+    credentials[name.lower()] = old_creds + list(creds)
+
+add_credentials('Broose',
+    ('nickserv', 'Broose'),
+    ('prev_hosts', 3))
 
 #===============================================================================
 # yield check_access(bot, nick, name) --> True iff nick has access to name.
-@util.mfunc(link, 'identity.check_access')
+@util.mfun(link, 'identity.check_access')
 def check_access(bot, nick, name, ret):
     nick, name = nick.lower(), name.lower()
-    if name in has_access.get(nick, set()):
+    if name in has_access.get(nick, []):
         yield ret(True); return
 
     for cred in credentials.get(name, list()):

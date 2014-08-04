@@ -12,6 +12,12 @@ import re
 ID = namedtuple('ID', ('nick', 'user', 'host'))
 ID.__getstate__ = lambda *a, **k: None
 
+class NotInstalled(Exception):
+    pass
+
+class AlreadyInstalled(Exception):
+    pass
+
 # Reply (in the same channel or by PM, as appropriate) to a message by `id'
 # sent to `target' with the message `msg', possibly prefixing the message with
 # their nick, unless `prefix' is given as False. For `wrap', see util.send_msg.
@@ -274,7 +280,6 @@ class LinkSet(object):
 
     # Installs all the current event bindings into the given Mode instance.
     def install(self, mode):
-        from control import AlreadyInstalled
         if mode in self.installed_modes: raise AlreadyInstalled
         for link in self.links:
             if link[0] == 'link':
@@ -287,7 +292,6 @@ class LinkSet(object):
     
     # Uninstalls the current event bindings from the given Mode instance.
     def uninstall(self, mode):
-        from control import NotInstalled
         if mode not in self.installed_modes: raise NotInstalled
         for link in self.links:
             if link[0] == 'link':

@@ -1,7 +1,6 @@
 from __future__ import print_function
 
 import runtime
-import control
 import util
 
 from untwisted import event
@@ -27,7 +26,7 @@ debug_link = util.LinkSet()
 
 
 def install(mode, debug=False):
-    if hasattr(mode, 'terraria_protocol'): raise control.AlreadyInstalled
+    if hasattr(mode, 'terraria_protocol'): raise util.AlreadyInstalled
     class TerrariaProtocol(object): pass
     mode.terraria_protocol = TerrariaProtocol()
     mode.terraria_protocol.debug = debug
@@ -35,7 +34,7 @@ def install(mode, debug=False):
     link.install(mode)
 
 def uninstall(mode):
-    if not hasattr(mode, 'terraria_protocol'): raise control.NotInstalled
+    if not hasattr(mode, 'terraria_protocol'): raise util.NotInstalled
     if mode.terraria_protocol.debug: debug_link.uninstall(mode)
     link.uninstall(mode)
     del mode.terraria_protocol
