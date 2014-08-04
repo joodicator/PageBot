@@ -9,7 +9,13 @@ from util import LinkSet
 from message import reply as echo
 from auth import admin
 
-link, install, uninstall = LinkSet().triple()
+link, link_install, uninstall = LinkSet().triple()
+
+def install(bot):
+    for dep in 'auth',:
+        try: __import__(dep).install(bot)
+        except AlreadyInstalled: pass
+    link_install(bot)
 
 @link('!echo')
 @admin

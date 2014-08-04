@@ -8,7 +8,14 @@ import util
 import runtime
 import channel
 
-link, install, uninstall = util.LinkSet().triple()
+link, link_install, uninstall = util.LinkSet().triple()
+
+def install(bot):
+    from control import AlreadyInstalled
+    for dep in 'channel',:
+        try: __import__(dep).install(bot)
+        except AlreadyInstalled: pass
+    link_install(bot)
 
 CONF_PATH = 'conf/aop.txt'
 DELAY_BASE_S = 6
