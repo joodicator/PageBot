@@ -19,10 +19,9 @@ passed = set()
 identified = dict()
 
 def install(bot):
-    from control import AlreadyInstalled
     for dep in 'nickserv',:
         try: __import__(dep).install(bot)
-        except AlreadyInstalled: pass
+        except util.AlreadyInstalled: pass
     link_install(bot)
 
 def reload(prev):
@@ -79,7 +78,6 @@ def h_auth_check(bot, id):
             yield ret(False)
 
 #===============================================================================
-
 @link('!id')
 @link('!identify')
 def h_identify(bot, id, target, args, full_msg):

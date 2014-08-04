@@ -1,5 +1,5 @@
 import untwisted.event
-from control import NotInstalled
+from util import NotInstalled
 
 def install(bot, no_numeric=False):
     old_drive = bot.drive

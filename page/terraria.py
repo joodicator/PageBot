@@ -1,6 +1,5 @@
 #==============================================================================#
 import util
-import control
 import runtime
 import terraria_protocol
 import bridge
@@ -55,7 +54,7 @@ def put_state(state):
 #==============================================================================#
 def install(bot):
     global ab_mode, te_work
-    if ab_mode is not None: raise control.AlreadyInstalled
+    if ab_mode is not None: raise util.AlreadyInstalled
     ab_mode = bot
     ab_link.install(ab_mode)
     te_link.install(te_mode)
@@ -74,7 +73,7 @@ def reload_uninstall(bot):
 
 def uninstall(bot, reload=False):
     global ab_mode
-    if ab_mode is None: raise control.NotInstalled
+    if ab_mode is None: raise util.NotInstalled
     if not reload:
         for work in te_work.itervalues(): kill_work(work)
     te_link.uninstall(te_mode)

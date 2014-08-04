@@ -26,27 +26,23 @@ import re
 
 import untwisted.magic
 
-import control
-import channel
-import util
-import auth
 from message import reply
 from util import multi, wc_to_re
 from auth import admin
+import identity
+import channel
+import util
+import auth
 
 
 #==============================================================================#
 link, link_install, uninstall = util.LinkSet().triple()
 
 def install(bot):
-   for dependency in 'auth', 'identity':
-        try: __import__(dependency).install(bot)
-        except control.AlreadyInstalled: pass
-    link_install(bot)
-
-identity.add_credentials('Broose',
-    ('nickserv', 'Broose'),
-    ('prev_hosts', 3))
+   for dep in 'auth', 'identity':
+        try: __import__(dep).install(bot)
+        except util.AlreadyInstalled: pass
+   link_install(bot)
 
 #==============================================================================#
 # Memory-cached plugin state.
@@ -255,10 +251,13 @@ def h_tell(bot, id, target, args, full_msg):
 
     put_state(state)
 
+    father = yield identity.check_access(bot, id.nick, 'Broose')
+    affirm = 'Yes, father' if father else 'It shall be done'
+
     if sent_count > 1: reply(bot, id, target,
-        'It shall be done (%s messages sent).' % sent_count)
+        '%s (%s messages sent).' % (affirm, sent_count))
     else: reply(bot, id, target,
-        'It shall be done (1 message sent to "%s").' % to_nick)
+        '%s (1 message sent to "%s").' % (affirm, to_nick))
 
 #==============================================================================#
 @link('HELP')

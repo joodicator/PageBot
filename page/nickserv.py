@@ -1,17 +1,26 @@
-from untwisted.magic import sign, hold
-from untwisted.event import TICK
-import util
 import re
+
+from untwisted.magic import sign, hold
+import runtime
+import util
 
 link, ls_install, ls_uninstall = util.LinkSet().triple()
 REGISTERED = '001'
 IDENTIFIED = ('AFTER', REGISTERED, __name__)
 
+installed = False
+
 def install(bot):
+    global installed
+    if installed: raise util.AlreadyInstalled
+    installed = True
     util.event_sub(bot, REGISTERED, IDENTIFIED)
     ls_install(bot)
     
 def uninstall(bot):
+    global installed
+    if not installed: raise util.NotInstalled
+    installed = False
     ls_uninstall(bot)
     util.event_sub(bot, IDENTIFIED, REGISTERED)
 
@@ -50,16 +59,21 @@ def nickserv_notice(bot, id, msg):
     if final and msg.startswith(final):
         yield sign('NICKSERV_REGISTERED', bot)
         return
-    match = re.match(r'STATUS\s+(?P<nick>\S+)\s+(?P<code>\d+)', msg)
-    if match:
-        nick, code = match.groups()
-        yield sign(('NICKSERV_STATUS', nick), bot, id, int(code))
-
 
 #-------------------------------------------------------------------------------
 # yield status(bot, nick) - the NickServ STATUS of nick, or None.
 @util.mfun(link, 'nickserv.status')
 def status(bot, nick, ret):
     bot.send_msg(conf('nickserv').nick, 'STATUS %s' % nick)
-    (_, [_, _, code]) = yield hold(bot, ('NICKSERV_STATUS', nick))
-    yield ret(code)
+    timeout = yield runtime.timeout(3)
+    result = None
+    while True:
+        event, args = yield hold(bot, 'NICKSERV_NOTICE', timeout)
+        if event == timeout: break
+        e_bot, e_id, e_msg = args
+        match = re.match(r'STATUS\s+(?P<nick>\S+)\s+(?P<code>\d+)', e_msg)
+        if not match: continue
+        nick, code = match.groups()
+        result = int(code)
+        break
+    yield ret(result)
