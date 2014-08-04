@@ -11,12 +11,19 @@ from untwisted.magic import hold, sign
 from util import ID, just, msign, LinkSet
 from message import reply
 
-link, install, uninstall = LinkSet().triple()
+link, link_install, uninstall = LinkSet().triple()
 
 IDENTIFY_DURATION_S = 60*60
 
 passed = set()
 identified = dict()
+
+def install(bot):
+    from control import AlreadyInstalled
+    for dep in 'nickserv',:
+        try: __import__(dep).install(bot)
+        except AlreadyInstalled: pass
+    link_install(bot)
 
 def reload(prev):
     if hasattr(prev, 'passed') and isinstance(prev.passed, set):

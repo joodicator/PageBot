@@ -9,7 +9,6 @@ from channel import not_quiet
 import message
 import channel
 import runtime
-import auth
 import util
 
 link, install, uninstall = util.LinkSet().triple()
@@ -114,7 +113,7 @@ def h_fto_msg(bot, id, target, msg):
 
     #---------------------------------------------------------------------------
     # Puni Puni Poemi, Episode 2
-    # http://splicd.com/U-BwZA70ZCI/168/190
+    # http://www.youtube.com/watch?v=U-BwZA70ZCI#t=168
     elif strip('Banana! Banana!') in strip(msg):
         remaining = map(strip, 
         'BananaBanana Cucumber Eggplant Caviar Papaya GIANTASPARAGUS'.split())

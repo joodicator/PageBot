@@ -6,8 +6,7 @@ import util
 import channel
 import message
 
-link, install, uninstall = util.LinkSet().triple()  
-
+link, install, uninstall = util.LinkSet().triple()
 
 bridges = util.read_list('conf/bridge.py')
 

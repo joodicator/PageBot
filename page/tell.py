@@ -14,15 +14,6 @@
 # - Place some limit on the number of messages a single user can leave, possibly
 #   also per recipient (if it's possible to identify "recipients"...)
 
-from message import reply
-from util import LinkSet, multi, wc_to_re
-from auth import admin
-import channel
-import util
-import auth
-
-import untwisted.magic
-
 from collections import namedtuple
 from copy import deepcopy
 from itertools import *
@@ -33,9 +24,31 @@ import datetime
 import time
 import re
 
-#==============================================================================#
-link, install, uninstall = LinkSet().triple()
+import untwisted.magic
 
+import control
+import channel
+import util
+import auth
+from message import reply
+from util import multi, wc_to_re
+from auth import admin
+
+
+#==============================================================================#
+link, link_install, uninstall = util.LinkSet().triple()
+
+def install(bot):
+   for dependency in 'auth', 'identity':
+        try: __import__(dependency).install(bot)
+        except control.AlreadyInstalled: pass
+    link_install(bot)
+
+identity.add_credentials('Broose',
+    ('nickserv', 'Broose'),
+    ('prev_hosts', 3))
+
+#==============================================================================#
 # Memory-cached plugin state.
 current_state = None
 
