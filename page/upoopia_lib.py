@@ -202,28 +202,34 @@ class UpoopiaText(Upoopia):
     # Return a list of strings giving rows in a (monospaced) text representation
     # of the current game state. If "viewer" is given as BLACK or WHITE, only
     # the information visible to that player is shown in the output.
-    def game_lines(self, viewer=None):
+    def game_lines(self, viewer=None, **kwds):
         return util.join_cols(
-            self.board_lines(viewer),
-            self.status_lines(viewer) + self.legend_lines(viewer))
+            self.board_lines(viewer, **kwds),
+            self.status_lines(viewer, **kwds)
+            + self.legend_lines(viewer, **kwds))
 
-    def board_lines(self, viewer=None):
-        return [
-            ' '.join(
-                self.board.get((x+1,y+1),EMPTY)
-                for x in xrange(WIDTH) )
-            for y in xrange(HEIGHT) ]
+    def board_lines(self, viewer=None, **kwds):
+        lines = []
+        for y in xrange(1,HEIGHT+1):
+            chs, bold, red = [], False, False
+            for x in xrange(1,WIDTH+1):
+                symbol = self.board.get((x, y), EMPTY)
+                if symbol in 
+            lines.append(' '.join(chs)) 
+        return lines
 
-    def status_lines(self, viewer=None):
+    def status_lines(self, viewer=None, **kwds):
         if self.winner: return [
             '',
-            '\2Game over!\2',
+            '%(bo)sGame over!%(bo)s' % {
+                'bo': '\2' if kwds.get('irc') else ''},
             '',
-            '\2%s%s wins%s.\2' % (
-                self.winner,
-                ' (%s)' % self.names[self.winner]
-                    if self.names[self.winner] else '',
-                ' by resignation' if self.resigned else ''),
+            '%(bo)%(pl)s%(pn)s wins%(re)s.%(bo)s' % {
+                'bo': '\2' if kwds.get('irc') else '',
+                'pl': self.winner,
+                'pn': ' (%s)' % self.names[self.winner]
+                      if self.names[self.winner] else '',
+                're': ' by resignation' if self.resigned else ''},
             '']
         else: return [
             '%(pl)s to play (round %(rn)s, started by %(rb)s)' % {
@@ -232,18 +238,20 @@ class UpoopiaText(Upoopia):
                 'rb': self.round_beginner },
             '',
             '%(bo)s%(pl)s%(pn)s: %(is)s%(bo)s' % {
-                'bo': '\2' if viewer == self.player == BLACK else '',
+                'bo': '\2' if viewer == self.player == BLACK
+                           and kwds.get('irc') else '',
                 'pl': BLACK,
                 'pn': ' (%s)' % self.names[BLACK] if self.names[BLACK] else '',
-                'is': ', '.join(self.item_names(BLACK, viewer)) },
+                'is': ', '.join(self.item_names(BLACK, viewer, **kwds)) },
             '%(bo)s%(pl)s%(pn)s: %(is)s%(bo)s' % {
-                'bo': '\2' if viewer == self.player == WHITE else '',
+                'bo': '\2' if viewer == self.player == WHITE
+                           and kwds.get('irc') else '',
                 'pl': WHITE,
                 'pn': ' (%s)' % self.names[WHITE] if self.names[WHITE] else '',
-                'is': ', '.join(self.item_names(WHITE, viewer)) },
+                'is': ', '.join(self.item_names(WHITE, viewer, **kwds)) },
             '']
 
-    def legend_lines(self, viewer=None):
+    def legend_lines(self, viewer=None, **kwds):
         return util.join_rows(
             ['%s black die'    % DIE[BLACK],  '%s white die'    % DIE[WHITE]],
             ['%s black worm'   % WORM[BLACK], '%s white worm'   % WORM[WHITE]],
@@ -251,7 +259,7 @@ class UpoopiaText(Upoopia):
             ['%s black galaxy' % GLXY[BLACK], '%s white galaxy' % GLXY[WHITE]],
             ['%s black hole'   % BHOLE,       '%s empty'        % EMPTY] )
 
-    def item_names(self, player, viewer=None):
+    def item_names(self, player, viewer=None, **kwds):
         sorted_dice = sorted(self.dice[player],
             key=lambda (dc,dv): (0 if dc == player else 1, dv))
         for (die_colour, value) in sorted_dice:
