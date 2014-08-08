@@ -278,7 +278,7 @@ def show_board(bot, game, priority=None):
     lines = { BLACK:[], WHITE:[] }
     for colour in BLACK, WHITE:
         chan = game.names[colour]
-        lines[colour].extend(game.game_lines(viewer=colour))
+        lines[colour].extend(game.game_lines(viewer=colour, irc=True))
     if priority:
         for colour in priority, other_colour(priority):
             for line in lines[colour]:

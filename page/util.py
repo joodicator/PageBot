@@ -108,23 +108,23 @@ def dice(throws, sides):
 
 # Returns the string of length at least `n' resulting from the concatenation of
 # the smallest necessary number of spaces to `str'.
-def pad_left(str, n):
-    return str + ' '*(n - len(str))
+def pad_left(str, n, lenf=len):
+    return str + ' '*(n - lenf(str))
 
 # As pad_left, but prepends spaces instead of appending.
-def pad_right(str, n):
-    return ' '*(n - len(str)) + str
+def pad_right(str, n, lenf=len):
+    return ' '*(n - lenf(str)) + str
 
 # Given some sequences of strings, representing the rows of a table, each
 # row of which contains a number of cells, returns a list of strings representing
 # the rows of the table where spaces have been added so that all columns in the
 # table are left-aligned and separated by two spaces, or the given separator.
 def join_rows(*rows, **kwds):
-    sep = kwds.get('sep','  ')
+    sep, lenf = kwds.get('sep','  '), kwds.get('lenf', len)
     pad = pad_left if kwds.get('align','l') == 'l' else pad_right
-    widths = (imap(len, r) for r in rows)
+    widths = (imap(lenf, r) for r in rows)
     widths = [max(t) for t in izip_longest(*widths, fillvalue=0)]
-    rows = ((pad(*t) for t in izip(l, widths)) for l in rows)
+    rows = ((pad(*t,lenf=lenf) for t in izip(l, widths)) for l in rows)
     return [sep.join(l).rstrip() for l in rows]
 
 # Alias for join_rows included for back-compatibility.
@@ -153,10 +153,11 @@ def msign(target, event, *args, **kwds):
 # Returns an object which may be yielded in an untwisted event handler to
 # raise `event' in `mode' with the given arguments, waiting for a response
 # event of the form `(event, *args)' with a single argument, and obtaining
-# this argument.
-def mmcall(mode, event, *args):
+# this argument. If 'token' is given as a keyword argument, this is used
+# instead of (event, *args).
+def mmcall(mode, event, *args, **kwds):
     import untwisted.usual
-    token = (event,) + args
+    token = kwds.get('token', (event,)+args)
     def act(source, chain):
         def ret(arg):
             mode.unlink(token, ret)
@@ -170,9 +171,9 @@ def mmcall(mode, event, *args):
     return act
 
 # As mmcall, but assumes `mode' is the current mode.
-def mcall(event, *args):
+def mcall(event, *args, **kwds):
     import untwisted.usual
-    token = (event,) + args
+    token = kwds.get('token', (event,)+args)
     def act(source, chain):
         def ret(arg):
             source.unlink(token, ret)
@@ -185,7 +186,7 @@ def mcall(event, *args):
         raise StopIteration
     return act
 
-
+#===============================================================================
 #   @mfun(link, event_name)
 #   def func(*args, **kwds):
 #       ...
@@ -204,15 +205,36 @@ def mcall(event, *args):
 #       ...
 def mfun(link, event_name):
     def mfun_dec(fun):
+        token = ('mfun', event_name, object())
         @link(event_name)
         def mfun_han(*args):
             from untwisted.magic import sign
-            ret = lambda r: sign((event_name,)+args, r)
+            ret = lambda r: sign(token, r)
             return fun(*args, ret=ret)
         def mfun_fun(*args):
-            return mcall(event_name, *args)
+            return mcall(event_name, *args, token=token)
         return mfun_fun
     return mfun_dec
+
+#===============================================================================
+# As mfun, but for non-blocking functions that do not return an argument.
+def msub(link, event_name):
+    def msub_dec(fun):
+        link(event_name)(fun)
+        return lambda *args: sub(fun(*args))
+    return msub_dec
+
+#===============================================================================
+# When yielded from an untwisted event handler, runs the handler invocation from
+# which sub_gen is the return value.
+def sub(sub_gen):
+    import untwisted.usual
+    def action(mode, super_gen):
+        if not inspect.isgenerator(sub_gen): return
+        gen = gen_chain(sub_gen, super_gen)
+        untwisted.usual.chain(mode, gen)
+        raise StopIteration
+    return action
 
 # As mmcall, but takes several tuples (event, *args) giving multiple calls
 # to perform concurrently, their results returned in a list.
@@ -339,18 +361,6 @@ def multi(*cmds, **kwds): # limit=None, prefix=True
                     reply=multi_reply if len(argss)>1 else plain_reply))
         return multi_func
     return multi_deco
-
-#===============================================================================
-# When yielded from an untwisted event handler, runs the handler invocation from
-# which sub_gen is the return value.
-def sub(sub_gen):
-    import untwisted.usual
-    def action(mode, super_gen):
-        if not inspect.isgenerator(sub_gen): return
-        gen = gen_chain(sub_gen, super_gen)
-        untwisted.usual.chain(mode, gen)
-        raise StopIteration
-    return action
 
 #===============================================================================
 # As itertools.chain, but supports the send() method, and requires all arguments
