@@ -3,12 +3,12 @@
 
 from itertools import *
 import random
+import re
 
 import util
 
 #---------------------------------------------------------------------------
-# Constants representing aspects of the state of a Upoopia game, whose string
-# values also give a human-readable text representation.
+# Constants representing aspects of the state of a Upoopia game.
 BLACK, WHITE = 'Black', 'White'
 LEFT, RIGHT, UP, DOWN = (-1,0), (1,0), (0,-1), (0,1)
 
@@ -27,6 +27,10 @@ def other_colour(colour):
 def roll_die(die_colour, owner_colour):
     sides = 6 if die_colour == owner_colour else 3
     return (die_colour, random.randint(1, sides))
+
+def strip_irc_len(text):
+    codes = re.finditer(r'[\x02\x1f\x16\x0f]|\x03(\d\d?(,\d\d?)?)?', text)
+    return len(text) - sum(len(m.group()) for m in codes)
 
 #-------------------------------------------------------------------------------
 # Hierarcy of exceptions related to Upoopia.
@@ -206,68 +210,124 @@ class UpoopiaText(Upoopia):
         return util.join_cols(
             self.board_lines(viewer, **kwds),
             self.status_lines(viewer, **kwds)
-            + self.legend_lines(viewer, **kwds))
+            + self.legend_lines(viewer, **kwds),
+            lenf=strip_irc_len)
+
+    def symbol_text(self, s, **kwds):
+        return 'Black' if s == BLACK else \
+               'Red' if s == WHITE else \
+               'B' if s == DIE[BLACK] else \
+               'R' if s == DIE[WHITE] else \
+               '#' if s == WORM[BLACK] else \
+               '8' if s == WORM[WHITE] else \
+               'x' if s == POOP[BLACK] else \
+               'o' if s == POOP[WHITE] else \
+               '+' if s == GLXY[BLACK] else \
+               '=' if s == GLXY[WHITE] else \
+               '@' if s == BHOLE else \
+               '.' if s == EMPTY else None
+
+    def symbol_colour(self, s, **kwds):
+        return None if s in (WORM[BLACK],GLXY[BLACK],POOP[BLACK],DIE[BLACK]) \
+          else '04' if s in (WORM[WHITE],GLXY[WHITE],POOP[WHITE],DIE[WHITE]) \
+          else '15' if s == EMPTY else None
+
+    def symbol_colour_text(self, s, **kwds):
+        text = self.symbol_text(s)
+        if kwds.get('irc'):
+            colour = self.symbol_colour(s, **kwds)
+            if colour: text = '\x03%s%s\x03' % (colour, text)
+        return text
 
     def board_lines(self, viewer=None, **kwds):
         lines = []
         for y in xrange(1,HEIGHT+1):
-            chs, bold, red = [], False, False
+            colour = None
+            cells = []
             for x in xrange(1,WIDTH+1):
                 symbol = self.board.get((x, y), EMPTY)
-                if symbol in 
-            lines.append(' '.join(chs)) 
+                new_colour = self.symbol_colour(symbol, **kwds)
+                cell = self.symbol_text(symbol, **kwds)
+                if colour != new_colour:
+                    cell = '\x03' + (new_colour or '') + cell
+                    colour = new_colour
+                cells.append(cell)
+            line = ' '.join(cells)
+            if kwds.get('irc') and colour: line += '\x0f'
+            lines.append(line)
         return lines
 
     def status_lines(self, viewer=None, **kwds):
         if self.winner: return [
             '',
             '%(bo)sGame over!%(bo)s' % {
-                'bo': '\2' if kwds.get('irc') else ''},
+                'bo': '\x02' if kwds.get('irc') else ''},
             '',
             '%(bo)%(pl)s%(pn)s wins%(re)s.%(bo)s' % {
-                'bo': '\2' if kwds.get('irc') else '',
-                'pl': self.winner,
+                'bo': '\x02' if kwds.get('irc') else '',
+                'pl': self.symbol_text(self.winner, **kwds),
                 'pn': ' (%s)' % self.names[self.winner]
                       if self.names[self.winner] else '',
                 're': ' by resignation' if self.resigned else ''},
             '']
         else: return [
             '%(pl)s to play (round %(rn)s, started by %(rb)s)' % {
-                'pl': self.player,
+                'pl': self.symbol_text(self.player, **kwds),
                 'rn': self.round_number,
-                'rb': self.round_beginner },
+                'rb': self.symbol_text(self.round_beginner, **kwds) },
             '',
             '%(bo)s%(pl)s%(pn)s: %(is)s%(bo)s' % {
-                'bo': '\2' if viewer == self.player == BLACK
-                           and kwds.get('irc') else '',
-                'pl': BLACK,
+                'bo': '\x02' if viewer == self.player == BLACK
+                             and kwds.get('irc') else '',
+                'pl': self.symbol_text(BLACK, **kwds),
                 'pn': ' (%s)' % self.names[BLACK] if self.names[BLACK] else '',
                 'is': ', '.join(self.item_names(BLACK, viewer, **kwds)) },
             '%(bo)s%(pl)s%(pn)s: %(is)s%(bo)s' % {
-                'bo': '\2' if viewer == self.player == WHITE
-                           and kwds.get('irc') else '',
-                'pl': WHITE,
+                'bo': '\x02' if viewer == self.player == WHITE
+                             and kwds.get('irc') else '',
+                'pl': self.symbol_text(WHITE, **kwds),
                 'pn': ' (%s)' % self.names[WHITE] if self.names[WHITE] else '',
                 'is': ', '.join(self.item_names(WHITE, viewer, **kwds)) },
             '']
 
     def legend_lines(self, viewer=None, **kwds):
+        s = lambda s: self.symbol_text(s, **kwds)
+        black, white = s(BLACK).lower(), s(WHITE).lower()
         return util.join_rows(
-            ['%s black die'    % DIE[BLACK],  '%s white die'    % DIE[WHITE]],
-            ['%s black worm'   % WORM[BLACK], '%s white worm'   % WORM[WHITE]],
-            ['%s black poop'   % POOP[BLACK], '%s white poop'   % POOP[WHITE]],
-            ['%s black galaxy' % GLXY[BLACK], '%s white galaxy' % GLXY[WHITE]],
-            ['%s black hole'   % BHOLE,       '%s empty'        % EMPTY] )
+            ['%s %s die'     % (s(DIE[BLACK]), black),
+             '%s %s die'     % (s(DIE[WHITE]), white)
+            ],
+            ['%s %s worm'    % (s(WORM[BLACK]), black),
+             '%s %s worm'    % (s(WORM[WHITE]), white)
+            ],
+            ['%s %s poop'    % (s(POOP[BLACK]), black),
+             '%s %s poop'    % (s(POOP[WHITE]), white)
+            ],
+            ['%s %s galaxy'  % (s(GLXY[BLACK]), black),
+             '%s %s galaxy'  % (s(GLXY[WHITE]), white),
+            ],
+            ['%s black hole' % s(BHOLE),
+             '%s empty'      % s(EMPTY)
+            ],
+            lenf=strip_irc_len)
 
     def item_names(self, player, viewer=None, **kwds):
         sorted_dice = sorted(self.dice[player],
             key=lambda (dc,dv): (0 if dc == player else 1, dv))
         for (die_colour, value) in sorted_dice:
             if viewer is None or viewer == player or self.has_xray[viewer]:
-                yield '%s(%s)' % (DIE[die_colour], value)
+                text = '%s(%s)' % (
+                    self.symbol_text(DIE[die_colour], **kwds),
+                    value)
             else:
-                yield '%s(?)' % DIE[die_colour]
+                text = '%s(%s)' % (
+                    self.symbol_text(DIE[die_colour], **kwds),
+                    '?')
+#            colour = self.symbol_colour(DIE[die_colour], **kwds)
+#            if colour and kwds.get('irc'):
+#                text = '\x03%s%s\x03' % (colour, text)
+            yield text
         for galaxy in self.galaxies[player]:
-            yield galaxy
+            yield self.symbol_text(galaxy, **kwds)
         if self.has_xray[player]:
             yield 'x-ray vision'
