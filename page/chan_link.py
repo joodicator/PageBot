@@ -5,8 +5,10 @@
 import inspect
 import re
 
+import auth
 import util
 import channel
+import message
 
 link, install, uninstall = util.LinkSet().triple()
 
@@ -56,8 +58,8 @@ def h_del_link(bot, c1, c2):
         if not links[c2]: del links[c2]
     decay_links.discard(c1)
     decay_links.discard(c2)
-    bot.send_msg(c1, '%s: channel link closed.' % c2)
-    bot.send_msg(c2, '%s: channel link closed.' % c1)
+    bot.send_msg(c1, '%s: Disconnected from channel.' % c2)
+    bot.send_msg(c2, '%s: Disconnected from channel.' % c1)
 
 # Mark an existing link so that it will eventually be removed
 # if it is not refreshed by calling add_link().
@@ -79,10 +81,8 @@ def is_linked(c1, c2):
         return 1
 
 #===============================================================================
-def introduce(*args):
-    return util.sub(h_introduce(*args))
-
-def h_introduce(bot, chan, lchan):
+@util.msub(link, 'chan_link.introduce')
+def introduce(bot, chan, lchan):
     topic, names = yield util.mmcall_all(bot,
         ('channel.topic', bot, chan),
         ('channel.names', bot, chan, True))
@@ -106,6 +106,28 @@ def h_self_exit(bot, chan, *args):
     for lchan in list(links[chan]):
         if lchan.lower() in channel.track_channels: continue
         yield del_link(bot, chan, lchan)
+
+@link('!online')
+def h_online(bot, id, chan, args, full_msg):
+    for linked_chan in links.get(chan.lower(), set()):
+        yield introduce(bot, linked_chan, chan)
+        yield introduce(bot, chan, linked_chan)
+
+@link('!add-chan-link')
+@auth.admin
+def h_add_chan_link(bot, id, chan, args, full_msg):
+    if not chan or not re.match(r'#\S*$', args):
+        message.reply(bot, id, chan, 'Error: invalid argument: "%s".' % args)
+    else:
+        yield add_link(bot, chan, args)
+
+@link('!del-chan-link')
+@auth.admin
+def h_del_chan_link(bot, id, chan, args, full_msg):
+    if not chan or not re.match(r'#\S*$', args):
+        message.reply(bot, id, chan, 'Error: invalid argument: "%s".' % args)
+    else:
+        yield del_link(bot, chan, args)
 
 #===============================================================================
 @link('OTHER_JOIN')
