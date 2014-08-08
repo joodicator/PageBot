@@ -9,9 +9,12 @@ from upoopia_lib import *
 from message import reply
 import util
 import modal
+import channel
 import chan_link
 
 link, install, uninstall = util.LinkSet().triple()
+install, uninstall = util.depend(install, uninstall,
+    'chan_link')
 
 # challenges[ch1.lower()] = (ch2, WHITE or BLACK or None)
 challenges = dict()
@@ -51,10 +54,12 @@ def h_help_upoopia(bot, reply, *args):
     ' must be in a separate channel with operator status, then each player'
     ' must send a challenge to the other channel, optionally indicating their'
     ' preferred colour, where, by convention, Black moves first.')
+    reply('upoopia',
+    '    With no arguments, start a new game with the last channel played.')
 
 @link('!upoopia')
-def h_upoopia(bot, id, target, args, full_msg):
-    if not target: return
+def h_upoopia(bot, id, chan, args, full_msg):
+    if not chan: return
 
     # Parse arguments.
     args = args.split()
@@ -65,66 +70,89 @@ def h_upoopia(bot, id, target, args, full_msg):
         elif 'white'.startswith(colour.lower()):
             colour = WHITE
         else:
-            reply(bot, id, target,
+            reply(bot, id, chan,
                 'Error: "%s" is not a valid colour.' % colour)
             return
     elif len(args) >= 1:
         opp_chan, colour = args[0], None
+    elif len(chan_link.links.get(chan.lower(), set())) == 1:
+        # Implicitly select the single channel to which we are linked.
+        [opp_chan], colour = chan_link.links[chan.lower()], None
     else:
-        if target.lower() in challenges:
-            opp_chan, colour = challenges[target.lower()]
-            bot.send_msg(target,
+        if chan.lower() in challenges:
+            opp_chan, colour = challenges[chan.lower()]
+            bot.send_msg(chan,
                 'A challenge issued to %s is currently pending.' % opp_chan)
-        elif target.lower() in games:
-            game = games[target.lower()]
+        elif chan.lower() in games:
+            game = games[chan.lower()]
             [opp] = [chan for chan in game.names.values()
-                     if chan.lower() != target.lower()]
-            bot.send_msg(target,
+                     if chan.lower() != chan.lower()]
+            bot.send_msg(chan,
                 'A game of Upoopia against %s is currently in session.' % opp)
         else:
-            bot.send_msg(target,
+            bot.send_msg(chan,
                 'No game of Upoopia is active.'
                 ' See \2!help upoopia\2 for starting a game.')
         return
 
     if not opp_chan.startswith('#'):
-        reply(bot, id, target,  
+        reply(bot, id, chan,  
             'Error: "%s" is not a valid channel name.' % opp_chan)
         return
-    elif opp_chan.lower() == target.lower():
-        reply(bot, id, target,
+    elif opp_chan.lower() == chan.lower():
+        reply(bot, id, chan,
             'Error: your opponent must be in a different channel!')
         return
 
-    if opp_chan.lower() in challenges:
-        # A reciprocating challenge exists; start the game.
-        if modal.get_mode(target):
-            yield sign('CONTEND_MODE', bot, id, target)
+    # If not already linked, require operator status.
+    if not chan_link.is_linked(chan, opp_chan):
+        pre_ms, pre_cs = bot.isupport['PREFIX']
+        umodes = channel.umode_channels[chan.lower()]
+        umodes = umodes.get(id.nick.lower(), '')
+        if not any(m in umodes for m in pre_ms[:pre_ms.find('o')+1]):
+            reply(bot, id, chan,
+                'Error: only channel operators may initiate a channel link.')
             return
-        modal.set_mode(target, 'upoopia')
 
-        opp_opp_chan, opp_colour = challenges[opp_chan.lower()]
-        if opp_opp_chan.lower() == target.lower():
-            del challenges[opp_chan.lower()]
-            yield chan_link.add_link(bot, target, opp_chan)
-            yield util.sub(start_game(bot, target, opp_chan, colour, opp_colour))
+    # Acquire the 'upoopia' mode in this channel.
+    if modal.get_mode(chan) == 'upoopia' and chan.lower() in challenges:
+        # If another challenge exists, cancel it.
+        old_opp_chan, colour = challenges.pop(chan.lower())
+        bot.send_msg(chan, 'Challenge to %s cancelled.' % old_opp_chan)
+    elif modal.get_mode(chan):
+        yield sign('CONTEND_MODE', bot, id, chan)
+        return
     else:
-        # Record the challenge.
-        if modal.get_mode(target) == 'upoopia' \
-        and target.lower() in challenges:
-            old_opp_chan, colour = challenges[target.lower()]
-            del challenges[target.lower()]
-            bot.send_msg(target, 'Challenge to %s cancelled.' % old_opp_chan)
-        elif modal.get_mode(target):
-            yield sign('CONTEND_MODE', bot, id, target)
-            return
-        modal.set_mode(target, 'upoopia')
+        modal.set_mode(chan, 'upoopia')
 
-        challenges[target.lower()] = (opp_chan, colour)
-        bot.send_msg(target,
-            'Challenge issued: waiting for %s to reciprocate.' % opp_chan)
+    if opp_chan.lower() in challenges:
+        # If a reciprocating challenge exists, immediately start the game.
+        opp_opp_chan, opp_colour = challenges[opp_chan.lower()]
+        if opp_opp_chan.lower() == chan.lower():
+            del challenges[opp_chan.lower()]
+            yield util.sub(start_game(bot, chan, opp_chan, colour, opp_colour))
+            return
+    elif chan_link.is_linked(chan, opp_chan):
+        # Otherwise, if the opponent channel is still linked and does not
+        # have any pending challenges, also immediately start the game.
+        yield util.sub(start_game(bot, chan, opp_chan, colour, None))
+        return
+
+    # Otherwise, just record the challenge.
+    challenges[chan.lower()] = (opp_chan, colour)
+    bot.send_msg(chan,
+        'Challenge issued: waiting for %s to reciprocate.' % opp_chan)
 
 def start_game(bot, chan1, chan2, colour1, colour2):
+    # Establish an exclusive channel link.
+    for lchan in list(chan_link.links.get(chan1.lower(), set())):
+        if lchan == chan2.lower(): continue
+        yield chan_link.del_link(bot, chan1, lchan)
+    for lchan in list(chan_link.links.get(chan2.lower(), set())):
+        if lchan == chan1.lower(): continue
+        yield chan_link.del_link(bot, chan2, lchan)
+    yield chan_link.add_link(bot, chan1, chan2)
+
     # Decide colours.
     if colour1 == colour2:
         colour1 = random.choice((BLACK, WHITE))
