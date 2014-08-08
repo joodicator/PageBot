@@ -56,6 +56,8 @@ def h_del_link(bot, c1, c2):
         if not links[c2]: del links[c2]
     decay_links.discard(c1)
     decay_links.discard(c2)
+    bot.send_msg(c1, '%s: channel link closed.' % c2)
+    bot.send_msg(c2, '%s: channel link closed.' % c1)
 
 # Mark an existing link so that it will eventually be removed
 # if it is not refreshed by calling add_link().
