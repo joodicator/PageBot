@@ -25,6 +25,7 @@ def part(bot, source, chans, msg=None, *args):
         yield sign('SOME_PART', bot, id, chan, msg)
         if (id.nick.lower() == bot.nick.lower()):
             yield sign('SELF_PART', bot, chan, msg)
+            yield sign('SELF_PART_FINAL', bot, chan, msg)
         else:
             yield sign('OTHER_PART', bot, id, chan, msg)
             yield sign('OTHER_PART_FINAL', bot, id, chan, msg)
@@ -35,6 +36,7 @@ def kicked(bot, op_id, chan, other_nick, msg=None, *args):
     yield sign('SOME_KICKED', bot, other_nick, op_id, chan, msg)
     if (other_nick.lower() == bot.nick.lower()):
         yield sign('SELF_KICKED', bot, chan, op_id, msg)
+        yield sign('SELF_KICKED_FINAL', bot, chan, op_id, msg)
     else:
         yield sign('OTHER_KICKED', bot, other_nick, op_id, chan, msg)
         yield sign('OTHER_KICKED_FINAL', bot, other_nick, op_id, chan, msg)

@@ -3,6 +3,8 @@ import traceback
 import sys
 import re
 
+from untwisted.magic import sign
+
 from util import LinkSet, AlreadyInstalled, NotInstalled
 from message import reply as echo
 from auth import admin
@@ -98,12 +100,12 @@ def _unload(bot, id, target, args, full_msg):
 @link('!reload')
 @admin
 def h_soft_reload(bot, id, target, args, full_msg):
-    h_reload(bot, id, target, hard=False)
+    return h_reload(bot, id, target, hard=False)
 
 @link('!hard-reload')
 @admin
 def h_hard_reload(bot, id, target, args, full_msg):
-    h_reload(bot, id, target, hard=True)
+    return h_reload(bot, id, target, hard=True)
 
 def h_reload(bot, id, target, hard):
     plugins = bot.conf['plugins']
@@ -157,4 +159,5 @@ def h_reload(bot, id, target, hard):
     if expns:
         echo(bot, id, target, 'Errors during reinstall: ' + repr(expns))
 
+    yield sign('POST_RELOAD', bot)
     echo(bot, id, target, 'Reload complete.')

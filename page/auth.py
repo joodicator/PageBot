@@ -1,7 +1,7 @@
 import re
 import util
 import time
-import nickserv
+import identity
 import inspect
 
 from untwisted.mode import Mode
@@ -13,7 +13,7 @@ from message import reply
 
 link, install, uninstall = LinkSet().triple()
 install, uninstall = util.depend(install, uninstall,
-    'nickserv')
+    'identity')
 
 IDENTIFY_DURATION_S = 60*60
 
@@ -44,34 +44,27 @@ def admin(func):
 
 # Returns an object that may be yielded in an untwisted event handler to obtain
 # True if the given user is authenticated as an admin, or otherwise False.
-def check(bot, id):
-    return util.mcall('auth.check', bot, id)
-
-@link('auth.check')
-def h_auth_check(bot, id):
-    ret = lambda a: sign(('auth.check', bot, id), a)
-
+@util.mfun(link, 'auth.check')
+def check(bot, id, ret):
     if identify_check(id):
-        yield ret(True)
+        yield ret(True); return
 
     with open('conf/admins.txt') as file:
         admins = re.findall(r'\S+', file.read())
 
-    if '*!%s@%s' % (id.user, id.host) in admins:
-        yield ret(True)
-    elif '*!*@%s' % id.host in admins:
-        yield ret(True)
-    elif id.nick not in admins:
-        yield ret(False)
-    elif id in passed:
-        yield ret(True)
-    else:
-        code = yield nickserv.status(bot, id.nick)
-        if code >= 3:
-            passed.add(id)
-            yield ret(True)
+    for admin in admins:
+        if any(c in admin for c in '!@*?'):
+            # Verify against a hostmask with wildcards.
+            hostmask = '%s!%s@%s' % id
+            if re.match(util.wc_to_re(admin), hostmask, re.I):
+                yield ret(True); return
         else:
-            yield ret(False)
+            # Verify an access name according to the 'identity' module.
+            access = yield identity.check_access(bot, id, admin)
+            if access:
+                yield ret(True); return
+
+    yield ret(False)
 
 #===============================================================================
 @link('!id')

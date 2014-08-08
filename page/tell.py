@@ -40,6 +40,11 @@ link, install, uninstall = util.LinkSet().triple()
 install, uninstall = util.depend(install, uninstall,
     'auth', 'identity')
 
+identity.add_credentials('tell.Broose',
+    ('nickserv',   'Broose'),
+    ('access',     'Broose'),
+    ('prev_hosts', 2))
+
 #==============================================================================#
 # Memory-cached plugin state.
 current_state = None
@@ -247,7 +252,7 @@ def h_tell(bot, id, target, args, full_msg):
 
     put_state(state)
 
-    father = yield identity.check_access(bot, id, 'Broose')
+    father = yield identity.check_access(bot, id, 'tell.Broose')
     affirm = 'Yes, father' if father else 'It shall be done'
 
     if sent_count > 1: reply(bot, id, target,

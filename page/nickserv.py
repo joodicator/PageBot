@@ -64,16 +64,27 @@ def nickserv_notice(bot, id, msg):
 # yield status(bot, nick) - the NickServ STATUS of nick, or None.
 @util.mfun(link, 'nickserv.status')
 def status(bot, nick, ret):
-    bot.send_msg(conf('nickserv').nick, 'STATUS %s' % nick)
-    timeout = yield runtime.timeout(3)
-    result = None
-    while True:
+    sdict = yield statuses(bot, [nick])
+    yield ret(sdict.get(nick.lower()))
+
+#-------------------------------------------------------------------------------
+# sdict = yield statuses(bot, nicks) - sdict[nick.lower()] is STATUS of nick.
+@util.mfun(link, 'nickserv.statuses')
+def statuses(bot, nicks, ret):
+    for i in xrange(0, len(nicks), 16):
+        batch_nicks = ' '.join(nicks[i:i+16])
+        bot.send_msg(conf('nickserv').nick, 'STATUS %s' % batch_nicks)
+
+    timeout = yield runtime.timeout(5 + len(nicks)/10)
+    result, remain = dict(), set(n.lower() for n in nicks)
+    while remain:
         event, args = yield hold(bot, 'NICKSERV_NOTICE', timeout)
         if event == timeout: break
         e_bot, e_id, e_msg = args
         match = re.match(r'STATUS\s+(?P<nick>\S+)\s+(?P<code>\d+)', e_msg)
         if not match: continue
         nick, code = match.groups()
-        result = int(code)
-        break
+        if nick.lower() not in remain: continue
+        result[nick.lower()] = int(code)
+        remain.remove(nick.lower())
     yield ret(result)
