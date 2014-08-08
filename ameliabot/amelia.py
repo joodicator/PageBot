@@ -72,23 +72,15 @@ class AmeliaBot(Mac):
 
     def load_plugins(self):
         loaded_plugins = []
-        def load_plugin(name, level):
-            plugin = import_module(name)
-            if plugin in loaded_plugins: return
-
-            loaded_plugins.append(plugin)
-            arrow = ' ' + level*'--' + '>' if level else ''
-            print '! plugin:%s %s' % (arrow, name)
-
-            if hasattr(plugin, '__depends__'):
-                for dep_name in plugin.__depends__:
-                    load_plugin(dep_name, level+1)
-
         for name in self.conf['plugins']:
-            load_plugin(name, 0)
+            plugin = import_module(name)
+            loaded_plugins.append(plugin)
 
         for plugin in loaded_plugins:
-            plugin.install(self)
+            try:
+                plugin.install(self)
+            except AlreadyInstalled:
+                pass
 
     def h_err_nicknameinuse(self, bot, *args):
         self.nick += "_"

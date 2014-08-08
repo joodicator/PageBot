@@ -408,3 +408,26 @@ def depend(install, uninstall, *deps):
         installed[0] = False
 
     return depend_install, depend_uninstall
+
+#===============================================================================
+# Given a structure of dicts and lists, returns an equivalent structure with
+# encode() mapped over all unicode values contained therein.
+def recursive_encode(object, codec, done=dict()):
+    if id(object) in done:
+        return done[id(object)]
+
+    result = None
+    if type(object) == unicode:
+        result = object.encode(codec)
+    elif type(object) == dict:
+        result = { recursive_encode(k, codec, done)
+                   : recursive_encode(v, codec, done)
+                   for (k,v) in object.iteritems() }
+    elif type(object) == list:
+        result = [ recursive_encode(v, codec, done)
+                   for v in object ]
+    else:
+        result = object
+
+    done[id(object)] = result
+    return result

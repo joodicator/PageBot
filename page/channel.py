@@ -325,9 +325,9 @@ def h_other_exit_chan(bot, *args, **kwds):
     if chan in umode_channels and nick in umode_channels[chan]:
         del umode_channels[chan][nick]
 
-@link('SELF_PART')
-@link('SELF_KICKED')
-def h_self_part_kicked(bot, chan, *args):
+@link('SELF_PART_FINAL')
+@link('SELF_KICKED_FINAL')
+def h_self_part_kicked_final(bot, chan, *args):
     chan = chan.lower()
     if chan in track_channels: del track_channels[chan]
     if chan in umode_channels: del umode_channels[chan]
