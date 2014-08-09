@@ -43,12 +43,12 @@ def reload(prev):
 # !upoopia
 @link('HELP')
 def h_help(bot, reply, *args):
-    reply('upoopia #CHANNEL [black|white]',
+    reply('upoopia #CHANNEL [blue|red]',
     'Challenge #CHANNEL to a game of Upoopia.')
 
 @link(('HELP', 'upoopia'))
 def h_help_upoopia(bot, reply, *args):
-    reply('upoopia #CHANNEL [b[lack]|w[hite]]',
+    reply('upoopia #CHANNEL [b[lue]|r[ed]]',
     '    Challenge #CHANNEL to a game of Upoopia:'
     ' <http://www.unicorn7.org/games/game/553/>. To play on IRC, each player'
     ' must be in a separate channel with operator status, then each player'
@@ -65,9 +65,9 @@ def h_upoopia(bot, id, chan, args, full_msg):
     args = args.split()
     if len(args) >= 2:
         opp_chan, colour = args[:2]
-        if 'black'.startswith(colour.lower()):
+        if 'blue'.startswith(colour.lower()):
             colour = BLACK
-        elif 'white'.startswith(colour.lower()):
+        elif 'red'.startswith(colour.lower()):
             colour = WHITE
         else:
             reply(bot, id, chan,
@@ -173,13 +173,13 @@ def start_game(bot, chan1, chan2, colour1, colour2):
 # !move
 @link(('HELP', 'upoopia'))
 def h_help_upoopia(bot, reply, *args):
-    reply('[move] b[lack]|w[hite] l[eft]|r[ight]|u[p]|d[own] 1|2|3|4|5|6',
+    reply('[move] b[lue]|r[ed] l[eft]|r[ight]|u[p]|d[own] 1|2|3|4|5|6',
     'Use a die of the given colour and value to move the worm of the same'
     ' colour over the same distance, in the given direction.')
 
-@link('!b', '!black', a=lambda args: 'b ' + args)
-@link('!w', '!white', a=lambda args: 'w ' + args)
-@link('!', '!move',   a=lambda args: args)
+@link('!b', '!blue', a=lambda args: 'b ' + args)
+@link('!r', '!red',  a=lambda args: 'r ' + args)
+@link('!', '!move',  a=lambda args: args)
 @modal.when_mode('upoopia')
 def h_move(bot, id, chan, args, full_msg, **kwds):
     if chan.lower() not in games: return
@@ -194,8 +194,8 @@ def h_move(bot, id, chan, args, full_msg, **kwds):
     colour, direction, value = args[:3]
     if direction in '123456': value, direction = direction, value
 
-    if   'black'.startswith(colour.lower()): colour = BLACK
-    elif 'white'.startswith(colour.lower()): colour = WHITE
+    if 'blue'.startswith(colour.lower()): colour = BLACK
+    elif 'red'.startswith(colour.lower()): colour = WHITE
     else: reply(bot, id, chan,
         'Error: "%s" is not a valid colour.' % colour); return
 

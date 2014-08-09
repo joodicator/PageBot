@@ -5,10 +5,11 @@ from untwisted.magic import sign
 
 import util
 import message
+import modal
 
 link, install, uninstall = util.LinkSet().triple()
 
-MAX_ROLL        = 99, 9999, 99999999
+MAX_ROLL = 99, 9999, 99999999
 
 #===============================================================================
 @link('HELP*')
@@ -28,7 +29,12 @@ def h_help_roll(bot, reply, args):
     'The shorthand "!r" may be used instead of "!roll".')
 
 #===============================================================================
-@link('!roll', '!r', '!dice', '!d')
+@link('!r', '!d')
+@modal.when_mode(None)
+def h_roll_abbrev(*args):
+    return h_roll(*args)
+
+@link('!roll', '!dice')
 def h_roll(bot, id, target, args, full_msg):
     class UserError(Exception):
         pass
