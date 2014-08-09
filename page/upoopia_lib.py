@@ -214,7 +214,7 @@ class UpoopiaText(Upoopia):
             lenf=strip_irc_len)
 
     def symbol_text(self, s, **kwds):
-        return 'Black' if s == BLACK else \
+        return 'Blue' if s == BLACK else \
                'Red' if s == WHITE else \
                'B' if s == DIE[BLACK] else \
                'R' if s == DIE[WHITE] else \
@@ -222,15 +222,17 @@ class UpoopiaText(Upoopia):
                '8' if s == WORM[WHITE] else \
                'x' if s == POOP[BLACK] else \
                'o' if s == POOP[WHITE] else \
-               '+' if s == GLXY[BLACK] else \
-               '=' if s == GLXY[WHITE] else \
+               '$' if s == GLXY[BLACK] else \
+               '%' if s == GLXY[WHITE] else \
                '@' if s == BHOLE else \
                '.' if s == EMPTY else None
 
     def symbol_colour(self, s, **kwds):
-        return None if s in (WORM[BLACK],GLXY[BLACK],POOP[BLACK],DIE[BLACK]) \
-          else '04' if s in (WORM[WHITE],GLXY[WHITE],POOP[WHITE],DIE[WHITE]) \
-          else '15' if s == EMPTY else None
+        return '12' if s in (WORM[BLACK],POOP[BLACK],DIE[BLACK],BLACK) \
+          else '04' if s in (WORM[WHITE],POOP[WHITE],DIE[WHITE],WHITE) \
+          else '10' if s == GLXY[BLACK] \
+          else '06' if s == GLXY[WHITE] \
+          else '14' if s == EMPTY else None
 
     def symbol_colour_text(self, s, **kwds):
         text = self.symbol_text(s)
@@ -258,37 +260,41 @@ class UpoopiaText(Upoopia):
         return lines
 
     def status_lines(self, viewer=None, **kwds):
-        if self.winner: return [
-            '',
-            '%(bo)sGame over!%(bo)s' % {
-                'bo': '\x02' if kwds.get('irc') else ''},
-            '',
-            '%(bo)%(pl)s%(pn)s wins%(re)s.%(bo)s' % {
-                'bo': '\x02' if kwds.get('irc') else '',
-                'pl': self.symbol_text(self.winner, **kwds),
-                'pn': ' (%s)' % self.names[self.winner]
-                      if self.names[self.winner] else '',
-                're': ' by resignation' if self.resigned else ''},
-            '']
-        else: return [
-            '%(pl)s to play (round %(rn)s, started by %(rb)s)' % {
-                'pl': self.symbol_text(self.player, **kwds),
-                'rn': self.round_number,
-                'rb': self.symbol_text(self.round_beginner, **kwds) },
-            '',
-            '%(bo)s%(pl)s%(pn)s: %(is)s%(bo)s' % {
-                'bo': '\x02' if viewer == self.player == BLACK
-                             and kwds.get('irc') else '',
-                'pl': self.symbol_text(BLACK, **kwds),
-                'pn': ' (%s)' % self.names[BLACK] if self.names[BLACK] else '',
-                'is': ', '.join(self.item_names(BLACK, viewer, **kwds)) },
-            '%(bo)s%(pl)s%(pn)s: %(is)s%(bo)s' % {
-                'bo': '\x02' if viewer == self.player == WHITE
-                             and kwds.get('irc') else '',
-                'pl': self.symbol_text(WHITE, **kwds),
-                'pn': ' (%s)' % self.names[WHITE] if self.names[WHITE] else '',
-                'is': ', '.join(self.item_names(WHITE, viewer, **kwds)) },
-            '']
+        if self.winner:
+            return [
+                '',
+                '%(bo)sGame over!%(bo)s' % {
+                    'bo': '\x02' if kwds.get('irc') else ''},
+                '',
+                '%(bo)s%(pl)s%(pn)s wins%(re)s.%(bo)s' % {
+                    'bo': '\x02' if kwds.get('irc') else '',
+                    'pl': self.symbol_text(self.winner, **kwds),
+                    'pn': ' (%s)' % self.names[self.winner]
+                          if self.names[self.winner] else '',
+                    're': ' by resignation' if self.resigned else ''},
+                '']
+        else:
+            h_black = viewer == self.player == BLACK and kwds.get('irc')
+            h_white = viewer == self.player == WHITE and kwds.get('irc')
+            return [
+                '%(pl)s to play (round %(rn)s, started by %(rb)s)' % {
+                    'pl': self.symbol_text(self.player, **kwds),
+                    'rn': self.round_number,
+                    'rb': self.symbol_text(self.round_beginner, **kwds) },
+                '',
+                '%(cs)s%(pl)s%(pn)s: %(is)s%(ce)s' % {
+                    'cs': '\x03'+self.symbol_colour(BLACK) if h_black else '',
+                    'ce': '\x03' if h_black else '',
+                    'pl': self.symbol_text(BLACK, **kwds),
+                    'pn': ' (%s)' % self.names[BLACK] if self.names[BLACK] else '',
+                    'is': ', '.join(self.item_names(BLACK, viewer, **kwds)) },
+                '%(cs)s%(pl)s%(pn)s: %(is)s%(ce)s' % {
+                    'cs': '\x03'+self.symbol_colour(BLACK) if h_white else '',
+                    'ce': '\x03' if h_white else '',
+                    'pl': self.symbol_text(WHITE, **kwds),
+                    'pn': ' (%s)' % self.names[WHITE] if self.names[WHITE] else '',
+                    'is': ', '.join(self.item_names(WHITE, viewer, **kwds)) },
+                '']
 
     def legend_lines(self, viewer=None, **kwds):
         s = lambda s: self.symbol_text(s, **kwds)
