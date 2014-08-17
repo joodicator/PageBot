@@ -191,10 +191,10 @@ def h_message(*args, **kwds):
 @link('TOPIC')
 def h_topic(bot, source, chan, topic):
     if chan.lower() not in links: return
-    if isinstance(source, tuple): source = '%s!%s@%s' % source
-    msg = '%s set topic to: %s' % (source, topic) if topic else \
-          '%s unset the topic.' % (source, topic)
-    for chan in links[chan.lower()]: bot.send_msg(lchan, msg, no_link=True)
+    if isinstance(source, tuple): source = source.nick
+    msg = '%s: %s set topic to: %s' % (source, topic) if topic else \
+          '%s: %s unset the topic.' % source
+    for lchan in links[chan.lower()]: bot.send_msg(lchan, msg, no_link=True)
 
 @link('MODE')
 def h_chan_mode(bot, source, chan, *args):

@@ -228,13 +228,14 @@ def h_tell(bot, id, target, args, full_msg):
         state.msgs.append(record)
 
     sent_count = len(to_nicks)
-    same_sent = [m for m in state.msgs if same_sender(m.from_id, id)]
+    same_sent = [m for m in state.msgs if same_sender(m.from_id, id)
+                 and m.channel.lower() == channel.lower()]
     if len(same_sent) > MAX_SENT:
         reply(bot, id, target,
             'Error: you may leave no more than %d messages at once.' % MAX_SENT)
         return
     if to_nick.endswith('$'):
-        same_recv = [m for m in state.msgs if m.to_nick.endswith('$')]
+        same_recv = [m for m in same_sent if m.to_nick.endswith('$')]
         if len(same_recv) > MAX_SENT_RE:
             reply(bot, id, target,
                 'Error: you may leave no more than %d regex-addressed messages'
@@ -243,7 +244,7 @@ def h_tell(bot, id, target, args, full_msg):
     else:
         norm_recv = lambda r: re.sub(r'\*+', r'*', r).lower()
         norm_nicks = map(norm_recv, to_nicks)
-        same_recv = [m for m in state.msgs if norm_recv(m.to_nick) in norm_nicks]
+        same_recv = [m for m in same_sent if norm_recv(m.to_nick) in norm_nicks]
         if len(same_recv) > MAX_SENT_WC:
             reply(bot, id, target,
                 'Error: you may leave no more than %d messages for "%s"'
@@ -440,7 +441,10 @@ def h_tell_list(bot, id, target, args, full_msg):
     msgs = state.msgs
     if target:
         msgs = filter(lambda m: m.channel.lower() == target.lower(), msgs)
+    rexp = re.compile(re.escape(args), re.I)
     for (num, msg) in izip(count(1), msgs):
+        if not any(rexp.search(text) for text in (
+            msg.from_id.nick, msg.to_nick, msg.message)): continue
         lines.append((
             str(num),
             '%s!%s@%s' % tuple(msg.from_id),

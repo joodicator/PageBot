@@ -7,7 +7,7 @@ import util
 
 MINLEN  = 5
 MAXLEN  = 100
-IFREQ   = 800
+IFREQ   = 1000
 
 ignore_words = set()
 ignore_prefixes = set()
@@ -32,11 +32,11 @@ def h_message_ignored(bot, id, target, msg):
     if not msg: return
     reply(bot, id, target, msg, prefix=False)
 
-def bum_replace(msg):
-    msg = bum_split(msg)
+def bum_replace(str_msg):
+    msg = bum_split(str_msg)
     indices = range(0, len(msg), 2)
 
-    if msg.startswith('\1'):
+    if str_msg.startswith('\1'):
         if msg.startswith('\1ACTION '):
             del indices[0]
         else:

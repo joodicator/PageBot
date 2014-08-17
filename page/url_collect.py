@@ -26,15 +26,10 @@ def reload(prev):
         history.update(prev.history)
 
 #==============================================================================#
-@link('MESSAGE', 'UNOTICE', 'OTHER_PART', 'OTHER_QUIT')
+@link('MESSAGE', 'UNOTICE')
 def h_message(bot, id, target, message, *args):
     if not message: return
     yield sign('URL_COLLECT_MSG', bot, message, target, id)
-
-@link('OTHER_KICKED')
-def h_other_kicked(bot, other_nick, op_id, channel, message):
-    if not message: return
-    yield sign('URL_COLLECT_MSG', bot, message, channel)
 
 @link('TELL_DELIVERY')
 def h_tell_delivery(bot, from_id, to_id, channel, message):

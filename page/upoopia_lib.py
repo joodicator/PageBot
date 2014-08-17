@@ -289,7 +289,7 @@ class UpoopiaText(Upoopia):
                     'pn': ' (%s)' % self.names[BLACK] if self.names[BLACK] else '',
                     'is': ', '.join(self.item_names(BLACK, viewer, **kwds)) },
                 '%(cs)s%(pl)s%(pn)s: %(is)s%(ce)s' % {
-                    'cs': '\x03'+self.symbol_colour(BLACK) if h_white else '',
+                    'cs': '\x03'+self.symbol_colour(WHITE) if h_white else '',
                     'ce': '\x03' if h_white else '',
                     'pl': self.symbol_text(WHITE, **kwds),
                     'pn': ' (%s)' % self.names[WHITE] if self.names[WHITE] else '',

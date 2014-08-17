@@ -247,6 +247,12 @@ def h_fto_msg(bot, id, target, msg):
             yield runtime.sleep(1)
 
 #===============================================================================
+@link('!nuke')
+def h_nuke(bot, id, target, message):
+    if not target: return
+    bot.send_cmd('KICK %s %s :Nuclear launch detected.' % (target, id.nick))
+
+#===============================================================================
 def strip(text):
     return cstrip(text.lower())
 
