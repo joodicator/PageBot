@@ -28,7 +28,7 @@ def read_conf():
                 chans = line.split()
                 continue
             for chan in chans:
-                conf[chan].append(line)
+                conf[chan].append(line.strip())
     return conf
 
 conf = read_conf()
@@ -39,17 +39,6 @@ def h_other_join(bot, id, chan):
     has_aop = yield has_aop_in(bot, id, chan)
     if not has_aop: return
     yield delayed_op_in(bot, [id.nick], chan)
-
-@link('NAMES_SYNC')
-def h_names_sync(bot, chan, nicks, *args):
-    aop_nicks = []
-    for nick in nicks:
-        if nick.lower() == bot.nick.lower(): continue
-        id = yield identity.get_id(bot, nick)
-        has_aop = yield has_aop_in(bot, id, chan)
-        if not has_aop: continue
-        aop_nicks.append(nick)
-    yield delayed_op_in(bot, aop_nicks, chan)
 
 #===============================================================================
 @link('HELP')
@@ -78,7 +67,7 @@ def has_aop_in(bot, id, chan, ret):
         if '!' in op or '@' in op:
             # Match against a nick!user@host with wildcards.
             try:
-                op = re.compile(util.wc_to_re(mask), flags=re.I)
+                op = re.compile(util.wc_to_re(op), flags=re.I)
             except re.error:
                 continue
             if op.match(id_str):

@@ -31,8 +31,8 @@ def h_help_roll(bot, reply, args):
 #===============================================================================
 @link('!r', '!d')
 @modal.when_mode(None)
-def h_roll_abbrev(*args):
-    return h_roll(*args)
+def h_roll_abbrev(bot, id, target, args, full_msg):
+    return h_roll(bot, id, target, args, full_msg)
 
 @link('!roll', '!dice')
 def h_roll(bot, id, target, args, full_msg):

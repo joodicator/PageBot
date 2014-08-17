@@ -35,7 +35,7 @@ def clear_mode(chan):
 #-------------------------------------------------------------------------------
 # Return the mode active in the given channel, or None.
 def get_mode(chan):
-    return chan_mode.get(chan.lower())
+    return chan and chan_mode.get(chan.lower())
 
 #-------------------------------------------------------------------------------
 # An event handler decorated with @when_mode(M) (beneath any @link decorators)
