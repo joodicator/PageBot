@@ -79,6 +79,10 @@ def h_fto_msg(bot, id, target, msg):
     elif strip('I am mighty Agamemnon!') in strip(msg) \
     and strip('Legolambnon') not in strip(msg):
         reply('I am tasty Legolambnon!')
+
+    elif strip('I sailed to troy with the navy!') in strip(msg) \
+    and not re.search(r'taste great|spuds|gravy', sstrip(msg)):
+        reply('I taste great with spuds and gravy!')
     
     elif strip('I am King Agamemnon!') in strip(msg) \
     and strip('Legolambnon') not in strip(msg):
@@ -89,13 +93,17 @@ def h_fto_msg(bot, id, target, msg):
     and strip('gas mark five') not in strip(msg):
         reply('Roast me up at gas mark five!')
     
+    elif strip('All Achaeans bow to me!') in strip(msg) \
+    and strip('rosemary') not in strip(msg):
+        reply('I taste great with rosemary-hee!')
+
     elif strip('I command man-killer Achilles!') in strip(msg) \
     and strip('with some peas') not in strip(msg):
         reply('Why not have me with some peas?')
 
-    elif strip('All Achaeans bow to me!') in strip(msg) \
-    and strip('rosemary') not in strip(msg):
-        reply('I taste great with rosemary-hee!')
+    elif strip('I spill entrails of our Trojan foe!') in strip(msg) \
+    and not re.search(r'nice with|garlic|dont you know', sstrip(msg)):
+        reply("I'm nice with garlic, don't you know?")
 
     #---------------------------------------------------------------------------
     # 【MMD】With pleasant companions『Go!Go!Carlito!』【PV】
@@ -167,9 +175,11 @@ def h_fto_msg(bot, id, target, msg):
             if len(remaining) <= 1: break
 
             bot.activity = True
-            (_, (bot, id, target, msg)) = yield hold(bot, 'FTO_MSG')
-            if strip('Banana! Banana!') in strip(msg): return
+            while True:
+                _, (e_bot, e_id, e_target, msg) = yield hold(bot, 'FTO_MSG')
+                if e_target and e_target.lower() == target.lower(): break
             if time.clock() - start > 3600: return
+            if strip('Banana! Banana!') in strip(msg): return
 
         if remaining: reply('\2GIANT ASPARAGUS!')
 
@@ -192,7 +202,9 @@ def h_fto_msg(bot, id, target, msg):
         reply('I pray every single day...')
         start = time.clock()
         while time.clock() - start < 60:
-            (_, (bot, id, target, msg)) = yield hold(bot, 'FTO_MSG')
+            (_, (e_bot, e_id, e_target, msg)) = yield hold(bot, 'FTO_MSG')
+            if not e_target or e_target.lower() != target.lower():
+                continue
             if strip('And he prays!') in strip(msg):
                 return
             if re.search(r'[mn]y[ea]+', strip(msg)):
@@ -246,6 +258,71 @@ def h_fto_msg(bot, id, target, msg):
             reply(line)
             yield runtime.sleep(1)
 
+    #---------------------------------------------------------------------------
+    # The Fellowship of the Ring (2001) - The Council of Elrond
+    # https://www.youtube.com/watch?v=pxPGzj2L3n0
+    elif re.search(r'^(you have|and) my \S+'
+    '|(you have|and) my \S+( \S+)?$', sstrip(msg)):
+        global and_my_axe
+        try:
+            if time.time() < and_my_axe: return
+        except NameError: pass
+        and_my_axe = time.time() + 60
+
+        while time.time() < and_my_axe:
+            _, (e_bot, e_id, e_target, e_msg) = yield hold(bot, 'FTO_MSG')
+            if not e_target or e_target.lower() != target.lower():
+                continue
+            if re.search(r'^(and|you have) my \S+'
+            '|(and|you have) my \S+( \S+)?$', sstrip(e_msg)):
+                reply('AND MY AXE!')
+                break
+
+    #---------------------------------------------------------------------------
+    # Blackout Crew - Put A Donk On It
+    # https://www.youtube.com/watch?v=ckMvj1piK58
+    elif re.search('you know what you (wanna|want to) do with that( right)$',
+    sstrip(msg)) and not re.search(r'put a|banging|donk', sstrip(msg)):
+        reply('You wanna put a \2banging donk\2 on it!')
+
+    elif strip(msg) == strip('Bassline!'):
+        reply('Aw, wicked! Now put a donk on it!')
+
+    elif strip(msg) == strip('Electro!'):
+        reply("Ah thats sick that m8! Put a donk on it!")
+
+    elif strip(msg) == strip('Techno!'):
+        reply("Aw, now that is good! Put a donk on it!")
+
+    #---------------------------------------------------------------------------
+    # Excel Saga, Episode 3 - Nabeshin's "No Escape"
+    # https://www.youtube.com/watch?v=tORRPhqu1Co
+    elif strip('Where are we going, general?') in strip(msg) and \
+    not re.search(r'dont have|special (reason|raisin)', sstrip(msg)):
+        reply("Who cares? We don't have a special raisin!")
+
+    elif sstrip(msg).endswith(sstrip('Then why should we fly?')) and \
+    not re.search(r'its just for|direction|low budget movie', sstrip(msg)):
+        reply("It's just for the direction of low-budget movie.")
+
+    #---------------------------------------------------------------------------
+    # Repo! The Genetic Opera - Zydrate Anatomy
+    # https://www.youtube.com/watch?v=aVTAf4FAXaU
+    elif sstrip('in a little glass vial') in sstrip(msg) and \
+    len(re.findall(r'a little glass vial', sstrip(msg))) == 1:
+        reply('A little glass vial?')
+    
+    elif (sstrip('into the gun like a battery') in sstrip(msg) or \
+    sstrip('somewhere against your anatomy') in sstrip(msg)) and \
+    not re.search(r'\b([ah]{2,} [ah]{2,})\b', sstrip(msg)):
+        reply('Hah~ hah~')
+
+    elif (sstrip('ready for surgery') in sstrip(msg) or \
+    sstrip(msg).endswith(' surgery') and re.search(r'S\S+$', csstrip(msg)) and \
+    len(re.findall(r'\b[A-Z]\S+', msg)) < len(re.findall(r'\b[a-z]\S+', msg))) \
+    and len(re.findall(r'\bsurgery\b', sstrip(msg))) == 1:
+        reply('Surgery!')
+
 #===============================================================================
 @link('!nuke')
 def h_nuke(bot, id, target, message):
@@ -257,4 +334,13 @@ def strip(text):
     return cstrip(text.lower())
 
 def cstrip(text):
-    return re.sub(r'[^a-z]', '', text, flags=re.I)
+    return re.sub(r'[^a-zA-Z]', '', text)
+
+def sstrip(text):
+    return csstrip(text.lower())
+
+def csstrip(text):
+    text = re.sub(r'[^a-zA-Z\s]', '', text)
+    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r'^\s+|\s+$', '', text)
+    return text
