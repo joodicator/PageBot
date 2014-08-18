@@ -273,15 +273,15 @@ def h_fto_msg(bot, id, target, msg):
             _, (e_bot, e_id, e_target, e_msg) = yield hold(bot, 'FTO_MSG')
             if not e_target or e_target.lower() != target.lower():
                 continue
-            if re.search(r'^(and|you have) my \S+'
-            '|(and|you have) my \S+( \S+)?$', sstrip(e_msg)):
+            if re.search(r'^and( you have)? my \S+'
+            '|and( you have)? my \S+( \S+)?$', sstrip(e_msg)):
                 reply('AND MY AXE!')
                 break
 
     #---------------------------------------------------------------------------
     # Blackout Crew - Put A Donk On It
     # https://www.youtube.com/watch?v=ckMvj1piK58
-    elif re.search('you know what you (wanna|want to) do with that( right)$',
+    elif re.search('you know what you (wanna|want to) do with that( right)?$',
     sstrip(msg)) and not re.search(r'put a|banging|donk', sstrip(msg)):
         reply('You wanna put a \2banging donk\2 on it!')
 
@@ -312,8 +312,8 @@ def h_fto_msg(bot, id, target, msg):
     len(re.findall(r'a little glass vial', sstrip(msg))) == 1:
         reply('A little glass vial?')
     
-    elif (sstrip('into the gun like a battery') in sstrip(msg) or \
-    sstrip('somewhere against your anatomy') in sstrip(msg)) and \
+    elif (strip('into the gun like a battery') in strip(msg) or \
+    strip('somewhere against your anatomy') in strip(msg)) and \
     not re.search(r'\b([ah]{2,} [ah]{2,})\b', sstrip(msg)):
         reply('Hah~ hah~')
 
