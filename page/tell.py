@@ -306,9 +306,7 @@ def untell_last(bot, id, target, channel):
         last_msg = cancel_msgs[-1]
         state.msgs = [m for m in state.msgs if m is not last_msg]
         put_state(state)
-        msg = ('1 message (to "%s"; the most recent of %s such message%s)'
-            ' deleted.' % (last_msg.to_nick, len(cancel_msgs),
-            's' if len(cancel_msgs) > 1 else ''))
+        msg = '1 message to "%s" deleted.' % last_msg.to_nick
     else:
         msg = 'Error: you have no messages to cancel.'
     reply(bot, id, target, msg)
