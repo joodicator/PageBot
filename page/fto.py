@@ -265,11 +265,12 @@ def h_fto_msg(bot, id, target, msg):
     '|(you have|and) my \S+( \S+)?$', sstrip(msg)):
         global and_my_axe
         try:
-            if time.time() < and_my_axe: return
-        except NameError: pass
-        and_my_axe = time.time() + 60
+            if time.time() < and_my_axe.get(target.lower()): return
+        except NameError:
+            and_my_axe = dict()
+        and_my_axe[target.lower()] = time.time() + 60
 
-        while time.time() < and_my_axe:
+        while time.time() < and_my_axe[target.lower()]:
             _, (e_bot, e_id, e_target, e_msg) = yield hold(bot, 'FTO_MSG')
             if not e_target or e_target.lower() != target.lower():
                 continue
@@ -317,11 +318,31 @@ def h_fto_msg(bot, id, target, msg):
     not re.search(r'\b([ah]{2,} [ah]{2,})\b', sstrip(msg)):
         reply('Hah~ hah~')
 
-    elif (sstrip('ready for surgery') in sstrip(msg) or \
+    elif (sstrip(msg).endswith(sstrip('ready for surgery')) or \
     sstrip(msg).endswith(' surgery') and re.search(r'S\S+$', csstrip(msg)) and \
     len(re.findall(r'\b[A-Z]\S+', msg)) < len(re.findall(r'\b[a-z]\S+', msg))) \
     and len(re.findall(r'\bsurgery\b', sstrip(msg))) == 1:
         reply('Surgery!')
+
+    #---------------------------------------------------------------------------
+    # Azumanga Daioh, Episode 21 - Saataa Andaagii
+    # https://www.youtube.com/watch?v=b6swokLgCcU
+    elif re.search(r'sa+ta+ a+nda+gi+', sstrip(msg)):
+        global saataa_andaagii
+        try:
+            if time.time() < saataa_andaagii.get(target.lower()): return
+        except NameError:
+            saataa_andaagii = dict()
+        saataa_andaagii[target.lower()] = time.time() + 300
+
+        count = 1
+        while count < 3:
+            if time.time() > saataa_andaagii.get(target.lower()): break
+            _, (e_bot, e_id, e_target, e_msg) = yield hold(bot, 'FTO_MSG')
+            if e_target.lower() != target.lower(): continue
+            if re.search(r'sa+ta+ a+nda+gi+', sstrip(e_msg)): count += 1
+        else:
+            reply('\2Saataa andaagii!')
 
 #===============================================================================
 @link('!nuke')
