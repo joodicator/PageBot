@@ -348,6 +348,7 @@ def h_fto_msg(bot, id, target, msg):
                     _, (e_bot, e_id, e_target, msg) = yield hold(bot, 'FTO_MSG')
                     if time.time() > end_time: return
                 if re.search(r'\b(its clear)\b', sstrip(msg)): return
+                bot.activity = True
         else:
             reply('It takes you there~')
 
