@@ -4,9 +4,9 @@
 #
 #                        PLAY TO FIND OUT WHAT HAPPENS.
 #
+#   Yes, I'm talking to you, little buddy. Just go ahead and close that tab.
+#
 #===============================================================================
-
-
 
 
 
@@ -309,20 +309,47 @@ def h_fto_msg(bot, id, target, msg):
     #---------------------------------------------------------------------------
     # Repo! The Genetic Opera - Zydrate Anatomy
     # https://www.youtube.com/watch?v=aVTAf4FAXaU
-    elif sstrip('in a little glass vial') in sstrip(msg) and \
-    len(re.findall(r'a little glass vial', sstrip(msg))) == 1:
+    elif sstrip(msg).endswith(' a little glass vial') and \
+    len(re.findall(r'alittleglassvial', strip(msg))) == 1:
         reply('A little glass vial?')
     
-    elif (strip('into the gun like a battery') in strip(msg) or \
-    strip('somewhere against your anatomy') in strip(msg)) and \
-    not re.search(r'\b([ah]{2,} [ah]{2,})\b', sstrip(msg)):
+    elif (sstrip(msg).endswith(' into the gun like a battery') or \
+    re.search(r'against(your|my|his|her|their)anatomy$', strip(msg))) \
+    and not re.search(r'\b([ah]{2,} [ah]{2,})\b', sstrip(msg)):
         reply('Hah~ hah~')
 
-    elif (sstrip(msg).endswith(sstrip('ready for surgery')) or \
-    sstrip(msg).endswith(' surgery') and re.search(r'S\S+$', csstrip(msg)) and \
+    elif (sstrip(msg).endswith(' ready for surgery') or \
+    sstrip(msg).endswith(' surgery') and re.search(r' S\S+$', csstrip(msg)) and \
     len(re.findall(r'\b[A-Z]\S+', msg)) < len(re.findall(r'\b[a-z]\S+', msg))) \
     and len(re.findall(r'\bsurgery\b', sstrip(msg))) == 1:
         reply('Surgery!')
+
+    elif sstrip(msg).endswith(' addicted to the knife') and \
+    len(re.findall(r'addictedtotheknife', strip(msg))) == 1:
+        reply('Addicted to the knife?')
+
+    elif sstrip(msg).endswith(' a little help with the agony') and \
+    len(re.findall(r'agony', strip(msg))) == 1:
+        reply('Agony~')
+
+    elif re.search(r'\b(its clear)\b', sstrip(msg)):
+        end_time = time.time() + 300
+        remain = ["it's clear", "it's pure", "it's rare"]
+        while remain:
+            if strip('takes you there') in strip(msg): return
+            rstr = r'^.*?\b(%s)\b' % re.escape(sstrip(remain[0]))
+            sub_msg = re.sub(rstr, '', sstrip(msg))
+            if sub_msg != sstrip(msg):
+                del remain[0]
+                msg = sub_msg
+            else:
+                e_target = ''
+                while e_target.lower() != target.lower():
+                    _, (e_bot, e_id, e_target, msg) = yield hold(bot, 'FTO_MSG')
+                    if time.time() > end_time: return
+                if re.search(r'\b(its clear)\b', sstrip(msg)): return
+        else:
+            reply('It takes you there~')
 
     #---------------------------------------------------------------------------
     # Azumanga Daioh, Episode 21 - Saataa Andaagii
@@ -340,7 +367,9 @@ def h_fto_msg(bot, id, target, msg):
             if time.time() > saataa_andaagii.get(target.lower()): break
             _, (e_bot, e_id, e_target, e_msg) = yield hold(bot, 'FTO_MSG')
             if e_target.lower() != target.lower(): continue
-            if re.search(r'sa+ta+ a+nda+gi+', sstrip(e_msg)): count += 1
+            if not re.search(r'sa+ta+ a+nda+gi+', sstrip(e_msg)): continue
+            count += 1
+            bot.activity = True
         else:
             reply('\2Saataa andaagii!')
 
