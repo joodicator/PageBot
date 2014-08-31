@@ -314,7 +314,7 @@ def h_fto_msg(bot, id, target, msg):
         reply('A little glass vial?')
     
     elif (sstrip(msg).endswith(' into the gun like a battery') or \
-    re.search(r'against(your|my|his|her|their)anatomy$', strip(msg))) \
+    re.search(r'against(your|my|his|her|their|its)anatomy$', strip(msg))) \
     and not re.search(r'\b([ah]{2,} [ah]{2,})\b', sstrip(msg)):
         reply('Hah~ hah~')
 
