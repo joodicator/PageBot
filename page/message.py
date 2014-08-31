@@ -1,12 +1,38 @@
 from untwisted.magic import sign
 from util import LinkSet, ID
 from util import message_reply as reply
-import util
 from itertools import *
+import inspect
+import util
 import re
+
+import limit
+
+IGNORE_FILE = 'conf/ignore.txt'
 
 link, install, uninstall = LinkSet().triple()
 
+try:
+    with open(IGNORE_FILE) as file:
+        ignore_re = '|'.join(
+            '(%s)' % util.wc_to_re(line)
+            for raw_line in file for line in [raw_line.strip()] if line)
+        ignore_re = re.compile(ignore_re, re.I)
+except IOError:
+    ignore_re = None
+
+@link('XIRCLIB_EVENT')
+def h_xirclib_msg(event, bot, source, *args):
+    if ignore_re and isinstance(source, tuple) \
+    and ignore_re.match('%s!%s@%s' % source):
+        return    
+    yield sign(event, bot, source, *args)
+
+@link('COMMAND')
+def h_command(bot, id, target, event, body, message):
+    if limit.mark_activity(bot, id, notify=target):
+        return
+    yield sign(event, bot, id, target, body, message)
 
 @link('JOIN')
 def join(bot, source, chans, *args):
@@ -93,10 +119,10 @@ def message(bot, id, target, msg):
         if match and match.group('addr').lower() == bot.nick.lower(): break
 
         return
+    
     event = '!' + match.group('head').lower()
     body = match.group('body').strip()
     yield sign('COMMAND', bot, id, target, event, body, msg)
-    yield sign(event, bot, id, target, body, msg)
     bot.activity = True
 
     from untwisted.usual import Stop

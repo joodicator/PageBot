@@ -51,6 +51,7 @@ import message
 import channel
 import runtime
 import util
+import limit
 
 link, install, uninstall = util.LinkSet().triple()
 
@@ -59,7 +60,9 @@ link, install, uninstall = util.LinkSet().triple()
 @not_quiet()
 def h_message(bot, id, target, msg):
     if not target: return
+    if limit.is_ignored(id): return
     yield sign('FTO_MSG', bot, id, target, msg)
+    if bot.activity: limit.mark_activity(bot, id)
 
 #===============================================================================
 @link('FTO_MSG')
