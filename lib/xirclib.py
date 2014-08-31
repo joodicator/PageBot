@@ -25,8 +25,8 @@ def install(obj):
     obj.link(DATA, append)
     obj.link(BUFFER, shrug)
     obj.link(FOUND, main)
-    obj.link('PRIVMSG', extract_ctcp) 
-    obj.link('DCC', patch) 
+    #obj.link('PRIVMSG', extract_ctcp) 
+    #obj.link('DCC', patch) 
 
 def main(work, data):
     field    = re.match(RFC_REG, data)
@@ -38,7 +38,7 @@ def main(work, data):
     command  = field.group('command').upper()
     argument = extract_argument(field.group('argument'))
 
-    yield sign(command, work, prefix, *argument)
+    yield sign('XIRCLIB_EVENT', command, work, prefix, *argument)
 
 def extract_prefix(prefix):
     field = re.match(PREFIX_REG, empty(prefix))
@@ -51,6 +51,7 @@ def extract_prefix(prefix):
 def extract_argument(argument):
     return tuple(re.findall(ARGUMENT_REG, empty(argument)))
 
+'''
 def extract_ctcp(*args):
     DELIM = '\001'
     msg = args[-1].lstrip(':') 
@@ -65,3 +66,4 @@ def extract_ctcp(*args):
 
 def patch(*args):
     yield sign('DCC %s' % args[5],  *(args[:5] + args[6:]))
+'''

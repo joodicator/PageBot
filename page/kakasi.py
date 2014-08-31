@@ -4,6 +4,7 @@ import re
 from channel import not_quiet
 import message
 import util
+import limit
 
 import kakasi_lib
 
@@ -14,6 +15,8 @@ link, install, uninstall = util.LinkSet().triple()
 @not_quiet()
 def h_message(bot, id, target, msg):
     if kakasi_lib.is_ja(msg):
+        if limit.mark_activity(bot, id):
+            return
         kakasi(bot, id, target, msg, target is not None)
 
 #===============================================================================
