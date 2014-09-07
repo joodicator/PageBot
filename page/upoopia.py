@@ -41,11 +41,6 @@ def reload(prev):
 
 #-------------------------------------------------------------------------------
 # !upoopia
-@link('HELP')
-def h_help(bot, reply, *args):
-    reply('upoopia #CHANNEL [blue|red]',
-    'Challenge #CHANNEL to a game of Upoopia.')
-
 @link(('HELP', 'upoopia'))
 def h_help_upoopia(bot, reply, *args):
     reply('upoopia #CHANNEL [b[lue]|r[ed]]',
