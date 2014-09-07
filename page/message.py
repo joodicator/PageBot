@@ -17,7 +17,7 @@ try:
         ignore_re = '|'.join(
             '(%s)' % util.wc_to_re(line)
             for raw_line in file for line in [raw_line.strip()] if line)
-        ignore_re = re.compile(ignore_re, re.I)
+        ignore_re = re.compile(ignore_re, re.I) if ignore_re else None
 except IOError:
     ignore_re = None
 
