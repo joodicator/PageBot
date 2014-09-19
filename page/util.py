@@ -221,7 +221,7 @@ def mfun(link, event_name):
 def msub(link, event_name):
     def msub_dec(fun):
         link(event_name)(fun)
-        return lambda *args: sub(fun(*args))
+        return lambda *args, **kwds: sub(fun(*args, **kwds))
     return msub_dec
 
 #===============================================================================

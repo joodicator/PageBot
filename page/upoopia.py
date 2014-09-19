@@ -11,6 +11,7 @@ import util
 import modal
 import channel
 import chan_link
+import runtime
 
 link, install, uninstall = util.LinkSet().triple()
 install, uninstall = util.depend(install, uninstall,
@@ -127,9 +128,11 @@ def h_upoopia(bot, id, chan, args, full_msg):
             del challenges[opp_chan.lower()]
             yield util.sub(start_game(bot, chan, opp_chan, colour, opp_colour))
             return
-    elif chan_link.is_linked(chan, opp_chan):
+    elif chan_link.is_linked(chan, opp_chan) \
+    and modal.get_mode(opp_chan) in (None, 'upoopia'):
         # Otherwise, if the opponent channel is still linked and does not
         # have any pending challenges, also immediately start the game.
+        modal.set_mode(opp_chan, 'upoopia')
         yield util.sub(start_game(bot, chan, opp_chan, colour, None))
         return
 
@@ -162,7 +165,7 @@ def start_game(bot, chan1, chan2, colour1, colour2):
         black_name = chan1 if colour1 == BLACK else chan2,
         white_name = chan1 if colour1 == WHITE else chan2)
     games[chan1] = games[chan2] = game
-    yield util.sub(show_board(bot, game, priority=BLACK))
+    yield show_board(bot, game, priority=BLACK)
 
 #-------------------------------------------------------------------------------
 # !move
@@ -214,7 +217,7 @@ def h_move(bot, id, chan, args, full_msg, **kwds):
     yield util.sub(end_move(bot, game))
 
 def end_move(bot, game):
-    yield util.sub(show_board(bot, game, priority=game.winner or game.player))
+    yield show_board(bot, game, priority=game.winner or game.player)
     if game.winner:
         chan1, chan2 = game.names.values()
         del games[chan1]
@@ -295,9 +298,11 @@ def h_board(bot, id, chan, args, full_msg):
     if chan.lower() not in games: return
     game = games[chan.lower()]
     colour = WHITE if game.names[WHITE].lower() == chan.lower() else BLACK
-    yield util.sub(show_board(bot, game, priority=colour))
+    yield show_board(bot, game, priority=colour)
 
+@util.msub(link, 'upoopia.show_board')
 def show_board(bot, game, priority=None):
+    yield runtime.sleep(0)
     lines = { BLACK:[], WHITE:[] }
     for colour in BLACK, WHITE:
         chan = game.names[colour]
