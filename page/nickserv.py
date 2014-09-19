@@ -75,7 +75,7 @@ def statuses(bot, nicks, ret):
         batch_nicks = ' '.join(nicks[i:i+16])
         bot.send_msg(conf('nickserv').nick, 'STATUS %s' % batch_nicks)
 
-    timeout = yield runtime.timeout(5 + len(nicks)/10)
+    timeout = yield runtime.timeout(10 + len(nicks)/10)
     result, remain = dict(), set(n.lower() for n in nicks)
     while remain:
         event, args = yield hold(bot, 'NICKSERV_NOTICE', timeout)
