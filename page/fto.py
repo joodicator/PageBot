@@ -379,7 +379,7 @@ def h_fto_msg(bot, id, target, msg):
 
 #===============================================================================
 @link('!nuke')
-def h_nuke(bot, id, target, message):
+def h_nuke(bot, id, target, message, full_msg):
     if not target: return
     bot.send_cmd('KICK %s %s :Nuclear launch detected.' % (target, id.nick))
 
