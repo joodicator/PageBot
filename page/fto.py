@@ -379,9 +379,46 @@ def h_fto_msg(bot, id, target, msg):
 
 #===============================================================================
 @link('!nuke')
-def h_nuke(bot, id, target, message, full_msg):
+def h_nuke(bot, id, target, args, full_msg):
     if not target: return
-    bot.send_cmd('KICK %s %s :Nuclear launch detected.' % (target, id.nick))
+    if not channel.has_op_in(bot, bot.nick, target, 'h'): return
+
+    global nuclear_launch
+    target_id = (target.lower(), ('%s!%s@%s' % id).lower())
+    try:
+        if target_id in nuclear_launch: return
+    except NameError:
+        nuclear_launch = set()
+    nuclear_launch.add(target_id)
+
+    message.reply(bot, id, target, 'Nuclear launch detected.', prefix=False)
+    yield runtime.sleep(15)
+    bot.send_cmd('KICK %s %s :*mushroom cloud*' % (target, id.nick))
+    
+    ERR_CHANOPRIVSNEEDED = '482'
+    UNREAL_ERR_CANNOTDOCOMMAND = '972'
+    timeout = yield runtime.timeout(10)
+    while True:
+        event, args = yield hold(bot, timeout,
+            UNREAL_ERR_CANNOTDOCOMMAND, ERR_CHANOPRIVSNEEDED)
+        if event == UNREAL_ERR_CANNOTDOCOMMAND:
+            e_bot, e_src, e_tgt, e_cmd, e_args = args
+            if e_cmd.upper() != 'KICK': continue
+            message.reply(bot, id, target,
+                'Nuclear launch failed: "%s".' % e_args, prefix=False)
+        elif event == ERR_CHANOPRIVSNEEDED:
+            e_bot, e_src, e_tgt, e_chan, e_args = args
+            if e_chan.lower() != target.lower(): continue
+            message.reply(bot, id, target,
+                'Nuclear launch failed: "%s".' % e_args, prefix=False)
+        elif event == timeout:
+            message.reply(bot, id, target,
+                'Nuclear launch failed.', prefix=False)
+        else:
+            continue
+        break
+
+    nuclear_launch.discard(target_id)
 
 #===============================================================================
 def strip(text):
