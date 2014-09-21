@@ -212,6 +212,28 @@ def prefix_nick(bot, nick, chan):
         if pre_m in umodes: return pre_c + nick
     return nick
 
+# Returns True if (according to current records) "nick" has a channel mode
+# matching "op", or greater in power than "op", according to the ISUPPORT PREFIX
+# record of the server (and some additional heuristics); or otherwise False.
+def has_op_in(bot, nick, chan, op='o'):
+    pre_ms, pre_cs = bot.isupport['PREFIX']
+    umodes = umode_channels[chan.lower()].get(nick.lower(), '')
+
+    if op in pre_ms:
+        return any(
+            pre_ms.index(um) <= pre_ms.index(op)
+            for um in umodes)
+
+    alt_pre_ms = 'qohv'
+    if op in alt_pre_ms:
+        op_ix = alt_pre_ms.index(op)
+        return any(
+            pre_ms.index(um) <= pre_ms.index(om)
+            for om in alt_pre_ms[:op_ix] if om in pre_ms
+            for um in umodes)
+
+    return False
+
 #===============================================================================
 # Updating channel data.
 
