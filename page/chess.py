@@ -16,7 +16,6 @@ from untwisted.magic import sign
 import util
 import debug
 import runtime
-import bridge
 from util import NotInstalled, AlreadyInstalled
 
 SOCKET_ADDRESS = 'state/chess'
