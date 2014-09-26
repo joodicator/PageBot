@@ -1,4 +1,5 @@
 from importlib import import_module
+from itertools import *
 from socket import *
 import time
 import sys
@@ -31,8 +32,7 @@ default_conf = {
     'plugins':       [],
     'timeout':       180, # 180s = 3m
     'bang_cmd':      True,
-    'flood_seconds': 9,
-    'flood_lines':   9
+    'flood_limits':  [(40,20), (0.5,1)]
 }
 
 class AmeliaBot(Mac):
@@ -121,13 +121,18 @@ class AmeliaBot(Mac):
         self.activity = True
 
     def send_line(self, line):
+        flood_limits = self.conf['flood_limits']
         now = time.time()
-        cut = now - self.conf['flood_seconds']
+        cut = now - max(s for (s,l) in flood_limits)
         while self.send_times and self.send_times[0] < cut:
             del self.send_times[0]
 
-        if len(self.send_times) > self.conf['flood_lines']:
-            self.flood_active = True
+        for flood_seconds, flood_lines in flood_limits:
+            cut = now - flood_seconds
+            times = dropwhile(lambda t: t < cut, self.send_times)
+            if len(list(times)) >= flood_lines:
+                self.flood_active = True
+                break
 
         if self.flood_active:
             self.flood_buffer.append(line)
