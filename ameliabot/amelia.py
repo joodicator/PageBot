@@ -1,12 +1,13 @@
 from importlib import import_module
 from socket import *
+import time
 import sys
 import re
 
 from plugins.standard import head
 from untwisted.core import gear
 from untwisted.network import Mac
-from untwisted.event import CLOSE
+from untwisted.event import CLOSE, TICK
 from untwisted.usual import Kill
 import utils.misc
 import stdlog as std
@@ -20,22 +21,21 @@ class NotInstalled(Exception): pass
 class AlreadyInstalled(Exception): pass
 
 default_conf = {
-    'server':       'irc.freenode.net',
-    'port':         6667,
-    'nick':         'ameliabot',
-    'user':         'ameliabot',
-    'name':         'ameliabot',
-    'host':         '0',
-    'channels':     ['#untwisted'],
-    'plugins':      [],
-    'timeout':      180, # 180s = 3m
-    'bang_cmd':     True
+    'server':        'irc.freenode.net',
+    'port':          6667,
+    'nick':          'ameliabot',
+    'user':          'ameliabot',
+    'name':          'ameliabot',
+    'host':          '0',
+    'channels':      ['#untwisted'],
+    'plugins':       [],
+    'timeout':       180, # 180s = 3m
+    'bang_cmd':      True,
+    'flood_seconds': 9,
+    'flood_lines':   9
 }
 
 class AmeliaBot(Mac):
-    send_cmd = utils.misc.send_cmd
-    send_msg = utils.misc.send_msg
-
     def __init__(self, conf=None):
         # Load configuration
         self.conf = default_conf.copy()
@@ -54,12 +54,18 @@ class AmeliaBot(Mac):
             'PREFIX':    ('ohv','@%+'),
             'CHANMODES': ('be','k','l','') }
 
+        # Initialise flood-protection system
+        self.send_times = []
+        self.flood_buffer = []
+        self.flood_active = False
+
         # Initialise events
         std.install(self)
         xirclib.install(self)
         self.link(ERR_NICKNAMEINUSE,    self.h_err_nicknameinuse)
         self.link(RPL_WELCOME,          self.h_rpl_welcome)
         self.link(RPL_ISUPPORT,         self.h_rpl_isupport)
+        self.link(TICK,                 self.h_tick)
         
         # Load plugins
         self.conf['plugins'][:0] = ['plugins.standard.head']
@@ -104,6 +110,39 @@ class AmeliaBot(Mac):
 
     def mainloop(self):
         return gear.mainloop()
+
+    def send_msg(self, target, msg, **kwds):
+        self.send_line('PRIVMSG %s :%s' % (target, msg))
+        self.drive('SEND_MSG', self, target, msg, kwds)
+        self.activity = True
+    
+    def send_cmd(self, cmd):
+        self.send_line(cmd)
+        self.activity = True
+
+    def send_line(self, line):
+        now = time.time()
+        cut = now - self.conf['flood_seconds']
+        while self.send_times and self.send_times[0] < cut:
+            del self.send_times[0]
+
+        if len(self.send_times) > self.conf['flood_lines']:
+            self.flood_active = True
+
+        if self.flood_active:
+            self.flood_buffer.append(line)
+        else:
+            self.send_times.append(now)
+            self.dump('%s\r\n' % line[:510])
+
+    def h_tick(self, bot):
+        if not self.flood_active:
+            return
+        lines = self.flood_buffer
+        self.flood_buffer = []
+        self.flood_active = False
+        for line in lines:
+            self.send_line(line)
 
 if __name__ == '__main__':
     gear = AmeliaBot()
