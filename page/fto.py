@@ -224,8 +224,9 @@ def h_fto_msg(bot, id, target, msg):
         reply("It's a drag, it's a bore, it's really such a pity"
         " to be looking at the board, not looking at the city!")
 
-    elif re.search(r'you(ve)?seen?onecrowdedpollutedstinking?town', strip(msg)):
-        reply('Tea girls, warm and sweet (warm! sweet!),'
+    elif re.search(r'(ya|you(ve)?)seen?onecrowdedpollutedstinking?town',
+    strip(msg)):
+        reply('Tea, girls, warm and sweet (warm! sweet!),'
         ' some are set up in the Somerset Maugham suite!')
 
     elif (strip("And if you're lucky then the god's a she") in strip(msg) 
@@ -411,9 +412,9 @@ def h_nuke(bot, id, target, args, full_msg):
             if e_chan.lower() != target.lower(): continue
             message.reply(bot, id, target,
                 'Nuclear launch failed: "%s".' % e_args, prefix=False)
-        elif event == timeout:
-            message.reply(bot, id, target,
-                'Nuclear launch failed.', prefix=False)
+#        elif event == timeout:
+#            message.reply(bot, id, target,
+#                'Nuclear launch failed.', prefix=False)
         else:
             continue
         break
