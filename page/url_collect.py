@@ -8,7 +8,9 @@ import util
 #==============================================================================#
 link, install, uninstall = util.LinkSet().triple()
 
-URL_RE = re.compile(r'(https?://.+?)[.,;:!?>)}\]]?(?:\s|[\x01-\x1f]|$)', re.I)
+URL_RE = re.compile(
+    r'<(https?://[^>]+)>'
+    r'|(https?://.+?)[.,;:!?>)}\]]*(?:\s|[\x01-\x1f]|$)', re.I)
 HISTORY_SIZE = 12 # To preserve channel privacy, do not make this too large.
 
 URL_PART_RE = re.compile(
@@ -53,6 +55,7 @@ def examine_message(bot, message, channel, id=None):
 
 def extract_urls(message):
     urls = re.findall(URL_RE, message)
+    urls = map(lambda u: ''.join(u), urls)
     if re.search(r'NSFW', message, re.I):
         urls = map(lambda u: ('NSFW',u), urls)
     return urls    
