@@ -78,7 +78,7 @@ def roll_str_int(dice, sides, add):
     rint = sum(rolls) + add
     failed = (dice,sides) == (2,6) and rint < 7
     rstr = '%s%s%s' % (
-        ('\304\2%2\2\3' if failed else '\2%s\2') % rint,
+        ('\00304\2%s\2\3' if failed else '\2%s\2') % rint,
         '=%s' % '+'.join(map(str, rolls)) if add or dice>1 else '',
         '(%+d)' % add if add else '')
     return (rstr, rint)
