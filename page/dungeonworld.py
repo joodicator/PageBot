@@ -56,7 +56,7 @@ def h_missed_rolls(bot, id, target, args, full_msg):
     if rolls_text:
         time = datetime.now().strftime('%Y-%m-%d %H:%M')
         rolls_url = pastebin.post(
-            rolls_text,
+            strip_irc(rolls_text),
             paste_expire = pastebin.E_1MONTH,
             paste_name   = '%s %s Missed Rolls %s' % (bot.nick, target, time))
         reply_msg += ' Full list: <%s>.' % rolls_url
@@ -153,3 +153,7 @@ def h_dice_rolls(bot, id, target, rolls, result_msg):
             tuple(id),
             result_msg
         ), file=file)
+
+#===============================================================================
+def strip_irc(str):
+    return re.sub(r'[\02\31\22\15]|\03\d{,2}(,\d{1,2})?', '', str)
