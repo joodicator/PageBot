@@ -76,8 +76,9 @@ def h_roll(bot, id, target, args, full_msg):
 def roll_str_int(dice, sides, add):
     rolls = roll_list(dice, sides)
     rint = sum(rolls) + add
+    failed = (dice,sides) == (2,6) and rint < 7
     rstr = '%s%s%s' % (
-        '\2%s\2' % rint,
+        ('\304\2%2\2\3' if failed else '\2%s\2') % rint,
         '=%s' % '+'.join(map(str, rolls)) if add or dice>1 else '',
         '(%+d)' % add if add else '')
     return (rstr, rint)
