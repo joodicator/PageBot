@@ -39,7 +39,7 @@ def convert_report(str):
 #-------------------------------------------------------------------------------
 # Returns (from_value, to_value, from_unit, to_unit)
 def convert(str):
-    x_re = r'((\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?)'
+    x_re = r'(-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?)'
 
     m = re.match(r'(?i)(?!%s)(?P<u1>.*?)(?P<x>%s)(\s+to\s+)?(?P<u2>.+)'
             % (x_re, x_re), str) or \

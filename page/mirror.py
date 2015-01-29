@@ -88,7 +88,8 @@ def h_url_collect_urls(bot, urls, chan, id, orig_msg):
         mirror_url = get_mirror_url(url, chan)
         if not mirror_url: continue
 
-        msg = '%s copied to <%s>.' % (url, mirror_url)
+        nsfw_str = '\2NSFW:\2 ' if is_nsfw else ''
+        msg = '%s%s copied to <%s>.' % (nsfw_str, url, mirror_url)
         message.reply(bot, id, chan, msg, prefix=False)
         url_collect.history[chan].append([nsfw_url(mirror_url, is_nsfw)])
         delete_indices.append(index)
@@ -105,7 +106,7 @@ def h_url_collect_urls(bot, urls, chan, id, orig_msg):
 # ('NSFW',url) -> (url,True); url -> (url,False)
 def url_nsfw(spec):
     return (spec[1],True) \
-        if type(spec) is tuple and url[0] == 'NSFW' \
+        if type(spec) is tuple and spec[0] == 'NSFW' \
       else (spec, False)
 
 # (url,True) -> ('NSFW',url); (url,False) -> url
