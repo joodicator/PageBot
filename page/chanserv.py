@@ -28,7 +28,7 @@ def evict_chanserv(bot, chan):
             evict_channels = re.findall(r'\S+', file.read())
     except IOError:
         return
-    if chan not in evict_channels: return
+    if chan not in map(str.lower, evict_channels): return
 
     names = map(str.lower, channel.track_channels[chan])
     if 'ChanServ'.lower() not in names: return

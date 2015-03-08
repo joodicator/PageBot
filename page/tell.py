@@ -173,22 +173,23 @@ def h_help_tell_short(bot, reply, args):
     reply('tell NICK MESSAGE',
     'When NICK is next seen in this channel, MESSAGE will be delivered to them.')
 
-@link(('HELP', 'tell'))
+@link(('HELP', 'tell'), ('HELP', 'page'))
 def h_help_tell(bot, reply, args):
     reply('tell NICK MESSAGE')
     reply('tell NICK[, NICK[, ...]]: MESSAGE')
     reply('',
     'Leaves a message for the given NICK, or for each of the listed NICKs,'
-    ' so that it will be delivered to them when next seen in this channel.',
+    ' so that it will be delivered to them when next seen in this channel.'
+    ' "page" may be used as a synonym for "tell".',
     'If NICK contains any occurrence of ! or @, it will be matched against'
-    ' the full NICK!USER@HOST of the recipient, instead of just their nick.'
+    ' the full NICK!USER@HOST of the recipient instead of just their nick.'
     ' If NICK contains the wildcard characters * or ?, these will match any'
     ' sequence of 0 or more characters, or exactly 1 character, respectively.',
     'Alternatively, if NICK contains the character $, it will be interpreted'
-    ' as a Python 2 regular expression using re.match() semantics.'
+    ' as a Python 2 regular expression using re.match() semantics'
     ' (see: http://docs.python.org/2/library/re.html).')
 
-@link('!tell')
+@link('!tell', '!page')
 def h_tell(bot, id, target, args, full_msg):
     # Secretly, admins may prepend the arguments with the target channel.
     match = re.match(r'(#\S+)\s+(.*)', args)
@@ -267,14 +268,15 @@ def h_help_untell_short(bot, reply, args):
     reply('untell [NICK ...]',
     'Cancels your last "tell" message, or all messages to given NICKs.')
 
-@link(('HELP', 'untell'))
+@link(('HELP', 'untell'), ('HELP', 'unpage'))
 def h_help_untell(bot, reply, args):
     reply('untell [NICK[, NICK[, ...]]]',
     'Cancels all undelivered messages sent using the "tell" command to any of'
     ' the listed NICKs, by any user with your hostmask; or, if no NICK is'
-    ' given, cancels your single most recent message.')
+    ' given, cancels your single most recent message. "unpage" may be used'
+    ' as a synonym for "untell".')
 
-@link('!untell')
+@link('!untell', '!unpage')
 def h_untell(bot, id, target, args, full_msg):
     # Secretly, admins may prepend the arguments with the target channel.
     match = re.match(r'(#\S+)\s+(.*)', args)
@@ -430,7 +432,7 @@ def h_undismiss(bot, id, chan, query, *args):
     reply(bot, id, chan, msg)
 
 #==============================================================================#
-@link('!tell?')
+@link('!tell?', '!page?')
 @admin
 def h_tell_list(bot, id, target, args, full_msg):
     output = lambda msg: reply(bot, id, target, msg, prefix=False)
@@ -456,7 +458,7 @@ def h_tell_list(bot, id, target, args, full_msg):
     output('\2End of List')
 
 #==============================================================================#
-@link('!tell+')
+@link('!tell+', '!page+')
 @admin
 def h_tell_add(bot, id, target, args, full_msg):
     args = [a.strip() for a in args.split(',', 4)]
@@ -479,7 +481,7 @@ def h_tell_add(bot, id, target, args, full_msg):
     reply(bot, id, target, 'Done.')
 
 #==============================================================================#
-@link('!tell-')
+@link('!tell-', '!page-')
 @admin
 def h_tell_remove(bot, id, target, args, full_msg):
     state = get_state()
@@ -499,14 +501,14 @@ def h_tell_remove(bot, id, target, args, full_msg):
     reply(bot, id, target, 'Done.')
 
 #==============================================================================#
-@link('!tell-clear')
+@link('!tell-clear', '!page-clear')
 @admin
 def h_tell_clear(bot, id, target, args, full_msg):
     put_state(State())
     reply(bot, id, target, 'Done.')
 
 #==============================================================================#
-@link('!tell-undo')
+@link('!tell-undo', '!page-undo')
 @admin
 def h_tell_undo(bot, id, target, args, full_msg):
     try:
@@ -517,7 +519,7 @@ def h_tell_undo(bot, id, target, args, full_msg):
         reply(bot, id, target, 'Done.')
 
 #==============================================================================#
-@link('!tell-redo')
+@link('!tell-redo', '!page-redo')
 @admin
 def h_tell_undo(bot, id, target, args, full_msg):
     try:
