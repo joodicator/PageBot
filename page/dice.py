@@ -15,25 +15,31 @@ MAX_ROLL = 99, 9999, 99999999
 #===============================================================================
 @link('HELP*')
 def h_help(bot, reply, args):
-    reply('roll [MdN[+K|-K] ...]',
-    'Simulates the rolling of dice.')
+    reply('roll MdN[+K|-K]', 'Simulates the rolling of dice.')
 
 #===============================================================================
 @link(('HELP', 'roll'), ('HELP', 'r'))
 def h_help_roll(bot, reply, args):
-    reply('roll ... MdN[+K|-K] ...',
-    'Simulates one or more dice rolls. '
-    'A roll is specified as "MdN", "MdN+K", or "MdN-K", where M is the number'
-    ' of dice, N is the number of sides of each die, and K or -K is an integer'
-    ' added to the result. '
-    'Rolls may be annotated with other text, which is repeated in the results. '
-    'The shorthand "!r" may be used instead of "!roll".')
-    reply('roll {[WEIGHT1:]ITEM1, [WEIGHT2:]ITEM2, ...} ...',
-    'For each comma-separated list of items enclosed in curly braces, chooses'
-    ' one item at random and replaces the list with that item. Items are'
-    ' selected with probability proportional to their WEIGHT, which can be'
-    ' specified as a positive number followed by a colon before the item, or'
-    ' otherwise defaults to 1.')
+    if args and int(args) == 2:
+        reply('roll ... MdN[+K|-K] ...',
+        'Simulates one or more dice rolls. A roll is specified as "MdN",'
+        ' "MdN+K", or "MdN-K", where M is the number of dice, N is the number'
+        ' of sides of each die, and K or -K is an integer added to the result.'
+        ' Rolls may be annotated with other text, which is repeated in the'
+        ' result. The shorthand "!r" may be used instead of "!roll".')
+        reply('roll {[WEIGHT1:]ITEM1, [WEIGHT2:]ITEM2, ...} ...',
+        'For each comma-separated list of items enclosed in curly braces,'
+        ' chooses one item at random and replaces the list with that item.'
+        ' Items are selected with probability proportional to their WEIGHT,'
+        ' which can be specified as a positive number followed by a colon'
+        ' before the item, or otherwise defaults to 1.')
+    else:
+        reply('roll MdN\2 or \2!roll MdN+K\2 or \2!roll MdN-K',
+        'Simulates the rolling of M dice, each of which has N sides, giving'
+        ' the sum of the individual results. Optionally, adds (for MdN+K) or'
+        ' subtracts (for MdN-K) a value of K to or from the result. Example:'
+        ' "!roll 2d6+1". For advanced features, see \2!help roll 2\2. See also:'
+        ' \2!help missed-rolls\2.')
 
 #===============================================================================
 @link('!r', '!d')

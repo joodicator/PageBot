@@ -43,7 +43,7 @@ install, uninstall = util.depend(install, uninstall,
 identity.add_credentials('tell.Broose',
     ('nickserv',   'Broose'),
     ('access',     'Broose'),
-    ('prev_hosts', 2))
+    ('prev_hosts', 3))
 
 #==============================================================================#
 # Memory-cached plugin state.
@@ -175,20 +175,27 @@ def h_help_tell_short(bot, reply, args):
 
 @link(('HELP', 'tell'), ('HELP', 'page'))
 def h_help_tell(bot, reply, args):
-    reply('tell NICK MESSAGE')
-    reply('tell NICK[, NICK[, ...]]: MESSAGE')
-    reply('',
-    'Leaves a message for the given NICK, or for each of the listed NICKs,'
-    ' so that it will be delivered to them when next seen in this channel.'
-    ' "page" may be used as a synonym for "tell".',
-    'If NICK contains any occurrence of ! or @, it will be matched against'
-    ' the full NICK!USER@HOST of the recipient instead of just their nick.'
-    ' If NICK contains the wildcard characters * or ?, these will match any'
-    ' sequence of 0 or more characters, or exactly 1 character, respectively.',
-    'Alternatively, if NICK contains the character $, it will be interpreted'
-    ' as a Python 2 regular expression using re.match() semantics'
-    ' (see: http://docs.python.org/2/library/re.html).')
+    if args and int(args) == 2:
+        reply('tell NICK MESSAGE\2 or \2tell NICK[, NICK[, ...]]: MESSAGE',
+        'Leaves a message for the given NICK, or for each of the listed NICKs,'
+        ' so that it will be delivered to them when next seen in this channel.'
+        ' \2!page\2 may be used as a synonym for \2!tell\2.',
+        'If NICK contains any occurrence of ! or @, it will be matched against'
+        ' the full NICK!USER@HOST of the recipient instead of just their nick.'
+        ' If NICK contains the wildcard characters * or ?, these will match any'
+        ' sequence of 0 or more characters, or exactly 1 character,'
+        ' respectively.',
+        'Alternatively, if NICK contains the character $, it will be'
+        ' interpreted as a Python 2 regular expression using re.match()'
+        ' semantics (see: http://docs.python.org/2/library/re.html).')
+    else:
+        reply('tell NICK MESSAGE',
+        'Leaves a message for NICK so that it will be delivered to them when'
+        ' next seen in this channel. Example: "!tell alice Hello.". For'
+        ' advanced features, see \2!help tell 2\2. See also: \2!help untell\2'
+        ' and \2!help dismiss\2.')
 
+#-------------------------------------------------------------------------------
 @link('!tell', '!page')
 def h_tell(bot, id, target, args, full_msg):
     # Secretly, admins may prepend the arguments with the target channel.
@@ -273,8 +280,8 @@ def h_help_untell(bot, reply, args):
     reply('untell [NICK[, NICK[, ...]]]',
     'Cancels all undelivered messages sent using the "tell" command to any of'
     ' the listed NICKs, by any user with your hostmask; or, if no NICK is'
-    ' given, cancels your single most recent message. "unpage" may be used'
-    ' as a synonym for "untell".')
+    ' given, cancels your single most recent message. \2!unpage\2 may be used'
+    ' as a synonym for \2!untell\2.')
 
 @link('!untell', '!unpage')
 def h_untell(bot, id, target, args, full_msg):
@@ -351,15 +358,22 @@ def h_help_dismiss_short(bot, reply, args):
 
 @link(('HELP', 'dismiss'))
 def h_help_dismiss(bot, reply, args):
-    reply('dismiss [NICK] [!dismiss [NICK] ...]',
-    'If NICK is given, dismisses the most recent message left for you by NICK,'
-    ' preventing it from being delivered; otherwise, dismisses the most recent'
-    ' message left by anybody. Messages may be recovered using "undismiss".'
-    ' Up to 3 additional !dismiss commands may be given on the same line.',
-    'NICK may be an IRC nick or a NICK!USER@HOST, may contain the wildcard'
-    ' characters * and ?, and may be a Python 2 regular expression containing'
-    ' the character $, as specified in "help tell"; in which case, the most'
-    ' recent matching message is dismissed.')
+    if args and int(args) == 2:
+        reply('dismiss [NICK] [!dismiss [NICK] ...]',
+        'If NICK is given, dismisses the most recent message left for you by NICK,'
+        ' preventing it from being delivered; otherwise, dismisses the most recent'
+        ' message left by anybody. Messages may be recovered using \2!undismiss\2.'
+        ' Up to 3 additional !dismiss commands may be given on the same line.',
+        'NICK may be an IRC nick or a NICK!USER@HOST, may contain the wildcard'
+        ' characters * and ?, and may be a Python 2 regular expression containing'
+        ' the character $, as specified in \2!help tell 2\2; in which case, the most'
+        ' recent matching message is dismissed.')
+    else:
+        reply('dismiss\2 or \2!dismiss NICK',
+        'Dismisses without showing it the most recent message left for you via'
+        ' the \2!tell\2 command. If NICK is given, dismisses the most recent'
+        ' message left by that nick. For advanced features, see'
+        ' \2!help dismiss 2\2. See also: \2!help undismiss\2.')
 
 @link('!dismiss')
 @multi('!dismiss', limit=4)
@@ -399,13 +413,12 @@ def h_help_undismiss_short(bot, reply, args):
 
 @link(('HELP', 'undismiss'))
 def h_help_undismiss(bot, reply, args):
-    reply('undismiss [NICK]',
-    'Reverses the effect of "dismiss", restoring the last dismissed message'
+    reply('undismiss\2 or \2!undismiss NICK',
+    'Reverses the effect of \2!dismiss\2, restoring the last dismissed message'
     ' from NICK, or from anybody if NICK is not specified. This may be done'
-    ' multiple times to restore messages from up to %s days ago.'
-    % DISMISS_DAYS,
-    'As with "dismiss", NICK may take the form NICK!USER@HOST, and may contain'
-    ' the wildcard characters * and ?.')
+    ' multiple times to restore messages from up to %s days ago. As with'
+    ' \2!dismiss\2, NICK may take the form NICK!USER@HOST, and may contain the'
+    ' wildcard characters * and ?.' % DISMISS_DAYS)
 
 @link('!undismiss')
 def h_undismiss(bot, id, chan, query, *args):

@@ -25,7 +25,7 @@ def h_help_missedrolls(bot, reply, args):
     reply('missed-rolls',
     'Gives a tally of dice rolls of the form 2d6+N whose value was less than 7,'
     ' grouped by the nick who made the roll, since the last time this command'
-    ' was invoked.')
+    ' was invoked. This is useful for playing Dungeon World RPGs in IRC.')
 
 #-------------------------------------------------------------------------------
 @link('!missed-rolls')
