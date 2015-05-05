@@ -130,12 +130,13 @@ def get_title_parts(url, type):
         res = get_title_youtube(url, type)
         if res: return res
     # imgur
-    if re.search(r'(^|\.)imgur\.com', match.group('host')):
+    if re.search(r'(^|\.)imgur\.com$', match.group('host')):
         res = get_title_imgur(url, type)
         if res: return res
     # HTML
     if 'html' in type:
-        return get_title_html(url, type)
+        res = get_title_html(url, type)
+        if res: return res
     # image files
     if type.startswith('image/'):
         return get_title_image(url, type)
@@ -149,8 +150,9 @@ def get_title_html(url, type):
     with closing(urllib2.urlopen(request, timeout=TIMEOUT_SECONDS)) as stream:
         soup = BeautifulSoup(stream.read(READ_BYTES_MAX))
     title = soup.find('title')
-    title = format_title(title.text.strip())
-    return (title, type)
+    if title:
+        title = format_title(title.text.strip())
+        return (title, type)
 
 #-------------------------------------------------------------------------------
 def get_title_image(url, type):
@@ -191,16 +193,23 @@ def get_title_youtube(url, type):
 def get_title_imgur(url, type):
     match = URL_PART_RE.match(url)
     path, query = decode_url_path(match.group('path'))
+
+    if (match.group('host') == 'i.imgur.com'
+    and re.search(r'\.gifv$', path)):
+        new_url = re.sub(r'\.gifv', '.gif', url)
+        return get_title_image(new_url, 'image/gif') + (new_url,)
+
     path_match = re.match(r'/(gallery/)?(?P<id>[a-zA-Z0-9]+)$', path)
-    if match.group('host') != 'imgur.com' or not path_match: return
-    try:
-        import imgur
-        info = imgur.image_info(path_match.group('id'))
-        img_url, img_type = info['link'], info['type']
-    except:
-        traceback.print_exc()
-        return
-    return get_title_image(img_url, img_type) + (img_url,)
+    if (match.group('host') == 'imgur.com'
+    and path_match):
+        try:
+            import imgur
+            info = imgur.image_info(path_match.group('id'))
+            img_url, img_type = info['link'], info['type']
+        except:
+            traceback.print_exc()
+            return
+        return get_title_image(img_url, img_type) + (img_url,)
 
 #-------------------------------------------------------------------------------
 def abbrev_url(url):
