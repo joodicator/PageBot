@@ -279,8 +279,9 @@ class LinkSet(object):
     # (i.e. it should be first in the list) so that the right function is bound.
     def __call__(self, *events, **kwds):
         def link(func):
+            unique_func = lambda *a, **k: func(*a, **k)
             for event in events:
-                self.link(event, func, **kwds)
+                self.link(event, unique_func, **kwds)
             return func
         return link
 

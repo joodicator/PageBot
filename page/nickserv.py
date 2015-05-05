@@ -1,3 +1,4 @@
+import time
 import re
 
 from untwisted.magic import sign, hold
@@ -69,14 +70,34 @@ def status(bot, nick, ret):
 
 #-------------------------------------------------------------------------------
 # sdict = yield statuses(bot, nicks) - sdict[nick.lower()] is STATUS of nick.
+STATUS_CACHE_SECONDS = 3
+status_cache = dict()
 @util.mfun(link, 'nickserv.statuses')
 def statuses(bot, nicks, ret):
-    for i in xrange(0, len(nicks), 16):
-        batch_nicks = ' '.join(nicks[i:i+16])
+    global status_cache
+    earliest = time.time() - STATUS_CACHE_SECONDS
+    for nick, (status, stime) in status_cache.items():
+        if stime is not None and stime < earliest:
+            del status_cache[nick]
+
+    nicks = map(str.lower, nicks)
+    send_nicks = [n for n in nicks if n not in status_cache]
+    for i in xrange(0, len(send_nicks), 16):
+        batch_nicks = ' '.join(send_nicks[i:i+16])
         bot.send_msg(conf('nickserv').nick, 'STATUS %s' % batch_nicks)
 
-    timeout = yield runtime.timeout(10 + len(nicks)/10)
-    result, remain = dict(), set(n.lower() for n in nicks)
+    result, remain = dict(), set()
+    for nick in nicks:
+        if nick not in status_cache:
+            status_cache[nick] = (None, None)
+            remain.add(nick)
+        elif status_cache[nick] == (None, None):
+            remain.add(nick)
+        else:
+            result[nick] = status_cache[nick][0]
+
+    if remain:
+        timeout = yield runtime.timeout(10 + len(nicks)/10)
     while remain:
         event, args = yield hold(bot, 'NICKSERV_NOTICE', timeout)
         if event == timeout: break
@@ -85,6 +106,9 @@ def statuses(bot, nicks, ret):
         if not match: continue
         nick, code = match.groups()
         if nick.lower() not in remain: continue
+
         result[nick.lower()] = int(code)
         remain.remove(nick.lower())
+        status_cache[nick.lower()] = (int(code), time.time())
+
     yield ret(result)

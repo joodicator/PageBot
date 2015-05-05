@@ -327,7 +327,7 @@ def untell_nicks(bot, id, target, channel, args):
 
     def would_cancel(msg, to_nick):
         if msg.channel.lower() != channel.lower(): return False
-        if msg.to_nick != to_nick: return False
+        if msg.to_nick.lower() != to_nick.lower(): return False
         if msg.from_id != id: return False
         return True
 
