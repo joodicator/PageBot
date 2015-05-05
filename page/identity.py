@@ -19,13 +19,23 @@ link, install, uninstall = util.LinkSet().triple()
 install, uninstall = util.depend(install, uninstall,
     'nickserv')
 
+prev_track_id = None
+def reload(prev):
+    global prev_track_id
+    if hasattr(prev, 'track_id') and type(prev.track_id) is dict:
+        prev_track_id = prev.track_id
+
 @link('POST_RELOAD')
 def h_post_reload(bot):
+    global prev_track_id
     all_nicks = set()
     for chan, nicks in channel.track_channels.iteritems():
         all_nicks.update(nick.lower() for nick in nicks)
     for nick in all_nicks:
         track_id[nick] = Record()
+        if nick in prev_track_id and hasattr(prev_track_id[nick], 'hostmask'):
+            track_id[nick].hostmask = prev_track_id[nick].hostmask
+    prev_track_id = None
     yield refresh(bot, list(all_nicks))
 
 #-------------------------------------------------------------------------------
