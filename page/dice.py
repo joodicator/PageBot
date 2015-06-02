@@ -27,12 +27,14 @@ def h_help_roll(bot, reply, args):
         ' of sides of each die, and K or -K is an integer added to the result.'
         ' Rolls may be annotated with other text, which is repeated in the'
         ' result. The shorthand "!r" may be used instead of "!roll".')
-        reply('roll {[WEIGHT1:]ITEM1, [WEIGHT2:]ITEM2, ...} ...',
+        reply('roll ... {[WEIGHT1:]ITEM1, [WEIGHT2:]ITEM2, ...} ...',
         'For each comma-separated list of items enclosed in curly braces,'
         ' chooses one item at random and replaces the list with that item.'
         ' Items are selected with probability proportional to their WEIGHT,'
         ' which can be specified as a positive number followed by a colon'
-        ' before the item, or otherwise defaults to 1.')
+        ' before the item, or otherwise defaults to 1. Each item may itself'
+        ' contain further brace-delimited lists, which will be recursively'
+        ' evaluated in the same way.')
     else:
         reply('roll MdN\2 or \2!roll MdN+K\2 or \2!roll MdN-K',
         'Simulates the rolling of M dice, each of which has N sides, giving'
@@ -80,7 +82,9 @@ def h_roll(bot, id, target, args, full_msg):
     try:
         msg = expand_choices(args)
         msg = re.sub(r'\b(\d*)[dD](\d+)([+-]\d+)?\b', roll_sub, msg)
-        if msg == args: raise UserError('No dice rolls or choices specified.')
+        if msg == args: raise UserError(
+            'No dice rolls or choices specified.'
+            ' See \2!help roll 2\2 for correct usage.')
         if len(msg) > 400: msg = '%s(...)' % msg[:395]
         yield sign('DICE_ROLLS', bot, id, target, rolls, msg)
         message.reply(bot, id, target, msg)

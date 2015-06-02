@@ -3,6 +3,7 @@ from collections import defaultdict
 import traceback
 import urllib2
 import time
+import ssl
 import re
 
 import util
@@ -15,6 +16,8 @@ CACHE_SIZE = 1024
 REPEAT_S = 60*60*3
 
 link, install, uninstall = util.LinkSet().triple()
+
+ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
 
 chan_times = defaultdict(dict)
 cache_old = dict()

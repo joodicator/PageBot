@@ -98,7 +98,8 @@ def give_op_in(bot, nicks, chan):
 
     while nicks:
         op_cmd, op_nicks = '', []
-        while nicks and len(op_cmd) < 400 and len(op_nicks) < max_modes:
+        while (nicks and len(op_cmd) < 400
+        and (max_modes is None or len(op_nicks) < max_modes)):
             op_nicks.append(nicks.pop(0))
             op_cmd = 'MODE %s +%s %s' % (
                 chan, 'o'*len(op_nicks), ' '.join(op_nicks))
