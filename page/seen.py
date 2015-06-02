@@ -239,6 +239,10 @@ def event_string(event_type, event_params):
             return 'setting the topic'
         elif event_params[0] == 'kick':
             return 'kicking a user'
+        elif event_params[0] == 'nick_from':
+            return 'changing their nick'
+        elif event_params[0] == 'nick_to':
+            return 'changing their nick'
     elif event_type == 'exit':
         if event_params[0] == 'quit':
             return 'quitting the network'
@@ -317,6 +321,10 @@ def relative_time(then, now=None):
     (bot, source, None, chan,   'action', ('topic', topic)))
 @link('SOME_KICKED',        a=lambda bot, knick, op_id, chan, kmsg:
     (bot, op_id, None, chan,    'action', ('kick', kmsg, knick)))
+@link('SOME_NICK_CHAN',     a=lambda bot, id, nnick, chan:
+    (bot, id, None, chan,       'action', ('nick_to', nnick)))
+@link('SOME_NICK_CHAN',     a=lambda bot, id, nnick, chan:
+    (bot, None, nnick, chan,    'action', ('nick_from', id.nick)))
 @link('MESSAGE',            a=lambda bot, id, chan, msg:
     (bot, id, None, chan,       'message', ('message', msg)))
 @link('COMMAND',            a=lambda bot, id, chan, event, body, msg:
@@ -327,7 +335,7 @@ def relative_time(then, now=None):
     (bot, id, None, chan,       'message', ('notice', msg)))
 def h_event(*args, **kwds):
     bot, id, nick, chan, event_type, params = kwds['a'](*args)
-    if chan is None: return
+    if chan is None or not chan.startswith('#'): return
     chan = chan.lower()
 
     if id:

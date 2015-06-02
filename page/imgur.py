@@ -6,9 +6,12 @@ import traceback
 import urllib
 import urllib2
 import json
+import ssl
 
 CLIENT_ID_FILE = 'conf/imgur_client_id.txt'
 API_URL = 'https://api.imgur.com/3'
+
+ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
 
 class ImgurError(Exception): pass
 
@@ -28,7 +31,7 @@ def api_request(rel_url, *args, **kwds):
 
 def api_result(*args, **kwds):
     req = api_request(*args, **kwds)
-    res = json.load(urllib2.urlopen(req))
+    res = json.load(urllib2.urlopen(req, context=ssl_context))
     if not res['success']:
         raise ImgurError(res['data'])
     return res['data']

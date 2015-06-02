@@ -137,9 +137,10 @@ class Temp(Unit):
     def parse_unit(cls, str):
         m = re.match(r'(?i)(°|deg(rees?)?)\s*'
             r'(?P<u>(k(elvin)?|r(ankine)?|c(elsius)?)|f(arenheit)?)', str) or \
+            re.match(r'(?i)(P?<u>kelvin|rankine|celsius|farenheit)') or \
             re.match(r'(?P<u>K|R|C|F)', str)
         if not m: return
-        u = Temp('°K',    0,    1  ) if m.group('u')[0].lower() == 'k' else \
+        u = Temp(' K',    0,    1  ) if m.group('u')[0].lower() == 'k' else \
             Temp('°R',    0,    1.8) if m.group('u')[0].lower() == 'r' else \
             Temp('°C', -273.15, 1  ) if m.group('u')[0].lower() == 'c' else \
             Temp('°F', -459.67, 1.8) if m.group('u')[0].lower() == 'f' else None

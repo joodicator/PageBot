@@ -9,9 +9,14 @@ import traceback
 import urllib
 import urllib2
 import socket
+import ssl
 import re
 
-from bs4 import BeautifulSoup
+try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    from BeautifulSoup import BeautifulSoup
+
 from untwisted.magic import sign
 
 from util import multi
@@ -31,6 +36,8 @@ CMDS_PER_LINE_MAX = 6
 
 MAX_AURL = 20
 MAX_YT_DESC = 70
+
+ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
 
 #==============================================================================#
 @link('HELP*')
@@ -69,6 +76,7 @@ def h_url(bot, id, target, args, full_msg, reply):
             reply(get_title(url))
             yield runtime.sleep(0.01)
         except (socket.error, urllib2.URLError, PageURLError) as e:
+            traceback.print_exc()
             reply('Error: %s [%s]' % (e, abbrev_url(url)))    
 
 #==============================================================================#
@@ -90,7 +98,8 @@ def get_title(url):
     if not is_global_address(host): raise PageURLError(
         'Access to this host is denied: %s.' % host)
 
-    with closing(urllib2.urlopen(request, timeout=TIMEOUT_SECONDS)) as stream:
+    with closing(urllib2.urlopen(
+    request, timeout=TIMEOUT_SECONDS, context=ssl_context)) as stream:
         info = stream.info()
         ctype = info.gettype()
         size = info['Content-Length'] if 'Content-Length' in info else None
@@ -99,8 +108,10 @@ def get_title(url):
     parts = get_title_parts(final_url, ctype)
     if len(parts) == 2:
         (title, extra) = parts
-    else:
+    elif len(parts) == 3:
         (title, extra, final_url) = parts
+    else:
+        (title, extra, final_url, size) = parts
 
     url_info = []
     if final_url != url:
@@ -121,7 +132,8 @@ def get_title(url):
 # Returns (body, extra), where body is the main title of the URL, and extra is
 # None, or a string with supplementary information; or (body, extra, new_url)
 # where new_url is the URL of the examined resource, which has been derived in
-# some way from the original URL.
+# some way from the original URL; or (body, extra, new_url, size) where size is
+# the size in bytes of the resource given by new_url.
 def get_title_parts(url, type):
     match = URL_PART_RE.match(url)
     path, query = decode_url_path(match.group('path'))
@@ -147,7 +159,8 @@ def get_title_parts(url, type):
 def get_title_html(url, type):
     request = urllib2.Request(url)
     request.add_header('User-Agent', AGENT)
-    with closing(urllib2.urlopen(request, timeout=TIMEOUT_SECONDS)) as stream:
+    with closing(urllib2.urlopen(request,
+    timeout=TIMEOUT_SECONDS, context=ssl_context)) as stream:
         soup = BeautifulSoup(stream.read(READ_BYTES_MAX))
     title = soup.find('title')
     if title:
@@ -192,24 +205,37 @@ def get_title_youtube(url, type):
 #-------------------------------------------------------------------------------
 def get_title_imgur(url, type):
     match = URL_PART_RE.match(url)
+    if match.group('host') not in ('imgur.com', 'i.imgur.com'): return
     path, query = decode_url_path(match.group('path'))
+    path_match = re.match(
+        r'(/gallery)?/(?P<id>[a-zA-Z0-9]+)(\.[a-zA-Z]+)?$', path)
 
-    if (match.group('host') == 'i.imgur.com'
-    and re.search(r'\.gifv$', path)):
-        new_url = re.sub(r'\.gifv', '.gif', url)
-        return get_title_image(new_url, 'image/gif') + (new_url,)
+    try:
+        import imgur
+        info = imgur.image_info(path_match.group('id'))
+        img_url, img_type = info['link'], info['type']
+    except:
+        traceback.print_exc()
+        info = None
+        img_url, img_type = url, type
 
-    path_match = re.match(r'/(gallery/)?(?P<id>[a-zA-Z0-9]+)$', path)
-    if (match.group('host') == 'imgur.com'
-    and path_match):
-        try:
-            import imgur
-            info = imgur.image_info(path_match.group('id'))
-            img_url, img_type = info['link'], info['type']
-        except:
-            traceback.print_exc()
-            return
-        return get_title_image(img_url, img_type) + (img_url,)
+    if img_url.endswith('.gifv'):
+        img_url = re.sub(r'\.gifv$', '.gif', img_url)
+        img_type = 'image/gif'
+    
+    title = get_title_image(img_url, img_type)[0]
+
+    if info and info.get('title') and not URL_PART_RE.match(info['title']):
+        title = '%s -- %s' % (format_title(info['title']), title)
+    if info and info.get('size'):
+        size = info['size']
+    else:
+        size = None
+
+    if img_url == url:
+        return (title, img_type)
+    else:
+        return (title, img_type, img_url, size)
 
 #-------------------------------------------------------------------------------
 def abbrev_url(url):
@@ -252,7 +278,8 @@ def google_image_title_soup(url):
         + urllib.urlencode({'image_url':url, 'safe':'off'}))
     request.add_header('Referer', 'https://www.google.com/imghp?hl=en&tab=wi')
     request.add_header('User-Agent', AGENT)
-    with closing(urllib2.urlopen(request, timeout=TIMEOUT_SECONDS)) as stream:
+    with closing(urllib2.urlopen(request,
+    timeout=TIMEOUT_SECONDS, context=ssl_context)) as stream:
         return BeautifulSoup(stream.read(READ_BYTES_MAX))    
 
 #==============================================================================#
