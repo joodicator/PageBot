@@ -211,7 +211,7 @@ class UpoopiaText(Upoopia):
             self.board_lines(viewer, **kwds),
             self.status_lines(viewer, **kwds)
             + self.legend_lines(viewer, **kwds),
-            lenf=strip_irc_len)
+            lenf=strip_irc_len) + ['---']
 
     def symbol_text(self, s, **kwds):
         return 'Blue' if s == BLACK else \

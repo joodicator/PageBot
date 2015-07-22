@@ -21,7 +21,7 @@ install, uninstall = util.depend(install, uninstall,
 challenges = dict()
 
 # games[ch1.lower()] == games[ch2.lower()] == game
-# where instanceof(UpoopiaText, game)
+# where isinstance(game, UpoopiaText)
 #   and game.players[BLACK].lower() == ch1.lower()
 #   and game.players[WHITE].lower() == ch2.lower()
 games = dict()
@@ -49,7 +49,7 @@ def h_help_upoopia(bot, reply, *args):
     ' <http://www.unicorn7.org/games/game/553/>. To play on IRC, each player'
     ' must be in a separate channel with operator status, then each player'
     ' must send a challenge to the other channel, optionally indicating their'
-    ' preferred colour, where, by convention, Black moves first.')
+    ' preferred colour, where, by convention, Blue moves first.')
     reply('upoopia',
     '    With no arguments, start a new game with the last channel played.')
 
@@ -172,7 +172,7 @@ def start_game(bot, chan1, chan2, colour1, colour2):
 @link(('HELP', 'upoopia'))
 def h_help_upoopia(bot, reply, *args):
     reply('[move] b[lue]|r[ed] l[eft]|r[ight]|u[p]|d[own] 1|2|3|4|5|6',
-    'Use a die of the given colour and value to move the worm of the same'
+    '    Use a die of the given colour and value to move the worm of the same'
     ' colour over the same distance, in the given direction.')
 
 @link('!b', '!blue', a=lambda args: 'b ' + args)
