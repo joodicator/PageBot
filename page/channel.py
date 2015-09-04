@@ -248,6 +248,9 @@ def h_names(bot, chan, new_names):
         # Update track_channels
         if nick.lower() not in map(str.lower, track_names):
             track_names.append(nick)
+        elif nick not in track_names:
+            track_names = [n for n in track_names if n.lower() != nick.lower()]
+            track_names.append(nick)
 
         # Update umode_channels
         if len(prefix)==1 and nick.lower() in umode_names and prefix in pre_cs:
@@ -327,13 +330,13 @@ def h_some_join(bot, id, chan):
 
 @link('SOME_NICK_CHAN_FINAL')
 def h_some_nick_chan(bot, id, new_nick, chan):
-    chan, old_nick, new_nick = chan.lower(), id.nick.lower(), new_nick.lower()
+    chan, old_nick = chan.lower(), id.nick.lower()
     if chan in track_channels:
         names = track_channels[chan]
         names = [(new_nick if n.lower() == old_nick else n) for n in names]
         track_channels[chan] = names
     if chan in umode_channels and old_nick in umode_channels[chan]:
-        umode_channels[chan][new_nick] = umode_channels[chan].pop(old_nick)
+        umode_channels[chan][new_nick.lower()] = umode_channels[chan].pop(old_nick)
 
 @link('OTHER_PART_FINAL',      a=lambda id, chan, msg:          (id.nick, chan))
 @link('OTHER_KICKED_FINAL',    a=lambda knick, opid, chan, msg: (knick, chan))

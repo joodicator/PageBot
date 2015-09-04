@@ -18,21 +18,22 @@ import sys
 import re
 
 #==============================================================================#
-RECONNECT_DELAY_SECONDS = 30
+RECONNECT_DELAY_SECONDS = 15
 VERSION_RECONNECT_DELAY_SECONDS = 1
-MAX_CHAT_LENGTH = None
+MAX_CHAT_LENGTH = 127
 STATE_FILE = 'state/terraria.json'
 
 IGNORE_MESSAGES=(
     'The air is getting colder around you...',
     'You feel vibrations from deep below...',
-    'This is going to be a terrible night...')
+    'This is going to be a terrible night...',
+    re.compile(r'\S+ the Travelling Merchant has (arrived|departed)!$'))
 
 servers = util.table('conf/terraria.py', 'server')
 
 te_mode = untwisted.mode.Mode()
 te_link = util.LinkSet()
-te_link.link_module(terraria_protocol, debug='--terraria-debug' in sys.argv)
+te_link.link_module(terraria_protocol, debug=False)
 te_work = dict()
 
 ab_mode = None
@@ -169,7 +170,7 @@ def te_chat(work, slot, colour, text):
             return
 
     if slot == 255:
-        if text in IGNORE_MESSAGES: return
+        if message_ignored(text): return
         yield sign('TERRARIA', work, text)
     elif slot != work.terraria_protocol.slot:
         name = work.terraria_protocol.players.get(slot, slot)
@@ -257,3 +258,12 @@ def world_name(work):
     else:
         wname = work.terraria.name
     return '+' + wname
+
+def message_ignored(msg):
+    for imsg in IGNORE_MESSAGES:
+        if isinstance(imsg, str):
+            if msg == imsg: return True
+        elif hasattr(imsg, 'match'):
+            if imsg.match(msg): return True
+    return False
+

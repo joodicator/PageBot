@@ -59,6 +59,7 @@ def bum_split(msg):
 
 def is_ignored(word):
     word = word.lower()
+    if word == 'bum': return True
     if word in ignore_words: return True
     bits = word.split("'")
     if len(bits) < 2: return False
