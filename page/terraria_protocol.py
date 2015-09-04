@@ -16,7 +16,7 @@ import re
 
 __INSTALL_BOT__ = False
 
-DEFAULT_VERSION = 'Terraria70'
+DEFAULT_VERSION = 'Terraria156'
 
 link = util.LinkSet()
 link.link_module(std)
@@ -42,11 +42,18 @@ def uninstall(mode):
 
 @link(event.BUFFER)
 def h_buffer(work, data):
-    while len(data) > 4:
-        length, type = struct.unpack('<iB', data[:5])
-        if len(data) < length + 4: break
-        yield sign('MESSAGE', work, type, data[4:][1:length])
-        data = data[4:][length:]
+    if work.terraria_protocol.version_number > 155:
+        while len(data) > 2:
+            length, type = struct.unpack('<hB', data[:3])
+            if len(data) < length: break
+            yield sign('MESSAGE', work, type, data[:length][3:])
+            data = data[length:]
+    else:
+        while len(data) > 4:
+            length, type = struct.unpack('<iB', data[:5])
+            if len(data) < length + 4: break
+            yield sign('MESSAGE', work, type, data[4:][1:length])
+            data = data[4:][length:]
     work.stack = data
 
 
@@ -59,11 +66,14 @@ def h_message(work, head, body):
         yield sign('CONNECTION_APPROVED', work, slot)
     elif head == 0x04:
         slot, = struct.unpack('<B', body[:1])
-        name = body[25:]
+        if work.terraria_protocol.version_number < 156:
+            name = body[25:]
+        else:
+            name = unpack_string(work, body[3:])
         yield sign('PLAYER_APPEARANCE', work, slot, name)
     elif head == 0x09:
-        count = struct.unpack('<i', body[:4])
-        text = body[4:]
+        count, = struct.unpack('<i', body[:4])
+        text = unpack_string(work, body[4:])
         yield sign('STATUSBAR_TEXT', work, count, text)
     elif head == 0x0E:
         slot, active = struct.unpack('<B?', body)
@@ -75,7 +85,7 @@ def h_message(work, head, body):
     elif head == 0x19:
         slot, = struct.unpack('<B', body[:1])
         colour = struct.unpack('<BBB', body[1:4])
-        text = body[4:]
+        text = unpack_string(work, body[4:])
         yield sign('CHAT', work, slot, colour, text)
     elif head == 0x31:
         yield sign('SPAWN', work)
@@ -83,15 +93,32 @@ def h_message(work, head, body):
         if work.terraria_protocol.version_number < 69:
             spawn = struct.unpack('<ii', body[15:23])
             world_name = body[36:]
-        else:
+        elif work.terraria_protocol.version_number < 156:
             spawn = struct.unpack('<ii', body[16:24])
             world_name = body[91:]
+        else:
+            spawn = struct.unpack('<hh', body[10:14])
+            world_name = unpack_string(work, body[22:])
         yield sign('WORLD_INFORMATION', work, spawn, world_name)
     elif head == 0x25:
         yield sign('REQUEST_PASSWORD', work)
     elif head not in (0x0a, 0x14, 0x17, 0x1a, 0x1b, 0x1c, 0x1d):
         yield sign('UNKNOWN', work, '$%02X' % head, body)
 
+def unpack_string(bot, data):
+    if bot.terraria_protocol.version_number < 156:
+        string = body
+    else:
+        length, = struct.unpack('<B', data[:1])
+        string = data[1:][:length]
+    return string
+
+def pack_string(work, string):
+    if work.terraria_protocol.version_number < 156:
+        data = string
+    else:
+        data = struct.pack('<b', len(string)) + string
+    return data
 
 def h_debug(bot, *args):
     print('> %s %s' % (args[-1], args[:-1]), file=sys.stderr)
@@ -111,37 +138,55 @@ def debug_send(send_f):
 
 
 def send_message(work, type, body):
-    body = struct.pack('<B', type) + body
-    body = struct.pack('<i', len(body)) + body
+    if work.terraria_protocol.version_number < 156:
+        body = struct.pack('<B', type) + body
+        body = struct.pack('<i', len(body)) + body
+    else:
+        body = struct.pack('<hB', len(body)+3, type) + body
     work.dump(body)
 
 @debug_send
 def send_connect_request(work, version):
-    send_message(work, 0x01, version)
+    send_message(work, 0x01, pack_string(work, version))
 
 @debug_send
 def send_player_appearance(work, slot, name):
-    body = struct.pack('<B', slot) + '\0'*24 + name
+    if work.terraria_protocol.version_number < 156:
+        body = struct.pack('<B', slot) + '\0'*24 + name
+    else:
+        body = struct.pack('<B', slot) + '\0'*2 + pack_string(work, name) + '\0'*26
     send_message(work, 0x04, body)
 
 @debug_send
 def send_set_player_life(work, slot, current, maximum):
-    body = struct.pack('<Bii', slot, current, maximum)
+    if work.terraria_protocol.version_number < 156:
+        body = struct.pack('<Bii', slot, current, maximum)
+    else:
+        body = struct.pack('<Bhh', slot, current, maximum)
     send_message(work, 0x10, body)
 
 @debug_send
 def send_set_player_mana(work, slot, current, maximum):
-    body = struct.pack('<Bii', slot, current, maximum)
+    if work.terraria_protocol.version_number < 156:
+        body = struct.pack('<Bii', slot, current, maximum)
+    else:
+        body = struct.pack('<Bhh', slot, current, maximum)
     send_message(work, 0x2A, body)
 
 @debug_send
 def send_set_player_buffs(work, slot, buffs):
-    body = struct.pack('<10B', *buffs)
+    if work.terraria_protocol.version_number < 156:
+        body = struct.pack('<10B', *buffs)
+    else:
+        body = struct.pack('<B', slot) + '\0'*22
     send_message(work, 0x32, body)
 
 @debug_send
 def send_set_inventory(work, slot, islot, istack, iprefix, item):
-    body = struct.pack('<BBBBh', slot, islot, istack, iprefix, item)
+    if work.terraria_protocol.version_number < 156:
+        body = struct.pack('<BBBBh', slot, islot, istack, iprefix, item)
+    else:
+        body = struct.pack('<BBhBh', slot, islot, istack, iprefix, item)
     send_message(work, 0x05, body)
 
 @debug_send
@@ -155,16 +200,19 @@ def send_request_initial_tile_data(work, *spawn):
 
 @debug_send
 def send_spawn_player(work, slot, *spawn):
-    body = struct.pack('<Bii', slot, *spawn)
+    if work.terraria_protocol.version_number < 156:
+        body = struct.pack('<Bii', slot, *spawn)
+    else:
+        body = struct.pack('<Bhh', slot, *spawn)
     send_message(work, 0x0C, body)
 
 @debug_send
 def send_password(work, password):
-    send_message(work, 0x26, password)
+    send_message(work, 0x26, pack_string(work, password))
 
 @debug_send
 def send_chat(work, slot, (r,g,b), text):
-    body = struct.pack('<B3B', slot, r,g,b) + text
+    body = struct.pack('<B3B', slot, r,g,b) + pack_string(work, text[:127])
     send_message(work, 0x19, body)
 
 

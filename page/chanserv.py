@@ -33,7 +33,9 @@ def evict_chanserv(bot, chan):
     names = map(str.lower, channel.track_channels[chan])
     if 'ChanServ'.lower() not in names: return
 
-    records = util.table(PASSWORD_FILE)
-    for r in [r for r in records if r.channel.lower() == chan]:
-        bot.send_msg('ChanServ', 'IDENTIFY %s %s' % (chan, r.password))
-        bot.send_msg('ChanServ', 'PART %s' % chan)
+    bot.send_cmd('KICK %s ChanServ' % chan)
+
+    #records = util.table(PASSWORD_FILE)
+    #for r in [r for r in records if r.channel.lower() == chan]:
+    #    bot.send_msg('ChanServ', 'IDENTIFY %s %s' % (chan, r.password))
+    #    bot.send_msg('ChanServ', 'PART %s' % chan)
