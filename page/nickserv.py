@@ -31,7 +31,8 @@ def conf(*args, **kwds):
 @link(REGISTERED)
 def registered(bot, *rargs):
     if conf('password'):
-        yield hold(bot, 'NICKSERV_REGISTERED')
+        timeout = yield runtime.timeout(30)
+        yield hold(bot, 'NICKSERV_REGISTERED', timeout)
     yield sign(IDENTIFIED, bot, *rargs)
 
 @link('MODE')

@@ -12,10 +12,7 @@ import socket
 import ssl
 import re
 
-try:
-    from bs4 import BeautifulSoup
-except ImportError:
-    from BeautifulSoup import BeautifulSoup
+from BeautifulSoup import BeautifulSoup
 
 from untwisted.magic import sign
 
@@ -161,7 +158,9 @@ def get_title_html(url, type):
     request.add_header('User-Agent', AGENT)
     with closing(urllib2.urlopen(request,
     timeout=TIMEOUT_SECONDS, context=ssl_context)) as stream:
-        soup = BeautifulSoup(stream.read(READ_BYTES_MAX))
+        soup = BeautifulSoup(
+            stream.read(READ_BYTES_MAX),
+            convertEntities=BeautifulSoup.HTML_ENTITIES)
     title = soup.find('title')
     if title:
         title = format_title(title.text.strip())
@@ -280,7 +279,10 @@ def google_image_title_soup(url):
     request.add_header('User-Agent', AGENT)
     with closing(urllib2.urlopen(request,
     timeout=TIMEOUT_SECONDS, context=ssl_context)) as stream:
-        return BeautifulSoup(stream.read(READ_BYTES_MAX))    
+        text = stream.read(READ_BYTES_MAX)
+        with open('/tmp/url', 'w') as file:
+            file.write(text)
+        return BeautifulSoup(text, convertEntities=BeautifulSoup.HTML_ENTITIES)
 
 #==============================================================================#
 # True if the given hostname or IPV4 or IPV6 address string is not in any

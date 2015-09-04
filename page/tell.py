@@ -41,7 +41,6 @@ install, uninstall = util.depend(install, uninstall,
     'auth', 'identity')
 
 identity.add_credentials('tell.Broose',
-    ('nickserv',   'Broose'),
     ('access',     'Broose'),
     ('prev_hosts', 3))
 
@@ -185,9 +184,9 @@ def h_help_tell(bot, reply, args):
         ' If NICK contains the wildcard characters * or ?, these will match any'
         ' sequence of 0 or more characters, or exactly 1 character,'
         ' respectively.',
-        'Alternatively, if NICK contains the character $, it will be'
-        ' interpreted as a Python 2 regular expression using re.match()'
-        ' semantics (see: http://docs.python.org/2/library/re.html).')
+        'Additionally, NICK may consist of multiple alternatives separated by'
+        ' the forward slash character (/), in which case the message will be'
+        ' delivered to the first of these recipients that is seen.')
     else:
         reply('tell NICK MESSAGE',
         'Leaves a message for NICK so that it will be delivered to them when'
@@ -242,22 +241,23 @@ def h_tell(bot, id, target, args, full_msg):
         reply(bot, id, target,
             'Error: you may leave no more than %d messages at once.' % MAX_SENT)
         return
-    if to_nick.endswith('$'):
-        same_recv = [m for m in same_sent if m.to_nick.endswith('$')]
+    if '$' in to_nick:
+        same_recv = [m for m in same_sent if '$' in m.to_nick]
         if len(same_recv) > MAX_SENT_RE:
             reply(bot, id, target,
                 'Error: you may leave no more than %d regex-addressed messages'
                 ' at once.' % (MAX_SENT_RE))
             return
     else:
-        norm_recv = lambda r: re.sub(r'\*+', r'*', r).lower()
-        norm_nicks = map(norm_recv, to_nicks)
-        same_recv = [m for m in same_sent if norm_recv(m.to_nick) in norm_nicks]
-        if len(same_recv) > MAX_SENT_WC:
-            reply(bot, id, target,
-                'Error: you may leave no more than %d messages for "%s"'
-                ' at once.' % (MAX_SENT_WC, same_recv[0].to_nick))
-            return
+        for recv in (p for n in to_nicks for p in n.split('/')):
+            norm_recv = lambda r: re.sub(r'\*+', r'*', r).lower()
+            same_recv = [m for m in same_sent if norm_recv(recv) in
+                         map(norm_recv, m.to_nick.split('/'))]       
+            if len(same_recv) > MAX_SENT_WC:
+                reply(bot, id, target,
+                    'Error: you may leave no more than %d messages for "%s"'
+                    ' at once.' % (MAX_SENT_WC, recv))
+                return
 
     put_state(state)
 
@@ -365,9 +365,9 @@ def h_help_dismiss(bot, reply, args):
         ' message left by anybody. Messages may be recovered using \2!undismiss\2.'
         ' Up to 3 additional !dismiss commands may be given on the same line.',
         'NICK may be an IRC nick or a NICK!USER@HOST, may contain the wildcard'
-        ' characters * and ?, and may be a Python 2 regular expression containing'
-        ' the character $, as specified in \2!help tell 2\2; in which case, the most'
-        ' recent matching message is dismissed.')
+        ' characters * and ?, and may contain alternatives separated by /, as'
+        ' specified in \2!help tell 2\2; in which case, the most recent matching'
+        ' message is dismissed.')
     else:
         reply('dismiss\2 or \2!dismiss NICK',
         'Dismisses without showing it the most recent message left for you via'
@@ -418,7 +418,7 @@ def h_help_undismiss(bot, reply, args):
     ' from NICK, or from anybody if NICK is not specified. This may be done'
     ' multiple times to restore messages from up to %s days ago. As with'
     ' \2!dismiss\2, NICK may take the form NICK!USER@HOST, and may contain the'
-    ' wildcard characters * and ?.' % DISMISS_DAYS)
+    ' wildcard characters * and ?, and alternatives separated by /.' % DISMISS_DAYS)
 
 @link('!undismiss')
 def h_undismiss(bot, id, chan, query, *args):
@@ -618,13 +618,14 @@ def would_deliver(id, chan, msg):
     return True
 
 #==============================================================================#
-# Returns True if `query', which is is a wildcard expression or (if it contains
-# '$'), a regular expression matching either a nick or a nick!user@host,
-# matches the given id.
+# Returns True if any '/'-separated part of `query', interpreted as a wildcard
+# expression, matches either the nick or or the nick!user@host of the given id.
 def match_id(query, id):
     id_str = '%s!%s@%s' % tuple(id) if re.search(r'!|@', query) else id.nick
-    rexp = query if '$' in query else wc_to_re(query)
-    return re.match(rexp, id_str, re.I) is not None
+    for part in query.split('/'):
+        rexp = part if '$' in part else wc_to_re(part)
+        if re.match(rexp, id_str, re.I) is not None: return True
+    return False
 
 #===============================================================================
 # Returns True iff the two given IDs are considered to belong to the same user,
