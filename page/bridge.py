@@ -69,14 +69,13 @@ def h_help_online(bot, reply, args):
 def h_online(bot, id, chan, args, full_msg):
     if chan is None: return message.reply(bot, id, chan,
         'The "online" command may not be used by PM.')
-    notice(bot, chan, 'NAMES_REQ', chan, args)
+    notice(bot, chan, 'NAMES_REQ', chan, args, include_self=False)
 
 @link(('BRIDGE', 'NAMES_REQ'))
 def h_bridge_names_req(bot, target, source, query):
     if not target.startswith('#'): return
     if query and query.lower() != target.lower(): return
-    names = yield channel.names(bot, target)
-    names = channel.strip_names(names)
+    names = channel.track_channels[target.lower()]
     notice(bot, target, 'NAMES_RES', source, target, names)
 
 
