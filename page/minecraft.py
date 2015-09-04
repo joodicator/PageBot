@@ -141,17 +141,17 @@ def h_query_success_map(work, type, key, val):
     work.minecraft_state.map_name = val
 
 
-# (status, value) = yield terraria.query(key),
+# (status, value) = yield minecraft.query(key),
 # where status is 'result' or 'failure'
 def query(work, key):
-    return util.mmcall(ab_mode, 'terraria.query', work, key)
+    return util.mmcall(ab_mode, 'minecraft.query', work, key)
 
 
-@ab_link('terraria.query')
+@ab_link('minecraft.query')
 def h_query(work, key):
-    work.dump('?query("%s")\n' % key)
+    work.dump('?query %s\n' % key)
 
 @mc_link(('QUERY_SUCCESS'))
 @mc_link(('QUERY_FAILURE'))
 def h_query_success_failure(work, type, key, val):
-    yield util.msign(ab_mode, ('terraria.query', work, key), (type, val))
+    yield util.msign(ab_mode, ('minecraft.query', work, key), (type, val))
