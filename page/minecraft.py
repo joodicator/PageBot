@@ -5,6 +5,7 @@ from __future__ import print_function
 import re
 import sys
 import socket
+from datetime import datetime
 
 from untwisted.mode import Mode
 from untwisted.network import Work
@@ -23,7 +24,7 @@ from util import NotInstalled, AlreadyInstalled
 RECONNECT_DELAY_SECONDS = 1
 
 conf_servers = util.table('conf/minecraft.py', 'server', socket.__dict__)
-
+substitutions = util.read_list('conf/substitute.py')
 
 mc_work = []
 mc_mode = Mode()
@@ -99,6 +100,10 @@ def h_bridge_names_req(bot, target, source, name_query):
 
         (state, value) = yield query(work, 'players')
         if state == 'success':
+            for sub_name, find, repl in substitutions:
+                if sub_name.lower() != work.minecraft.name.lower(): continue
+                find = re.escape(find)
+                value = re.sub(r'\b%s\b' % find, repl, value)
             bridge.notice(bot, target, 'NAMES_RES', source, name, value.split())
         elif state == 'failure':
             bridge.notice(bot, target, 'NAMES_ERR', source, name, value)
@@ -114,16 +119,31 @@ def mc_found(work, line):
         for event in head, (head, key):
             yield sign(event, work, type, key, body)
 
-    for fmt in '<%s>', '* %s', '%s':
+    for fmt in '<%s>', '* %s ', '%s ':
         if line.startswith(fmt % work.minecraft.agent): return
 
-    match = re.match(r'(<\S+>|\[\S+\]) !online(?P<args> .*|$)', line)
+    match = re.match(r'(<\S+>|\[\S+\]) !online(?P<args> .*|$)', line, re.I)
     if match:
         args = match.group('args').strip()
         bridge.notice(ab_mode, work.minecraft.name, 'NAMES_REQ',
                       work.minecraft.name, args)
 
+    match = re.match(r'(<\S+>|\[\S+\]) !(time|date)( .*|$)', line, re.I)
+    if match:
+        msg = datetime.utcnow().strftime('%H:%M:%S %a %d/%b/%Y UTC')
+        work.dump(msg + '\n')
+        return
+
     if re.match(r'(<\S+> |\[\S+\] |\* \S+ |)!', line): return
+
+    for sub_name, find, repl in substitutions:
+        if sub_name.lower() != work.minecraft.name.lower(): continue
+        find = re.escape(find)
+        if re.match(r'[\[\*<]', line):
+            line = re.sub(r'<%s> ' % find, '<%s> ' % repl, line)
+            line = re.sub(r'\* %s ' % find, '* %s ' % repl, line)
+        else:
+            line = re.sub(r'\b%s\b' % find, repl, line)
 
     yield util.msign(ab_mode, 'MINECRAFT', ab_mode,
         work.minecraft.name, line,

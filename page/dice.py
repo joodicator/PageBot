@@ -94,7 +94,7 @@ def h_roll(bot, id, target, args, full_msg):
 #===============================================================================
 def expand_choices(str):
     while True:
-        match = re.search(r'\{(?P<items>[^{},]*,[^{}]*)\}', str)
+        match = re.search(r'\{(?P<items>[^{}]*)\}', str)
         if not match: break
         weight_sum = 0
         cum_weight_items = []

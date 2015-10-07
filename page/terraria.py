@@ -27,9 +27,11 @@ IGNORE_MESSAGES=(
     'The air is getting colder around you...',
     'You feel vibrations from deep below...',
     'This is going to be a terrible night...',
+    'A solar eclipse is happening!',
     re.compile(r'\S+ the Travelling Merchant has (arrived|departed)!$'))
 
 servers = util.table('conf/terraria.py', 'server')
+substitutions = util.read_list('conf/substitute.py')
 
 te_mode = untwisted.mode.Mode()
 te_link = util.LinkSet()
@@ -147,11 +149,15 @@ def ab_bridge(ab_mode, target, msg):
 def h_bridge_names_req(bot, target, source, query):
     work = te_work.get(target.lower())
     if work is None: return
+    if work.terraria_protocol.stage < 3: return
 
     name = world_name(work)
     if query and name.lower() not in (query.lower(), '+'+query.lower()): return
 
     names = work.terraria_protocol.players.values()
+    for sub_name, find, repl in substitutions:
+        if sub_name.lower() != target.lower(): continue
+        names = [repl if n.lower() == find.lower() else n for n in names]
     bridge.notice(bot, target, 'NAMES_RES', source, name, names)
 
 #==============================================================================#
@@ -170,10 +176,17 @@ def te_chat(work, slot, colour, text):
             return
 
     if slot == 255:
-        if message_ignored(text): return
-        yield sign('TERRARIA', work, text)
+        if len(work.terraria_protocol.players) > 1 or not message_ignored(text):
+            if not text.startswith('[Server]'):
+                for sub_name, find, repl in substitutions:
+                    if te_work.get(sub_name.lower()) != work: continue
+                    text = re.sub(r'\b%s\b' % re.escape(find), repl, text)
+            yield sign('TERRARIA', work, text)
     elif slot != work.terraria_protocol.slot:
         name = work.terraria_protocol.players.get(slot, slot)
+        for sub_name, find, repl in substitutions:
+            if te_work.get(sub_name.lower()) != work: continue
+            if name.lower() == find.lower(): name = repl
         yield sign('TERRARIA', work, '<%s> %s' % (name, text))
 
 #-------------------------------------------------------------------------------
