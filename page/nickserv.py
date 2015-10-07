@@ -71,6 +71,7 @@ def status(bot, nick, ret):
 
 #-------------------------------------------------------------------------------
 # sdict = yield statuses(bot, nicks) - sdict[nick.lower()] is STATUS of nick.
+STATUS_BATCH = 1
 STATUS_CACHE_SECONDS = 3
 status_cache = dict()
 @util.mfun(link, 'nickserv.statuses')
@@ -78,21 +79,21 @@ def statuses(bot, nicks, ret):
     global status_cache
     earliest = time.time() - STATUS_CACHE_SECONDS
     for nick, (status, stime) in status_cache.items():
-        if stime is not None and stime < earliest:
+        if stime < earliest:
             del status_cache[nick]
 
     nicks = map(str.lower, nicks)
     send_nicks = [n for n in nicks if n not in status_cache]
-    for i in xrange(0, len(send_nicks), 16):
-        batch_nicks = ' '.join(send_nicks[i:i+16])
+    for i in xrange(0, len(send_nicks), STATUS_BATCH):
+        batch_nicks = ' '.join(send_nicks[i:i+STATUS_BATCH])
         bot.send_msg(conf('nickserv').nick, 'STATUS %s' % batch_nicks)
 
     result, remain = dict(), set()
     for nick in nicks:
         if nick not in status_cache:
-            status_cache[nick] = (None, None)
+            status_cache[nick] = (None, time.time())
             remain.add(nick)
-        elif status_cache[nick] == (None, None):
+        elif status_cache[nick][0] == None:
             remain.add(nick)
         else:
             result[nick] = status_cache[nick][0]

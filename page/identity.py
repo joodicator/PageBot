@@ -118,7 +118,7 @@ def check_access(bot, query, name, ret):
         return
 
     creds = credentials.get(name, list())
-    creds = sorted(creds, reverse=True, key=lambda cred:
+    creds = sorted(creds, key=lambda cred:
         0 if cred[0] == 'hostmask' else
         1 if cred[0] == 'access' else
         2 if cred[0] == 'prev_hosts' else
