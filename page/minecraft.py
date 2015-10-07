@@ -119,8 +119,9 @@ def mc_found(work, line):
         for event in head, (head, key):
             yield sign(event, work, type, key, body)
 
-    for fmt in '<%s>', '* %s ', '%s ':
-        if line.startswith(fmt % work.minecraft.agent): return
+    if getattr(work.minecraft, 'agent', None):
+        for fmt in '<%s>', '* %s ', '%s ':
+            if line.startswith(fmt % work.minecraft.agent): return
 
     match = re.match(r'(<\S+>|\[\S+\]) !online(?P<args> .*|$)', line, re.I)
     if match:
