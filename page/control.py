@@ -67,12 +67,13 @@ def _exec(bot, id, target, args, full_msg):
 
 @link('!yield')
 @admin
-def _mcall(bot, id, target, args, full_msg):
+@util.multi('!yield')
+def _mcall(bot, id, target, args, full_msg, reply):
     try:
         result = yield eval(args, sys.modules, {'bot':bot})
     except Exception as e:
         result = e
-    echo(bot, id, target, repr(result))
+    reply(repr(result))
 
 @link('!load')
 @admin

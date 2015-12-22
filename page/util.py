@@ -205,14 +205,14 @@ def mcall(event, *args, **kwds):
 #       ...
 def mfun(link, event_name):
     def mfun_dec(fun):
-        token = ('mfun', event_name, object())
         @link(event_name)
-        def mfun_han(*args):
+        def mfun_han(token, *args):
             from untwisted.magic import sign
             ret = lambda r: sign(token, r)
             return fun(*args, ret=ret)
         def mfun_fun(*args):
-            return mcall(event_name, *args, token=token)
+            token = ('util.mfun', event_name, object())
+            return mcall(event_name, token, *args, token=token)
         return mfun_fun
     return mfun_dec
 
