@@ -65,7 +65,7 @@ def install(bot):
     prev_work, te_work = te_work, dict()
     for work in prev_work.itervalues():
         try: reload_work(work)
-        except NameError: trackback.print_exc()
+        except NameError: traceback.print_exc()
 
     for server in servers:
         if server.name.lower() not in te_work:
@@ -96,35 +96,43 @@ def reload_work(work):
     if match:
         te_work[match[0].name.lower()] = init_work(match[0], work)
     else:
-        if work.terraria_protocol.stage >= 3:
+        if (hasattr(work, 'terraria_protocol')
+        and work.terraria_protocol.stage >= 3):
             msg = 'Disconnected from server: configuration update.'
             te_mode.drive('TERRARIA', work, msg)
         kill_work(work)
 
 #-------------------------------------------------------------------------------
-def init_work(server, prev=None, version=None):
-    if prev is None:
+def init_work(server, reload_from=None, reconnect_from=None, version=None):
+    if reload_from is not None:
+        reload_from.destroy()
+        work = untwisted.network.Work(te_mode, reload_from.sock)
+        if hasattr(reload_from, 'terraria_protocol'):
+            work.terraria_protocol = reload_from.terraria_protocol
+        work.prev_terraria_protocol = getattr(
+            reload_from, 'prev_terraria_protocol', None)
+        if (hasattr(work, 'terraria_protocol')
+        and work.terraria_protocol.stage >= 3):
+            te_mode.drive('HEARTBEAT', work)
+    else:
         if version is None:
             state = get_state().get(repr(server.address), dict())
             version = state.get('version')
-
         work = untwisted.network.Work(te_mode, socket.socket())
         work.setblocking(0)
         work.connect_ex(server.address)
         terraria_protocol.login(
             work, server.user, server.password, version=version)
-    else:
-        prev.destroy()
-        work = untwisted.network.Work(te_mode, prev.sock)
-        work.terraria_protocol = prev.terraria_protocol
-        if work.terraria_protocol.stage >= 3:
-            te_mode.drive('HEARTBEAT', work)
+        if hasattr(reconnect_from, 'prev_terraria_protocol'):
+            work.terraria_protocol.world_name = getattr(
+                reconnect_from.prev_terraria_protocol, 'world_name', None)
     work.terraria = server
     return work
 
 #-------------------------------------------------------------------------------
-def kill_work(work):
-    if hasattr(work, 'terraria'): del work.terraria
+def kill_work(work, remove=True):
+    if remove and hasattr(work, 'terraria'):
+        del work.terraria
     terraria_protocol.close(work)
     try: work.destroy()
     except socket.error: pass
@@ -137,7 +145,7 @@ def kill_work(work):
 @ab_link('BRIDGE')
 def ab_bridge(ab_mode, target, msg):
     work = te_work.get(target.lower())
-    if work is None: return
+    if work is None or not hasattr(work, 'terraria_protocol'): return
     if MAX_CHAT_LENGTH is not None:
         max_len = MAX_CHAT_LENGTH - len('<%s> ' % work.terraria.user)
         while len(msg) > max_len:
@@ -149,10 +157,14 @@ def ab_bridge(ab_mode, target, msg):
 def h_bridge_names_req(bot, target, source, query):
     work = te_work.get(target.lower())
     if work is None: return
-    if work.terraria_protocol.stage < 3: return
 
     name = world_name(work)
     if query and name.lower() not in (query.lower(), '+'+query.lower()): return
+
+    if not hasattr(work, 'terraria_protocol') or work.terraria_protocol.stage < 3:
+        bridge.notice(bot, target, 'NAMES_ERR', source, name,
+            'No contact with server.')
+        return
 
     names = work.terraria_protocol.players.values()
     for sub_name, find, repl in substitutions:
@@ -223,6 +235,7 @@ def te_connection_approved(work, *args):
 #-------------------------------------------------------------------------------
 @te_link(untwisted.event.CLOSE)
 def te_close(work):
+    if not hasattr(work, 'terraria_protocol'): return
     if work.terraria_protocol.stage < 3: return
     yield sign('TERRARIA', work, 'Disconnected from server.')
 
@@ -254,21 +267,27 @@ def reconnect_work(work, version=None, delay=None):
 @ab_link('terraria.reconnect_work')
 def h_reconnect_work(work, version, delay):
     server = work.terraria
-    disconnect_work(work)
+    disconnect_work(work, remove=False)
     yield runtime.sleep(delay or RECONNECT_DELAY_SECONDS)
-    te_work[server.name.lower()] = init_work(server, version=version)
+    new_work = init_work(server, version=version, reconnect_from=work)
+    te_work[server.name.lower()] = new_work
 
-def disconnect_work(work):
+def disconnect_work(work, remove=True):
     server = work.terraria
-    kill_work(work)
-    del te_work[server.name.lower()]
+    kill_work(work, remove=remove)
+    if remove:
+        del te_work[server.name.lower()]
 
 def world_name(work):
-    if hasattr(work.terraria_protocol, 'world_name'):
+    wname = None
+    if hasattr(getattr(work, 'terraria_protocol', None), 'world_name'):
         wname = work.terraria_protocol.world_name
-    elif hasattr(work.terraria, 'display'):
+    if wname is None and hasattr(
+    getattr(work, 'prev_terraria_protocol', None), 'world_name'):
+        wname = work.prev_terraria_protocol.world_name
+    if wname is None and hasattr(work.terraria, 'display'):
         wname = work.terraria.display
-    else:
+    if wname is None:
         wname = work.terraria.name
     return '+' + wname
 

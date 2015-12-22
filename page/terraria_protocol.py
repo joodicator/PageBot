@@ -238,8 +238,9 @@ def chat(work, text, colour=(255,255,255)):
         send_chat(work, work.terraria_protocol.slot, colour, text)    
 
 def close(work):
-    if hasattr(work, 'terraria_protocol'): del work.terraria_protocol
-
+    if hasattr(work, 'terraria_protocol'):
+        work.prev_terraria_protocol = work.terraria_protocol
+        del work.terraria_protocol
 
 @link('REQUEST_PASSWORD')
 def h_request_password(work):

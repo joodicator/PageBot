@@ -36,13 +36,14 @@ def targets(source_chan, include_self=False):
 @link(('BRIDGE', 'NAMES_RES'))
 def h_bridge_names_res(bot, target, target_, source_name, names):
     if target.lower() != target_.lower(): return
-    msg = 'Online in %s: %s.' % (source_name, ', '.join(names))
+    msg = 'Online in %s: %s.' % (
+        source_name, ', '.join(names) if names else '(nobody)')
     yield sign('BRIDGE', bot, target, msg)
 
 @link(('BRIDGE', 'NAMES_ERR'))
 def h_bridge_names_err(bot, target, target_, source_name, error):
     if target.lower() != target_.lower(): return
-    msg = 'Failed to enumerate users in %s: %s.' % (source_name, error)
+    msg = 'Failed to enumerate users in %s: %s' % (source_name, error)
     yield sign('BRIDGE', bot, target, msg)
 
 
