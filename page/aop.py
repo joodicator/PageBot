@@ -55,7 +55,7 @@ def h_help_update(bot, reply, *args):
 @link('!update')
 def h_update(bot, id, chan, args, full_msg):
     if not chan: return
-    has_aop = yield has_op_in(bot, id, chan)
+    has_aop = yield has_aop_in(bot, id, chan)
     if not has_aop: return
     yield give_op_in(bot, id, chan)
 

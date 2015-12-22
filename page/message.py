@@ -28,10 +28,13 @@ def h_xirclib_msg(event, bot, source, *args):
         return    
     yield sign(event, bot, source, *args)
 
-@link('COMMAND')
-def h_command(bot, id, target, event, body, message):
+@link('COMMAND',        action=False)
+@link('ACTION_COMMAND', action=True)
+def h_command(bot, id, target, event, body, message, action):
     if limit.mark_activity(bot, id, notify=target):
         return
+    if action:
+        event = ('ACTION', event)
     yield sign(event, bot, id, target, body, message)
 
 @link('JOIN')
@@ -109,6 +112,13 @@ def notice(bot, source, target, msg, *args):
 @link('MESSAGE')
 def message(bot, id, target, msg):
     while True:
+        match = re.match(r'\x01ACTION (.*?)\x01?$', msg)
+        if match:
+            msg = match.group(1)
+            action = True
+        else:
+            action = False
+
         # !CMD [ARGS...]
         if bot.conf['bang_cmd']:
             match = re.match(r'!(?P<head>\S*)\s*(?P<body>.*)', msg)
@@ -122,7 +132,8 @@ def message(bot, id, target, msg):
     
     event = '!' + match.group('head').lower()
     body = match.group('body').strip()
-    yield sign('COMMAND', bot, id, target, event, body, msg)
+    type = 'ACTION_COMMAND' if action else 'COMMAND'
+    yield sign(type, bot, id, target, event, body, msg)
     bot.activity = True
 
     from untwisted.usual import Stop

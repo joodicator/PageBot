@@ -9,8 +9,7 @@ import runtime
 import channel
 import util
 
-RPL_WHOREPLY = '352'
-RPL_ENDOFWHO = '315'
+RPL_WHOISUSER = '311'
 
 CREDENTIALS_FILE = 'conf/identity.py'
 PREV_HOSTS_FILE  = 'state/identity_hosts.json'
@@ -256,15 +255,14 @@ def grant_access(bot, nick_or_id, access_name):
 # yield who(bot, query_nick) -> (nick, user, host, real) or None
 @util.mfun(link, 'identity.who')
 def who(bot, nick, ret):
-    bot.send_cmd('WHO %s' % nick)
-    timeout = runtime.timeout(5)
+    bot.send_cmd('WHOIS %s' % nick)
+    timeout = yield runtime.timeout(5)
     result = None
     while True:
-        event, args = yield hold(bot, RPL_WHOREPLY, timeout)
-        if event != RPL_WHOREPLY: break
-        (e_bot, e_source, e_target, e_chan, e_user,
-         e_host, e_server, e_nick, e_flags, e_args) = args
-        e_hops, e_real = e_args.split(' ', 1)
+        event, args = yield hold(bot, RPL_WHOISUSER, timeout)
+        if event != RPL_WHOISUSER: break
+        (e_bot, e_source, e_target,
+         e_nick, e_user, e_host, e_star, e_real) = args
         if e_nick.lower() != nick.lower(): continue
         result = (e_nick, e_user, e_host, e_real)
         break
