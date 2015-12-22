@@ -27,7 +27,14 @@ def h_help_roll(bot, reply, args):
         ' of sides of each die, and K or -K is an integer added to the result.'
         ' Rolls may be annotated with other text, which is repeated in the'
         ' result. The shorthand "!r" may be used instead of "!roll".')
-        reply('roll ... {[WEIGHT1:]ITEM1, [WEIGHT2:]ITEM2, ...} ...',
+        reply('roll ... bJ(ROLL) ...\2 or \2!roll ... wJ(ROLL) ...',
+        'Where ROLL is a dice roll of the form MdN, MdN+K or MdN-K, as'
+        ' specified above, and J is a non-negative integer, this form discards'
+        ' all but the J highest (in the case of bJ) or lowest (in the case of'
+        ' wJ) individual dice out of the original M dice rolled. If J is'
+        ' omitted, it it defaults to 1. Examples: "!roll w(2d8-1)" or'
+        ' "!roll b2(3d6)".')
+        reply('roll {[WEIGHT1:]ITEM1, [WEIGHT2:]ITEM2, ...}',
         'For each comma-separated list of items enclosed in curly braces,'
         ' chooses one item at random and replaces the list with that item.'
         ' Items are selected with probability proportional to their WEIGHT,'
@@ -44,17 +51,18 @@ def h_help_roll(bot, reply, args):
         ' \2!help missed-rolls\2.')
 
 #===============================================================================
-@link('!r', '!d')
+@link(          '!r',            '!d',  action=False)
+@link(('ACTION','!r'), ('ACTION','!d'), action=True)
 @modal.when_mode(None)
-def h_roll_abbrev(bot, id, target, args, full_msg):
-    return h_roll(bot, id, target, args, full_msg)
+def h_roll_abbrev(bot, id, target, args, full_msg, action):
+    return h_roll(bot, id, target, args, full_msg, action)
 
 class UserError(Exception):
     pass
 
-@link('!roll', '!dice')
-def h_roll(bot, id, target, args, full_msg):
-
+@link(           '!roll',             '!dice',  action=False)
+@link(('ACTION', '!roll'), ('ACTION', '!dice'), action=True)
+def h_roll(bot, id, target, args, full_msg, action):
     rolls = []
 
     def check_roll(dice=None, sides=None, add=None):
@@ -67,27 +75,57 @@ def h_roll(bot, id, target, args, full_msg):
             'No more than %d dice, %d sides per die, or %s units added or'
             ' subtracted are permitted per roll.' % MAX_ROLL)
 
+    def keep_sub(match):
+        bw = match.group('bw').lower()
+        keep = int(match.group('keep')) if match.group('keep') else 1
+        dice = int(match.group('dice')) if match.group('dice') else 1       
+        sides = int(match.group('sides'))
+        add = int(match.group('add')) if match.group('add') else 0
+
+        if keep > dice: raise UserError(
+            'It is not possible to keep %d out of %s dice rolls.'
+            % (keep, dice))
+
+        if bw == 'b':
+            return do_roll_str(dice, sides, add, drop_low=dice-keep)
+        elif bw == 'w':
+            return do_roll_str(dice, sides, add, drop_high=dice-keep)
+
     def roll_sub(match):
-        dice = int(match.group(1)) if match.group(1) else 1
-        sides = int(match.group(2))
-        add = int(match.group(3)) if match.group(3) else 0
+        dice = int(match.group('dice')) if match.group('dice') else 1
+        sides = int(match.group('sides'))
+        add = int(match.group('add')) if match.group('add') else 0
         return do_roll_str(dice, sides, add)
 
-    def do_roll_str(dice, sides, add):
+    def do_roll_str(dice, sides, add, drop_low=0, drop_high=0):
         check_roll(dice, sides, add)
-        rstr, rint = roll_str_int(dice, sides, add)
-        rolls.append(((dice, sides, add), rint))
+        rstr, rint = roll_str_int(dice, sides, add, drop_low, drop_high)
+        if drop_low or drop_high:
+            dice_spec = (dice, drop_low, drop_high)
+        else:
+            dice_spec = dice
+        rolls.append(((dice_spec, sides, add), rint))
         return rstr
 
     try:
         msg = expand_choices(args)
-        msg = re.sub(r'\b(\d*)[dD](\d+)([+-]\d+)?\b', roll_sub, msg)
+        msg = re.sub(
+            r'\b(?P<bw>[bBwW])(?P<keep>\d*)'
+            '\((?P<dice>\d*)[dD](?P<sides>\d+)(?P<add>[+-]\d+)?\)',
+            keep_sub, msg)
+        msg = re.sub(
+            r'\b(?P<dice>\d*)[dD](?P<sides>\d+)(?P<add>[+-]\d+)?\b',
+            roll_sub, msg)
         if msg == args: raise UserError(
             'No dice rolls or choices specified.'
             ' See \2!help roll 2\2 for correct usage.')
         if len(msg) > 400: msg = '%s(...)' % msg[:395]
         yield sign('DICE_ROLLS', bot, id, target, rolls, msg)
-        message.reply(bot, id, target, msg)
+        if action:
+            message.reply(bot, id, target, '* %s %s' % (
+                id.nick, msg), prefix=False)
+        else:
+            message.reply(bot, id, target, msg)
     except UserError as e:
         message.reply(bot, id, target, 'Error: %s' % e.message)
 
@@ -101,7 +139,7 @@ def expand_choices(str):
 
         for item in match.group('items').split(','):
             item = item.strip()
-            pmatch = re.match(r'(?P<weight>\d*.?\d+)\s*:\s*(?P<item>.*)', item)
+            pmatch = re.match(r'(?P<weight>\d*\.?\d+)\s*:\s*(?P<item>.*)', item)
             if pmatch:
                 weight = float(pmatch.group('weight'))
                 if weight <= 0: raise UserError('The weight "%s" is too small.'
@@ -134,22 +172,17 @@ def abbrev_middle(str):
     return str[:left_len] + '...' + str[-right_len:]
 
 #===============================================================================
-def roll_str_int(dice, sides, add):
+def roll_str_int(dice, sides, add, drop_low=0, drop_high=0):
     rolls = roll_list(dice, sides)
-    rint = sum(rolls) + add
-    failed = (dice,sides) == (2,6) and rint < 7
-    rstr = '%s%s%s' % (
+    drop = sorted(rolls)
+    del drop[drop_low:dice-drop_high]
+    rint = sum(rolls) + add - sum(drop)
+    rstr = ''.join((
         '\2%s\2' % rint,
         '=%s' % '+'.join(map(str, rolls)) if add or dice>1 else '',
-        '(%+d)' % add if add else '')
+        ''.join('-%d' % r for r in drop),
+        '(%+d)' % add if add else ''))
     return (rstr, rint)
-
-#===============================================================================
-def roll_str_spec(dice, sides, add):
-    return '%sd%d%s' % (
-        str(dice) if dice != 1 else '',
-        sides,
-        '%+d' % add if add else '')
 
 #===============================================================================
 def roll_list(dice, sides):
