@@ -5,6 +5,7 @@ from __future__ import print_function
 import re
 import sys
 import socket
+import traceback
 from datetime import datetime
 
 from untwisted.mode import Mode
@@ -42,41 +43,64 @@ ab_link = util.LinkSet()
 class MinecraftState(object):
     def __init__(self):
         self.map_name = None
+    def reload_from(self, prev):
+        if hasattr(prev, 'map_name'):
+            self.map_name = prev.map_name
 
-def init_work(server):
+def init_work(server, reload_from=None, reconnect_from=None):
     sock = socket.socket(server.family, socket.SOCK_STREAM)
     work = Work(mc_mode, sock)
     mc_work.append(work)
     work.minecraft = server
     work.minecraft_state = MinecraftState()
+    if hasattr(reconnect_from, 'minecraft_state'):
+        work.minecraft_state.reload_from(reconnect_from.minecraft_state)
+    elif hasattr(reload_from, 'minecraft_state'):
+        work.minecraft_state.reload_from(reload_from.minecraft_state)
     work.setblocking(0)
     work.connect_ex(server.address)
     h_query(work, 'map')
 
-def kill_work(work):
-    work.destroy()
-    work.shutdown(socket.SHUT_RDWR)
-    work.close()
-    mc_work.remove(work)
+def kill_work(work, remove=True):
+    try: work.destroy()
+    except socket.error: pass
+    try: work.shutdown(socket.SHUT_RDWR)
+    except socket.error: pass
+    try: work.close()
+    except socket.error: pass
+    if remove: mc_work.remove(work)
+
+def reload(prev):
+    if not hasattr(prev, 'mc_work'): return
+    if not isinstance(prev.mc_work, list): return
+    mc_work[:] = prev.mc_work[:]
 
 def install(bot):
-    global ab_mode
+    global ab_mode, mc_work
     if ab_mode is not None: raise AlreadyInstalled
 
     ab_mode = bot
     ab_link.install(ab_mode)
 
     mc_link.install(mc_mode)
+    prev_work, mc_work = mc_work, list()
     for server in conf_servers:
-        init_work(server)
+        prev = [w for w in prev_work if w.minecraft.name == server.name]
+        if prev:
+            init_work(server, reload_from=prev[0])
+        else:
+            init_work(server)
 
-def uninstall(bot):
+def reload_uninstall(bot):
+    uninstall(bot, reload=True)
+
+def uninstall(bot, reload=False):
     global ab_mode
     if ab_mode is None: raise NotInstalled
 
     mc_link.uninstall(mc_mode)
-    while len(mc_work):
-        kill_work(mc_work[0])
+    for work in mc_work[:]:
+        kill_work(work, remove=not reload)
 
     ab_link.uninstall(ab_mode)
     ab_mode = None
@@ -155,7 +179,7 @@ def mc_found(work, line):
 def mc_close_recv_error(work, *args):
     kill_work(work)
     yield runtime.sleep(RECONNECT_DELAY_SECONDS)
-    init_work(work.minecraft)
+    init_work(work.minecraft, reconnect_from=work)
 
 @mc_link(('QUERY_SUCCESS', 'map'))
 def h_query_success_map(work, type, key, val):
