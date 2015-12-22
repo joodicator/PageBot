@@ -7,7 +7,7 @@ import util
 
 MINLEN  = 5
 MAXLEN  = 100
-IFREQ   = 1000
+IFREQ   = 500
 
 ignore_words = set()
 ignore_prefixes = set()
