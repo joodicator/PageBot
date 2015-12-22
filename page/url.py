@@ -12,7 +12,7 @@ import socket
 import ssl
 import re
 
-from BeautifulSoup import BeautifulSoup
+from bs4 import BeautifulSoup
 
 from untwisted.magic import sign
 
@@ -31,8 +31,8 @@ TIMEOUT_SECONDS = 20
 READ_BYTES_MAX = 1024*1024
 CMDS_PER_LINE_MAX = 6
 
-MAX_AURL = 20
-MAX_YT_DESC = 70
+MAX_AURL = 30
+MAX_YT_DESC = 100
 
 ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
 
@@ -102,7 +102,8 @@ def get_title(url):
         size = info['Content-Length'] if 'Content-Length' in info else None
         final_url = stream.geturl()
 
-    parts = get_title_parts(final_url, ctype)
+        parts = get_title_parts(final_url, ctype, stream=stream)
+
     if len(parts) == 2:
         (title, extra) = parts
     elif len(parts) == 3:
@@ -131,7 +132,7 @@ def get_title(url):
 # where new_url is the URL of the examined resource, which has been derived in
 # some way from the original URL; or (body, extra, new_url, size) where size is
 # the size in bytes of the resource given by new_url.
-def get_title_parts(url, type):
+def get_title_parts(url, type, stream=None):
     match = URL_PART_RE.match(url)
     path, query = decode_url_path(match.group('path'))
     # YouTube
@@ -144,7 +145,7 @@ def get_title_parts(url, type):
         if res: return res
     # HTML
     if 'html' in type:
-        res = get_title_html(url, type)
+        res = get_title_html(url, type, stream=stream)
         if res: return res
     # image files
     if type.startswith('image/'):
@@ -153,14 +154,18 @@ def get_title_parts(url, type):
     return ('(no title)', type)
 
 #-------------------------------------------------------------------------------
-def get_title_html(url, type):
-    request = urllib2.Request(url)
-    request.add_header('User-Agent', AGENT)
-    with closing(urllib2.urlopen(request,
-    timeout=TIMEOUT_SECONDS, context=ssl_context)) as stream:
+def get_title_html(url, type, stream=None):
+    if stream is None:
+        request = urllib2.Request(url)
+        request.add_header('User-Agent', AGENT)
+        stream = urllib2.urlopen(
+            request, timeout=TIMEOUT_SECONDS, context=ssl_context)
+    
+    with closing(stream):
         soup = BeautifulSoup(
             stream.read(READ_BYTES_MAX),
-            convertEntities=BeautifulSoup.HTML_ENTITIES)
+            from_encoding = stream.info().getparam('charset'))
+
     title = soup.find('title')
     if title:
         title = format_title(title.text.strip())
@@ -223,18 +228,23 @@ def get_title_imgur(url, type):
         img_type = 'image/gif'
     
     title = get_title_image(img_url, img_type)[0]
-
     if info and info.get('title') and not URL_PART_RE.match(info['title']):
         title = '%s -- %s' % (format_title(info['title']), title)
+
     if info and info.get('size'):
         size = info['size']
     else:
         size = None
 
-    if img_url == url:
-        return (title, img_type)
-    else:
-        return (title, img_type, img_url, size)
+    if info and info.get('gifv') and not path.endswith('.gif'):
+        img_url = info['gifv']
+        img_type = None
+        size = None
+
+    if decode_url_path(URL_PART_RE.match(img_url).group('path'))[0] == path:
+        img_url = url
+
+    return (title, img_type, img_url, size)
 
 #-------------------------------------------------------------------------------
 def abbrev_url(url):
@@ -282,7 +292,7 @@ def google_image_title_soup(url):
         text = stream.read(READ_BYTES_MAX)
         with open('/tmp/url', 'w') as file:
             file.write(text)
-        return BeautifulSoup(text, convertEntities=BeautifulSoup.HTML_ENTITIES)
+        return BeautifulSoup(text, 'html5lib')
 
 #==============================================================================#
 # True if the given hostname or IPV4 or IPV6 address string is not in any
