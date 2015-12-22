@@ -142,7 +142,7 @@ def h_delete_missed_roll(bot, id, target, args, full_msg, reply):
 #-------------------------------------------------------------------------------
 @link('DICE_ROLLS')
 def h_dice_rolls(bot, id, target, rolls, result_msg):
-    move_rolls = filter(lambda ((d,s,a),r): (d,s) == (2,6), rolls)
+    move_rolls = filter(is_move_roll, rolls)
     fail_rolls = filter(lambda (t,r): r < 7, move_rolls)
     if not move_rolls or not target: return
     with open(LOG_FILE, 'a') as file:
@@ -153,6 +153,10 @@ def h_dice_rolls(bot, id, target, rolls, result_msg):
             tuple(id),
             result_msg
         ), file=file)
+
+def is_move_roll(((d,s,a), r)):
+    dice, drop_low, drop_high = d if isinstance(d, tuple) else (d, 0, 0)
+    return (dice - drop_low - drop_high, s) == (2, 6)
 
 #===============================================================================
 def strip_irc(str):
