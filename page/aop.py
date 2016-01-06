@@ -36,9 +36,14 @@ conf = read_conf()
 #===============================================================================
 @link('OTHER_JOIN')
 def h_other_join(bot, id, chan):
-    has_aop = yield has_aop_in(bot, id, chan)
-    if not has_aop: return
-    yield delayed_op_in(bot, [id.nick], chan)
+    yield maybe_aop(bot, [id], chan, delay=True)
+
+@link('CHAN_MODE')
+def h_chan_mode(bot, src, chan, modes):
+    for (pm, mchar, marg) in modes:
+        if pm == '+' and mchar in 'oh' and marg.lower() == bot.nick.lower():
+            yield maybe_aop_chan(bot, chan)
+            break
 
 #===============================================================================
 @link('HELP')
@@ -55,11 +60,30 @@ def h_help_update(bot, reply, *args):
 @link('!update')
 def h_update(bot, id, chan, args, full_msg):
     if not chan: return
-    has_aop = yield has_aop_in(bot, id, chan)
-    if not has_aop: return
-    yield give_op_in(bot, id, chan)
+    yield maybe_aop(bot, [id], chan)
 
 #===============================================================================
+@util.msub(link, 'aop.maybe_aop')
+def maybe_aop(bot, ids, chan, delay=False):
+    aop_nicks = []
+    for nick_or_id in ids:
+        if isinstance(nick_or_id, tuple):
+            id = nick_or_id
+        else:
+            id = yield identity.get_id(bot, nick_or_id)
+        has_aop = yield has_aop_in(bot, id, chan)
+        if has_aop: aop_nicks.append(id.nick)
+
+    if delay:
+        yield delayed_op_in(bot, aop_nicks, chan)
+    else:
+        yield give_op_in(bot, aop_nicks, chan)
+
+@util.msub(link, 'aop.maybe_aop_chan')
+def maybe_aop_chan(bot, chan, delay=False):
+    names = yield channel.names(bot, chan, include_prefix=False)
+    yield maybe_aop(bot, names, chan, delay=delay)
+
 @util.mfun(link, 'aop.has_aop_in')
 def has_aop_in(bot, id, chan, ret):
     id_str = '%s!%s@%s' % tuple(id)
