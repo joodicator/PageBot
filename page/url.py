@@ -141,7 +141,7 @@ def get_title_parts(url, type, stream=None):
         if res: return res
     # imgur
     if re.search(r'(^|\.)imgur\.com$', match.group('host')):
-        res = get_title_imgur(url, type)
+        res = get_title_imgur(url, type, stream)
         if res: return res
     # HTML
     if 'html' in type:
@@ -207,12 +207,12 @@ def get_title_youtube(url, type):
         traceback.print_exc(e)
 
 #-------------------------------------------------------------------------------
-def get_title_imgur(url, type):
+def get_title_imgur(url, type, stream=None):
     match = URL_PART_RE.match(url)
     if match.group('host') not in ('imgur.com', 'i.imgur.com'): return
     path, query = decode_url_path(match.group('path'))
     path_match = re.match(
-        r'(/gallery)?/(?P<id>[a-zA-Z0-9]+)(\.[a-zA-Z]+)?$', path)
+        r'(/gallery|/r/[^/]+)?/(?P<id>[a-zA-Z0-9]+)(\.[a-zA-Z]+)?$', path)
 
     try:
         import imgur
@@ -230,6 +230,11 @@ def get_title_imgur(url, type):
     title = get_title_image(img_url, img_type)[0]
     if info and info.get('title') and not URL_PART_RE.match(info['title']):
         title = '%s -- %s' % (format_title(info['title']), title)
+    elif 'html' in type:
+        (html_title, html_type) = get_title_html(url, type, stream)
+        if html_title and not URL_PART_RE.match(html_title):
+            html_title = re.sub(r'^\002(.*) - Imgur\002$', r'\1', html_title)
+            title = '%s -- %s' % (format_title(html_title), title)
 
     if info and info.get('size'):
         size = info['size']
