@@ -75,3 +75,10 @@ def h_exception(bot, e):
     bot.destroy()
     yield sleep(EXIT_DELAY_SECONDS)
     raise e
+
+@b_link('AUTONICK')
+def b_nick(bot):
+    while True:
+        yield sleep(60)
+        if bot.nick != bot.autonick: break
+        bot.send_cmd('NICK %s' % bot.conf.nick)

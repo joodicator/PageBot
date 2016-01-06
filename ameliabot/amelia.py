@@ -92,6 +92,12 @@ class AmeliaBot(Mac):
         self.nick += "_"
         self.send_cmd('NICK %s' % self.nick)
 
+        if hasattr(self, 'auto_nick'):
+            self.auto_nick = self.nick
+        else:
+            self.auto_nick = self.nick
+            self.drive('AUTONICK', self)
+
     def h_rpl_isupport(self, bot, pre, target, *args):
         for arg in args[:-1]:
             match = re.match(r'-?(?P<key>[^=]+)(=(?P<val>.*))?', arg)
@@ -104,6 +110,7 @@ class AmeliaBot(Mac):
             bot.isupport[key] = val
 
     def h_rpl_welcome(self, *args):
+        self.unlink(ERR_NICKNAMEINUSE, self.h_err_nicknameinuse)
         for channel in self.conf['channels']:
             self.send_cmd('JOIN %s' % channel)
         self.drive('AUTOJOIN', self)
