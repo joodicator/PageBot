@@ -390,11 +390,15 @@ def quiet_channels():
     return quiet_channels_list
 
 # A function decorated with @not_quiet(chan_arg=a) will do nothing if it is
-# called with the argument named a set to a channel in quiet_channels().
+# called with the argument named a set to a channel either in quiet_channels()
+# or with mode +m.
 def not_quiet(chan_arg='target'):
     def not_quiet_deco(func):
         def not_quiet_func(*args, **kwds):
             chan = inspect.getcallargs(func, *args, **kwds)[chan_arg]
+            modes = cmode_channels.get(chan)
+            if modes and 'm' in modes:
+                return
             if type(chan) is not str or chan.lower() not in quiet_channels():
                 return func(*args, **kwds)
         return not_quiet_func
