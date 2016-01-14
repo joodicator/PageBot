@@ -26,40 +26,44 @@ def reload(prev):
             if decay_chan not in links: continue
             decay_links.add(decay_chan)
 
-# Establish a mutual link between channels c1 and c2.
+# Establish a link from channel c1 to c2, and from c2 to c1 if mutual is True.
 # If an existing link is marked to decay, unmark it.
-def add_link(*args):
-    return util.sub(h_add_link(*args))
-
-def h_add_link(bot, c1, c2):
-    c1, c2 = c1.lower(), c2.lower()
+@util.msub(link, 'chan_link.add_link')
+def add_link(bot, c1, c2, mutual=True):
+    c1, c2 = c1.lower(), c2.lower()   
     if c1 not in links: links[c1] = set()
-    if c2 not in links: links[c2] = set()
-
     if c2 not in links[c1] or c1 not in links[c2]:
         links[c1].add(c2)
-        links[c2].add(c1)
         decay_links.discard(c1)
-        decay_links.discard(c2)
         yield introduce(bot, c1, c2)
-        yield introduce(bot, c2, c1)
+    if mutual:
+        yield add_link(bot, c2, c1, False)
 
 # Delete any link between channels c1 and c2.
 def del_link(*args):
     return util.sub(h_del_link(*args))
 
-def h_del_link(bot, c1, c2):
-    c1, c2 = c1.lower(), c2.lower()
+def h_del_link(bot, c1_orig, c2_orig):
+    c1, c2 = c1_orig.lower(), c2_orig.lower()
+    notify_c1 = notify_c2 = False
     if c1 in links:
-        links[c1].discard(c2)
+        if c2 in links[c1]:
+            notify_c2 = True
+            links[c1].remove(c2)
         if not links[c1]: del links[c1]
     if c2 in links:
-        links[c2].discard(c1)
+        if c1 in links[c2]:
+            notify_c1 = True
+            links[c2].remove(c1)
         if not links[c2]: del links[c2]
+    if notify_c2:
+        bot.send_msg(c2, '%s: Disconnected from channel.'
+            % channel.capitalisation.get(c1, c1_orig))
+    if notify_c1:
+        bot.send_msg(c1, '%s: Disconnected from channel.'
+            % channel.capitalisation.get(c2, c2_orig))
     decay_links.discard(c1)
     decay_links.discard(c2)
-    bot.send_msg(c1, '%s: Disconnected from channel.' % c2)
-    bot.send_msg(c2, '%s: Disconnected from channel.' % c1)
 
 # Mark an existing link so that it will eventually be removed
 # if it is not refreshed by calling add_link().
@@ -86,10 +90,11 @@ def introduce(bot, chan, lchan):
     topic, names = yield util.mmcall_all(bot,
         ('channel.topic', bot, chan),
         ('channel.names', bot, chan, True))
+    cchan = channel.capitalisation.get(chan.lower(), chan)
     if topic:
-        bot.send_msg(lchan, '%s: Topic: %s' % (chan, topic), no_link=True)
+        bot.send_msg(lchan, '%s: Topic: %s' % (cchan, topic), no_link=True)
     for row in util.join_cols(*(names[i::9] for i in range(9))):
-        bot.send_msg(lchan, '%s: Users: \2%s\2' % (chan, row), no_link=True)
+        bot.send_msg(lchan, '%s: Users: \2%s\2' % (cchan, row), no_link=True)
 
 @link('SELF_JOIN')
 def h_self_join(bot, chan):
@@ -115,11 +120,19 @@ def h_online(bot, id, chan, args, full_msg):
 
 @link('!add-chan-link')
 @auth.admin
-def h_add_chan_link(bot, id, chan, args, full_msg):
-    if not chan or not re.match(r'#\S*$', args):
-        message.reply(bot, id, chan, 'Error: invalid argument: "%s".' % args)
+def h_add_chan_link(bot, id, chan, from_chan, full_msg):
+    if not chan or not re.match(r'#\S*$', from_chan):
+        message.reply(bot, id, chan, 'Error: invalid argument: "%s".' % from_chan)
     else:
-        yield add_link(bot, chan, args)
+        yield add_link(bot, from_chan, chan)
+
+@link('!add-chan-link-from')
+@auth.admin
+def h_add_chan_link(bot, id, chan, from_chan, full_msg):
+    if not chan or not re.match(r'#\S*$', from_chan):
+        message.reply(bot, id, chan, 'Error: invalid argument: "%s".' % from_chan)
+    else:
+        yield add_link(bot, from_chan, chan, False)
 
 @link('!del-chan-link')
 @auth.admin
@@ -200,5 +213,6 @@ def h_topic(bot, source, chan, topic):
 def h_chan_mode(bot, source, chan, *args):
     if chan.lower() not in links: return
     if isinstance(source, tuple): source = source[0]
-    msg = '%s set mode: %s' % (source, ' '.join(args))
+    chan = channel.capitalisation.get(chan.lower(), chan)
+    msg = '%s: %s set mode: %s' % (chan, source, ' '.join(args))
     for lchan in links[chan.lower()]: bot.send_msg(lchan, msg, no_link=True)
