@@ -1,3 +1,4 @@
+import traceback
 import time
 import re
 
@@ -26,7 +27,10 @@ def uninstall(bot):
     util.event_sub(bot, IDENTIFIED, REGISTERED)
 
 def conf(*args, **kwds):
-    return util.fdict('conf/nickserv.py', util.__dict__).get(*args, **kwds)
+    try:
+        return util.fdict('conf/nickserv.py', util.__dict__).get(*args, **kwds)
+    except IOError:
+        traceback.print_exc()
 
 @link(REGISTERED)
 def registered(bot, *rargs):

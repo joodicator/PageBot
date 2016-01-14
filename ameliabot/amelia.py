@@ -10,7 +10,6 @@ from untwisted.core import gear
 from untwisted.network import Mac
 from untwisted.event import CLOSE, TICK
 from untwisted.usual import Kill
-import utils.misc
 import stdlog as std
 import xirclib
 

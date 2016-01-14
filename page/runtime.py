@@ -77,8 +77,15 @@ def h_exception(bot, e):
     raise e
 
 @b_link('AUTONICK')
-def b_nick(bot):
+def h_nick(bot):
     while True:
-        yield sleep(60)
-        if bot.nick != bot.autonick: break
-        bot.send_cmd('NICK %s' % bot.conf.nick)
+        yield sleep(30)
+        if bot.nick != bot.auto_nick: break
+        bot.send_cmd('NICK %s' % bot.conf['nick'])
+
+@b_link('OTHER_NICK')
+@b_link('OTHER_QUIT')
+def h_other_nick(bot, id, *args):
+    if (hasattr(bot, 'auto_nick') and bot.nick == bot.auto_nick
+    and id.nick.lower() == bot.conf['nick'].lower()):
+        bot.send_cmd('NICK %s' % bot.conf['nick'])
