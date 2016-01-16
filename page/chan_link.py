@@ -10,13 +10,29 @@ import util
 import channel
 import message
 
-link, install, uninstall = util.LinkSet().triple()
+LINKS_FILE = 'state/chan_link_persistent.txt'
+
+link, link_install, uninstall = util.LinkSet().triple()
 
 # c2.lower() in links[c1.lower()] iff c1 is broadcast to c2.
 links = dict()
 
 # c1.lower() in decay_links if c1's link will eventually decay.
 decay_links = set()
+
+# (c1.lower(), c2.lower()) in persistent_links if a link from c1 to c2
+# will be created upon the next restart.
+try:
+    persistent_links = set(util.read_list(LINKS_FILE))
+except IOError:
+    persistent_links = set()
+
+def install(bot):
+    for c1, c2 in persistent_links:
+        c1, c2 = c1.lower(), c2.lower()
+        if c1 not in links: links[c1] = set()
+        links[c1].add(c2)
+    link_install(bot)
 
 def reload(prev):
     if hasattr(prev, 'links') and isinstance(prev.links, dict):
@@ -26,33 +42,43 @@ def reload(prev):
             if decay_chan not in links: continue
             decay_links.add(decay_chan)
 
+def add_persistent_link(c1, c2):
+    persistent_links.add((c1.lower(), c2.lower()))
+    util.write_list(LINKS_FILE, list(persistent_links))
+
+def del_persistent_link(c1, c2):
+    persistent_links.discard((c1.lower(), c2.lower()))
+    util.write_list(LINKS_FILE, list(persistent_links))
+
 # Establish a link from channel c1 to c2, and from c2 to c1 if mutual is True.
-# If an existing link is marked to decay, unmark it.
+# If an existing link is marked to decay, unmark it. If persistent is True,
+# the link will be saved in a state file to be restored after any restart.
 @util.msub(link, 'chan_link.add_link')
-def add_link(bot, c1, c2, mutual=True):
+def add_link(bot, c1, c2, mutual=True, persistent=False):
     c1, c2 = c1.lower(), c2.lower()   
     if c1 not in links: links[c1] = set()
     if c2 not in links[c1] or c1 not in links[c2]:
+        add_persistent_link(c1, c2)
         links[c1].add(c2)
         decay_links.discard(c1)
         yield introduce(bot, c1, c2)
     if mutual:
-        yield add_link(bot, c2, c1, False)
+        yield add_link(bot, c2, c1, False, persistent)
 
 # Delete any link between channels c1 and c2.
-def del_link(*args):
-    return util.sub(h_del_link(*args))
-
-def h_del_link(bot, c1_orig, c2_orig):
+@util.msub(link, 'chan_link.del_link')
+def del_link(bot, c1_orig, c2_orig):
     c1, c2 = c1_orig.lower(), c2_orig.lower()
     notify_c1 = notify_c2 = False
     if c1 in links:
         if c2 in links[c1]:
+            del_persistent_link(c1, c2)
             notify_c2 = True
             links[c1].remove(c2)
         if not links[c1]: del links[c1]
     if c2 in links:
         if c1 in links[c2]:
+            del_persistent_link(c2, c1)
             notify_c1 = True
             links[c2].remove(c1)
         if not links[c2]: del links[c2]
@@ -68,6 +94,8 @@ def h_del_link(bot, c1_orig, c2_orig):
 # Mark an existing link so that it will eventually be removed
 # if it is not refreshed by calling add_link().
 def decay_link(bot, c1, c2):
+    del_persistent_link(c1, c2)
+    del_persistent_link(c2, c1)
     decay_links.add(c1)
     decay_links.add(c2)
 
@@ -124,7 +152,7 @@ def h_add_chan_link(bot, id, chan, from_chan, full_msg):
     if not chan or not re.match(r'#\S*$', from_chan):
         message.reply(bot, id, chan, 'Error: invalid argument: "%s".' % from_chan)
     else:
-        yield add_link(bot, from_chan, chan)
+        yield add_link(bot, from_chan, chan, True, True)
 
 @link('!add-chan-link-from')
 @auth.admin
@@ -132,7 +160,7 @@ def h_add_chan_link(bot, id, chan, from_chan, full_msg):
     if not chan or not re.match(r'#\S*$', from_chan):
         message.reply(bot, id, chan, 'Error: invalid argument: "%s".' % from_chan)
     else:
-        yield add_link(bot, from_chan, chan, False)
+        yield add_link(bot, from_chan, chan, False, True)
 
 @link('!del-chan-link')
 @auth.admin
