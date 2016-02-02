@@ -57,5 +57,6 @@ def backslash_escape(str):
 def backslash_unescape(str):
     def sub(m):
         s = m.group(1)
-        return unichr(int(s[1:], 16)) if s[0] in 'xu' else s
-    return re.sub(r'\\(\\|x[0-9a-f]{2}|u[0-9a-f]{4})', sub, str, re.I)
+        return unichr(int(s[1:], 16)) if s[0] in 'xuU' else s
+    return re.sub(
+        r'\\(\\|x[0-9a-f]{2}|u[0-9a-f]{4}|U[0-9a-f]{8})', sub, str)
