@@ -35,7 +35,7 @@ def _msg(bot, id, target, args, full_msg):
 @admin
 def _act(bot, id, target, args, full_msg):
     match = re.match('(?P<whom>\S*)\s*(?P<msg>.*)$', args)
-    bot.send_msg(match.group('whom'), '\1ACTION ' + match.group('msg'))
+    bot.send_msg(match.group('whom'), '\1ACTION ' + match.group('msg') + '\1')
 
 @link('!j')
 @link('!join')
