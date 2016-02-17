@@ -77,9 +77,13 @@ MAX_SENT_WC = 3
 # where the recipient is given as a regular expression.
 MAX_SENT_RE = 4
 
-# last_notify[msg] = time.time()
-# when msg's recipient was last notified of it.
-last_notify = dict()
+# The most messages that will be automatically delivered in a channel.
+# When exceeded, the recipient will be instructed to read by PM using !read.
+MAX_DELIVER_CHAN = 4
+
+# The most messages that will be delivered at once by PM when using !read.
+# When exceeded, the recipient will be prompted to enter !read again.
+MAX_DELIVER_PM = 4
 
 #-------------------------------------------------------------------------------
 # A saved message kept by the system.
@@ -91,8 +95,16 @@ Message.__getstate__ = lambda *a, **k: None
 # The plugin's persistent state object.
 class State(object):
     def __init__(self):
+        # All undelivered messages, in order sent.
         self.msgs = []
+
+        # All dismissed messages, in order dismissed.
         self.dismissed_msgs = []
+
+        # The most recent time, if any, when each message's receipient was
+        # notified of its existence.
+        self.last_notify = dict() 
+
         self.prev_state = None
         self.next_state = None        
 
@@ -159,12 +171,12 @@ def redo_state():
     if state is None: raise HistoryEmpty
     set_state(state)
 
-# Mark that msg's receipient has been notified of it now.
+# Mark that msg's recipient has presently been notified of it.
 def set_last_notify(msg, state):
-    last_notify[msg] = time.time()
-    for other_msg in last_notify.keys():
+    state.last_notify[msg] = time.time()
+    for other_msg in state.last_notify.keys():
         if other_msg not in state.msgs:
-            last_notify.pop(other_msg, None)
+            state.last_notify.pop(other_msg, None)
 
 #==============================================================================#
 @link('HELP*')
@@ -242,12 +254,10 @@ def h_tell(bot, id, target, args, full_msg):
             'Error: you may leave no more than %d messages at once.' % MAX_SENT)
         return
     if '$' in to_nick:
-        same_recv = [m for m in same_sent if '$' in m.to_nick]
-        if len(same_recv) > MAX_SENT_RE:
-            reply(bot, id, target,
-                'Error: you may leave no more than %d regex-addressed messages'
-                ' at once.' % (MAX_SENT_RE))
-            return
+        reply(bot, id, target,
+            'Error: the recipient may not contain "$". Note that regular expressions'
+            ' are no longer supported.')
+        return
     else:
         for recv in (p for n in to_nicks for p in n.split('/')):
             norm_recv = lambda r: re.sub(r'\*+', r'*', r).lower()
@@ -445,6 +455,42 @@ def h_undismiss(bot, id, chan, query, *args):
     reply(bot, id, chan, msg)
 
 #==============================================================================#
+@link('!read')
+def h_read(bot, id, chan, args, full_msg):
+    if chan is not None:
+        msgs = deliver_msgs(bot, id, chan, explicit=True)
+        if not msgs:
+            reply(bot, id, chan, 'You have no messages.')
+        return
+
+    state = get_state()
+    all_msgs = [m for m in state.msgs if would_deliver(id, None, m)
+                and m in state.last_notify]
+    if not all_msgs:
+        reply(bot, id, chan, 'No messages are available to read.')
+        return
+
+    for msg in all_msgs[:MAX_DELIVER_PM]:
+        deliver_msg(bot, id, None, msg)
+
+    state = get_state()
+    state.msgs = [m for m in state.msgs if m not in all_msgs[:MAX_DELIVER_PM]]
+    put_state(state)
+
+    remain = len(all_msgs) - MAX_DELIVER_PM
+    if not remain: return
+
+    noun = 'message' if remain == 1 else 'messages'
+    if remain > MAX_DELIVER_PM: reply(bot, id, chan,
+        'Say \2!read\2 to read the next %d of %d %s.' % (
+            MAX_DELIVER_PM, remain, noun))
+    elif remain > 0: reply(bot, id, chan,
+        'Say \2!read\2 to read the remaining %d %s.' % (
+            remain, noun))
+    else: reply(bot, id, chan,
+        '(End of messages.)')
+
+#==============================================================================#
 @link('!tell?', '!page?')
 @admin
 def h_tell_list(bot, id, target, args, full_msg):
@@ -560,7 +606,8 @@ def h_nick(bot, id, new_nick, chan):
     last_notify_max = time.time() - MIN_NICKCHANGE_NOTIFY_INTERVAL_S
     def would_notify(msg):
         if not would_deliver(new_id, chan, msg): return False
-        return msg not in last_notify or last_notify[msg] < last_notify_max
+        return msg not in state.last_notify \
+            or state.last_notify[msg] < last_notify_max
 
     if any(would_notify(m) for m in state.msgs):
         return notify_msgs(bot, new_id, chan)
@@ -570,24 +617,47 @@ def h_nick(bot, id, new_nick, chan):
 def notify_msgs(bot, id, chan):
     state = get_state()
     msgs = filter(lambda m: would_deliver(id, chan, m), state.msgs)
-    if msgs:
-        reply(bot, id, chan, 'You have %s message%s; say anything to read %s.'
-            % ((len(msgs),'s','them') if len(msgs) > 1 else (len(msgs),'','it')))
-        for msg in msgs:
-            set_last_notify(msg, state)
+    if not msgs:
+        return
+
+    noun, pronoun = ('messages', 'them') if len(msgs) > 1 else ('message', 'it')
+    if len(msgs) <= MAX_DELIVER_CHAN:
+        reply(bot, id, chan,
+            'You have %s %s; say anything to read %s.' % (
+            len(msgs), noun, pronoun))
+    else:
+        reply(bot, id, chan,
+            'You have %s %s; use "\2/msg %s !read\2" to read %s.' % (
+            len(msgs), noun, bot.nick, pronoun))
+
+    for msg in msgs:
+        set_last_notify(msg, state)
+    set_state(state)
 
 #==============================================================================#
-# Deliver to `id' any messages left for them in `chan'.
-def deliver_msgs(bot, id, chan):
+# Deliver to `id' any messages left for them in `chan'; unless the number of
+# such messages exceeds MAX_DELIVER_CHAN, in which case instruct `id' to read
+# them by PM; unless explicit is False and the recipient has already been
+# notified of all such messages, in which case do not issue any notification.
+# In all cases, return a list of the messages in question.
+def deliver_msgs(bot, id, chan, explicit=False):
     state = get_state()
     msgs = [(would_deliver(id, chan, m), m) for m in state.msgs]
     msgs_deliver = [m for (b, m) in msgs if b]
     msgs_keep = [m for (b, m) in msgs if not b]
-    if not msgs_deliver: return
-    for msg in msgs_deliver:
-        deliver_msg(bot, id, chan, msg)
-    state.msgs = msgs_keep
-    put_state(state)
+
+    if 0 < len(msgs_deliver) <= MAX_DELIVER_CHAN:
+        # Deliver each message in the channel.
+        for msg in msgs_deliver:
+            deliver_msg(bot, id, chan, msg)
+        state.msgs = msgs_keep
+        set_state(state)
+    elif (len(msgs_deliver) > MAX_DELIVER_CHAN
+    and (explicit or any(m not in state.last_notify for m in msgs_deliver))):
+        # There are too many messages; tell the recipient to read them by PM.
+        notify_msgs(bot, id, chan)
+
+    return msgs_deliver
 
 #==============================================================================#
 # Unconditionally deliver `msg' to `id' in `chan', or by PM if `chan' is None.
@@ -597,24 +667,26 @@ def deliver_msg(bot, id, chan, msg):
     d_mins, d_secs = divmod(delta.seconds, 60)
     d_hours, d_mins = divmod(d_mins, 60)
 
-    bot.send_msg(chan, '%s: %s said on %s UTC (%s ago):' % (
-        id.nick,
+    reply(bot, id, chan, '%s said%s on %s UTC (%s ago):' % (
         '%s!%s@%s' % tuple(msg.from_id),
+        (' in %s' % msg.channel) if chan is None else '',
         msg.time_sent.strftime('%d %b %Y, %H:%M'),
         '%sd, %02d:%02d:%02d' % (delta.days, d_hours, d_mins, d_secs)))
-    bot.send_msg(chan, "<%s> %s" % (msg.from_id.nick, msg.message))
+    reply(bot, id, chan, "<%s> %s" % (msg.from_id.nick, msg.message),
+        prefix=False)
 
     bot.drive('TELL_DELIVERY', bot, msg.from_id, id, chan, msg.message)
     return True
 
 #==============================================================================#
 # Returns True if `msg' would be delivered at this time to `id' in `chan',
-# or otherwise returns False.
+# or otherwise returns False. Alternatively, if `chan' is None, returns True if
+# the message would be delivered in any channel.
 def would_deliver(id, chan, msg):
-    if msg.channel.lower() != chan.lower(): return False
+    if chan is not None and msg.channel.lower() != chan.lower(): return False
     if not match_id(msg.to_nick, id): return False
     delta = datetime.datetime.utcnow() - msg.time_sent
-    if delta.total_seconds() < 1: return False    
+    if delta.total_seconds() < 1: return False
     return True
 
 #==============================================================================#
