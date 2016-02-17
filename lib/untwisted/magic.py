@@ -2,11 +2,12 @@ from misc import xmap, ymap
 
 class sign(object):
     def __call__(self, mod, seq):
-        mod.drive(self.event, *self.args)
+        mod.drive(self.event, *self.args, **self.kwds)
 
-    def __init__(self, event, *args):
+    def __init__(self, event, *args, **kwds):
         self.event = event
         self.args = args
+        self.kwds = kwds
 
 class hold(object):
     def __call__(self, mod, seq):

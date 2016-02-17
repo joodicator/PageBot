@@ -12,21 +12,23 @@ class Mode(object):
         self.base = OrderedDict()
         self.default = default
     
-    def drive(self, event, *args):
+    def drive(self, event, *args, **kwds):
         # It evaluates all callbacks linked to event
 
         for signal, handle in self.base.keys():
             ################
             if signal == event:
                 try:
-                    old_args, kwds = self.base[signal, handle] 
+                    old_args, old_kwds = self.base[signal, handle] 
                 except KeyError:
                     continue
                 new_args = glue(args, old_args)
+                new_kwds = dict(old_kwds)
+                new_kwds.update(kwds)
 
                 try:
                     #it evaluates handle
-                    seq = handle(*new_args, **kwds)
+                    seq = handle(*new_args, **new_kwds)
 
                     if seq:
                         chain(self, seq)
@@ -39,7 +41,7 @@ class Mode(object):
 
              ################
 
-        self.default(event, *args)
+        self.default(event, *args, **kwds)
 
     def link(self, event, callback, *args, **kwds):
         # This function maps an event to a callback.

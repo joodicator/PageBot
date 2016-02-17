@@ -2,7 +2,7 @@ import UserDict
 
 import traceback
 
-void = lambda *args: None
+void = lambda *args, **kwds: None
 
 def chain(poll, seq):
     try:
