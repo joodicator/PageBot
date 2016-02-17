@@ -70,17 +70,32 @@ def h_url(bot, id, target, args, full_msg, reply):
 
     for url in urls:
         try:
-            reply(get_title(url))
+            result = get_title_proxy(url)
+            reply(result['title'])
+            if target:
+                yield sign('PROXY_MSG', bot, None, target, result['proxy_msg'],
+                    full_msg=result['proxy_msg_full'])
             yield runtime.sleep(0.01)
         except (socket.error, urllib2.URLError, PageURLError) as e:
             traceback.print_exc()
             reply('Error: %s [%s]' % (e, abbrev_url(url)))    
 
 #==============================================================================#
+# May be raised by get_title, get_title_proxy, etc, to indicate that the
+# retrieval of information about a URL failed in some controlled fashion.
 class PageURLError(Exception):
     pass
 
+# Returns an IRC string describing the given URL, including its title; suitable
+# for sending over IRC as a single line, as in response to the !url command.
 def get_title(url):
+    return get_title_proxy(url)['title']
+
+# Returns a dictionary containing the following keys:
+#   'title':          An IRC string describing the URL, including its title.
+#   'proxy_msg':      The part of 'title' considered to be a proxy message.
+#   'proxy_msg_full': The unabbreviated version of 'proxy_msg'.
+def get_title_proxy(url):
     is_nsfw = False
     if type(url) is tuple:
         if url[0] == 'NSFW': is_nsfw = True
@@ -101,15 +116,13 @@ def get_title(url):
         ctype = info.gettype()
         size = info['Content-Length'] if 'Content-Length' in info else None
         final_url = stream.geturl()
-
         parts = get_title_parts(final_url, ctype, stream=stream)
 
-    if len(parts) == 2:
-        (title, extra) = parts
-    elif len(parts) == 3:
-        (title, extra, final_url) = parts
-    else:
-        (title, extra, final_url, size) = parts
+    title = parts.get('title', 'Title: (none)')
+    extra = parts.get('info', ctype)
+    extra_full = parts.get('info_full', extra)
+    final_url = parts.get('url', final_url)
+    size = parts.get('size', size)
 
     url_info = []
     if final_url != url:
@@ -124,14 +137,20 @@ def get_title(url):
     url_info = '; '.join(url_info)
     if is_nsfw: url_info = '%s \2NSFW\2' % url_info
 
-    return '%s [%s]' % (title, url_info)
+    return {
+        'title':          '%s [%s]' % (title, url_info),
+        'proxy_msg':      extra,
+        'proxy_msg_full': extra_full }
 
 #-------------------------------------------------------------------------------
-# Returns (body, extra), where body is the main title of the URL, and extra is
-# None, or a string with supplementary information; or (body, extra, new_url)
-# where new_url is the URL of the examined resource, which has been derived in
-# some way from the original URL; or (body, extra, new_url, size) where size is
-# the size in bytes of the resource given by new_url.
+# Given a URL and its MIME type (according to HTTP), and possibly also given a
+# file object containing a stream with the contents of the URL, returns a
+# dictionary containing some or all of the following keys:
+#   'title':     the main title of the URL.
+#   'info':      a string with supplementary information about the URL.
+#   'info_full': if 'info' has been abbreviated, the unabbreviated version.
+#   'url':       the (new) URL to which the original URL ultimately directs.
+#   'size':      the size in bytes of the resource given by the 'url' key.
 def get_title_parts(url, type, stream=None):
     match = URL_PART_RE.match(url)
     path, query = decode_url_path(match.group('path'))
@@ -151,7 +170,7 @@ def get_title_parts(url, type, stream=None):
     if type.startswith('image/'):
         return get_title_image(url, type)
     # Other
-    return ('(no title)', type)
+    return dict()
 
 #-------------------------------------------------------------------------------
 def get_title_html(url, type, stream=None):
@@ -168,14 +187,14 @@ def get_title_html(url, type, stream=None):
 
     title = soup.find('title')
     if title:
-        title = format_title(title.text.strip())
-        return (title, type)
+        title = 'Title: %s' % format_title(title.text.strip())
+        return { 'title': title }
 
 #-------------------------------------------------------------------------------
 def get_title_image(url, type):
     title = google_image_best_guess(url)
     title = 'Best guess: %s' % (format_title(title) if title else '(none)')
-    return (title, type)
+    return { 'title': title }
 
 #-------------------------------------------------------------------------------
 def get_title_youtube(url, type):
@@ -196,13 +215,20 @@ def get_title_youtube(url, type):
         #dislikes = result['statistics']['dislikeCount']
         duration = result['contentDetails']['duration']
 
+        desc_full = desc
         desc = re.sub(r'\r\n|\r|\n', ' ', desc)
         desc = '%s...' % desc[:MAX_YT_DESC] if len(desc) > MAX_YT_DESC else desc
         duration = iso8601_period_human(duration)
 
-        return (format_title(title),
-            'Duration: %s; Channel: %s; Description: "%s"'
-            % (duration, channel, desc))
+        return {
+            'title':
+                'Title: %s' % format_title(title),
+            'info':
+                'Duration: %s; Channel: %s; Description: "%s"'
+                % (duration, channel, desc),
+            'info_full':
+                'Duration: %s; Channel: %s; Description: "%s"'
+                % (duration, channel, desc_full) }
     except Exception as e:
         traceback.print_exc(e)
 
@@ -229,12 +255,12 @@ def get_title_imgur(url, type, stream=None):
     
     title = get_title_image(img_url, img_type)[0]
     if info and info.get('title') and not URL_PART_RE.match(info['title']):
-        title = '%s -- %s' % (format_title(info['title']), title)
+        title = 'Title: %s -- %s' % (format_title(info['title']), title)
     elif 'html' in type:
         (html_title, html_type) = get_title_html(url, type, stream)
         if html_title and not URL_PART_RE.match(html_title):
             html_title = re.sub(r'^\002(.*) - Imgur\002$', r'\1', html_title)
-            title = '%s -- %s' % (format_title(html_title), title)
+            title = 'Title: %s -- %s' % (format_title(html_title), title)
 
     if info and info.get('size'):
         size = info['size']
@@ -249,7 +275,7 @@ def get_title_imgur(url, type, stream=None):
     if decode_url_path(URL_PART_RE.match(img_url).group('path'))[0] == path:
         img_url = url
 
-    return (title, img_type, img_url, size)
+    return {'title':title, 'info':img_type, 'url':img_url, 'size':size}
 
 #-------------------------------------------------------------------------------
 def abbrev_url(url):

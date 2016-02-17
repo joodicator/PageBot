@@ -1,4 +1,5 @@
 #==============================================================================#
+from itertools import *
 import collections
 import re
 
@@ -10,7 +11,7 @@ link, install, uninstall = util.LinkSet().triple()
 
 URL_RE = re.compile(
     r'<(?P<a>https?://[^>]+)>'
-    r'|(?P<b1>https?://.+?)(?P<b2>[.,;:!?>)}\]]*)(?:\s|[\x01-\x1f]|$)', re.I)
+    r'|(?P<b1>https?://.+?)(?P<b2>[.,;:!?"\'>)}\]]*)(?:\s|[\x01-\x1f]|$)', re.I)
 HISTORY_SIZE = 12 # To preserve channel privacy, do not make this too large.
 
 URL_PART_RE = re.compile(
@@ -31,21 +32,21 @@ def reload(prev):
 @link('MESSAGE', 'UNOTICE')
 def h_message(bot, id, target, message, *args):
     if not message: return
-    yield sign('URL_COLLECT_MSG', bot, message, target, id)
+    yield examine_message(bot, message, target, id)
 
-@link('TELL_DELIVERY')
-def h_tell_delivery(bot, from_id, to_id, channel, message):
-    yield sign('URL_COLLECT_MSG', bot, message, channel)
+@link('PROXY_MSG')
+def h_proxy_msg(bot, id, chan, msg, full_msg=None, **kwds):
+    yield examine_message(bot, msg, chan, id, full_msg=full_msg)
 
 @link('COMMAND')
 def h_command(bot, id, target, cmd, args, full_msg):
     if cmd in ('!url', '!title'): return
-    yield sign('URL_COLLECT_MSG', bot, args, target, id)
+    yield examine_message(bot, args, target, id)
 
-@link('URL_COLLECT_MSG')
-def examine_message(bot, message, channel, id=None):
+@util.msub(link, 'url_collect.examine_message')
+def examine_message(bot, message, channel, id=None, full_msg=None):
     source = (channel or ('%s!%s@%s' % id)).lower()
-    urls = extract_urls(message)
+    urls = extract_urls(message, full_msg=full_msg)
     if not urls: return
 
     history[source].append(urls)
@@ -53,25 +54,24 @@ def examine_message(bot, message, channel, id=None):
 
     yield sign('URL_COLLECT_URLS', bot, urls, channel, id, message)
 
-def extract_urls(message):
+def extract_urls(message, full_msg=None):
     urls = []
     start = 0
     between = ''
     for match in re.finditer(URL_RE, message):
+        between += message[start:match.start()]
         if match.group('a'):
             urls.append(match.group('a'))
         else:
             b1, b2 = match.group('b1'), match.group('b2')
             op, cl = '<({[', '>)}]'
-            if b2 in cl and (op[cl.index(b2)] in b1
-            or op[cl.index(b2)] not in between):
-                urls.append(b1 + b2)
-            else:
-                urls.append(b1)
-        between += message[start:match.start()]
+            b2 = ''.join(takewhile(lambda c: c in cl and (
+                op[cl.index(c)] in b1 or op[cl.index(c)] not in between), b2))
+            urls.append(b1 + b2)
         start = match.end()
-    urls = re.findall(URL_RE, message)
-    urls = map(lambda u: ''.join(u), urls)
-    if re.search(r'NSFW', message, re.I):
-        urls = map(lambda u: ('NSFW',u), urls)
+    if full_msg is not None:
+        full_urls = extract_urls(full_msg)
+        urls = filter(lambda u: u in full_urls, urls)
+    if re.search(r'\bNSFW\b', message, re.I):
+        urls = map(lambda u: ('NSFW', u), urls)
     return urls    

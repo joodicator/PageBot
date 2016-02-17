@@ -51,7 +51,7 @@ def h_bridge_names_err(bot, target, target_, source_name, error):
 def h_bridge(bot, target_chan, msg):
     if not target_chan.startswith('#'): return
     bot.send_msg(target_chan, msg)
-
+    yield sign('PROXY_MSG', bot, None, target_chan, msg)
 
 @link('HELP')
 def h_help_online_short(bot, reply, args):

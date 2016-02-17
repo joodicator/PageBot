@@ -5,6 +5,8 @@
 import inspect
 import re
 
+from untwisted.magic import sign
+
 import auth
 import util
 import channel
@@ -214,20 +216,29 @@ def h_other_nick_chan(bot, id, nnick, chan):
         bot.send_msg(lchan, msg, no_link=True)
 
 @link('MESSAGE',  a=lambda bot, id, chan, msg:
-                    (bot, id.nick, chan, msg))
+                    (bot, id.nick, id, chan, msg))
 @link('COMMAND',  a=lambda bot, id, chan, event, body, msg:
-                    (bot, id.nick, chan, msg))
+                    (bot, id.nick, id, chan, msg))
 @link('SEND_MSG', a=lambda bot, chan, msg, kwds:
-                    (bot, bot.nick, not kwds.get('no_link') and chan, msg))
+                    (bot, bot.nick, None, not kwds.get('no_link') and chan, msg))
 def h_message(*args, **kwds):
-    bot, nick, chan, msg = kwds['a'](*args)
+    bot, nick, id, chan, msg = kwds['a'](*args)
     if not chan or chan.lower() not in links: return
     chan = channel.capitalisation.get(chan.lower(), chan)
     p_nick = channel.prefix_nick(bot, nick, chan)
     match = re.match(r'\x01ACTION (?P<act>.*?)\x01?$', msg)
     msg = '%s: * %s %s' % (chan, nick, match.group('act')) if match else \
           '%s: <%s> %s' % (chan, p_nick, msg)
-    for lchan in links[chan.lower()]: bot.send_msg(lchan, msg, no_link=True)
+    for lchan in links[chan.lower()]:
+        bot.send_msg(lchan, msg, no_link=True)
+        if id is not None:
+            yield sign('PROXY_MSG', bot, id, lchan, msg, no_link=True)
+
+@link('PROXY_MSG')
+def h_proxy_msg(bot, id, chan, msg, no_link=False, **kwds):
+    if no_link or chan.lower() not in links: return
+    for lchan in links[chan.lower()]:
+        yield sign('PROXY_MSG', bot, id, lchan, msg, no_link=True)
 
 @link('TOPIC')
 def h_topic(bot, source, chan, topic):

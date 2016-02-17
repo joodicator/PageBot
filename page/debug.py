@@ -3,7 +3,7 @@ from util import NotInstalled
 
 def install(bot, no_numeric=False):
     old_drive = bot.drive
-    def drive(event, *args):
+    def drive(event, *args, **kwds):
         if event == untwisted.event.TICK: return
         if event == untwisted.event.READ: return
         if event == untwisted.event.WRITE: return
@@ -18,11 +18,11 @@ def install(bot, no_numeric=False):
         else:
             domain = id(bot)
 
-        print '@%s %s %s' % (domain, event, args)
+        print '@%s %s %s %s' % (domain, event, args, kwds)
 
-    def new_drive(event, *args):
-        drive(event, *args)
-        old_drive(event, *args)
+    def new_drive(event, *args, **kwds):
+        drive(event, *args, **kwds)
+        old_drive(event, *args, **kwds)
     bot.drive = new_drive
 
     def uninstall():
