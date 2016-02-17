@@ -75,7 +75,10 @@ def maybe_aop(bot, ids, chan, delay=False):
             id = nick_or_id
         else:
             id = yield identity.get_id(bot, nick_or_id)
-        has_aop = yield has_aop_in(bot, id, chan)
+        if id is not None:
+            has_aop = yield has_aop_in(bot, id, chan)
+        else:
+            has_aop = False
         if has_aop: aop_nicks.append(id.nick)
 
     if delay:
