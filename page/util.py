@@ -364,6 +364,25 @@ def multi(*cmds, **kwds): # limit=None, prefix=True
     return multi_deco
 
 #===============================================================================
+# Decorates a !command event handler so that, within its arguments, any
+# occurrence of '!' followed by one or more non-space characters will cause this
+# to be removed from the arguments and issued as a separate command. The handler
+# must accept an additional argument, 'cont', to be yielded after it is complete.
+def further(func):
+    from untwisted.magic import sign
+    def further_fun(bot, id, target, args, full_msg):
+        match = re.search(r'(?P<cmd>!\S+)\s*(?P<args>.*)', args)
+        if match:
+            scmd = match.group('cmd')
+            sargs = match.group('args')
+            args = args[:match.start()]
+            cont = sign('COMMAND', bot, id, target, scmd, sargs, full_msg)
+            return func(bot, id, target, args, full_msg, cont)
+        else:
+            return func(bot, id, target, args, full_msg, lambda *args: None)
+    return further_fun
+
+#===============================================================================
 # As itertools.chain, but supports the send() method, and requires all arguments
 # to be generators (or otherwise to support send()).
 def gen_chain(*gens):
