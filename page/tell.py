@@ -15,6 +15,7 @@
 #   also per recipient (if it's possible to identify "recipients"...)
 
 from collections import namedtuple
+from collections import Counter
 from copy import deepcopy
 from itertools import *
 import pickle as pickle
@@ -29,6 +30,7 @@ import untwisted.magic
 from message import reply
 from util import multi, wc_to_re
 from auth import admin
+import runtime
 import identity
 import channel
 import util
@@ -466,29 +468,47 @@ def h_read(bot, id, chan, args, full_msg):
     state = get_state()
     all_msgs = [m for m in state.msgs if would_deliver(id, None, m)
                 and m in state.last_notify]
+
+    earliest = dict()
+    for msg in all_msgs:
+        earliest[msg.channel.lower()] = min(
+            msg.time_sent, earliest.get(msg.channel.lower(), msg.time_sent))
+    all_msgs = sorted(all_msgs, key=lambda m: earliest[m.channel.lower()])
+
     if not all_msgs:
         reply(bot, id, chan, 'No messages are available to read.')
         return
 
-    for msg in all_msgs[:MAX_DELIVER_PM]:
-        deliver_msg(bot, id, None, msg)
+    msgs = all_msgs[:MAX_DELIVER_PM]
+    remain_msgs = all_msgs[MAX_DELIVER_PM:]
+    while any(n <= MAX_DELIVER_CHAN
+    for n in Counter(m.channel for m in remain_msgs).itervalues()):
+        msgs.append(remain_msgs.pop(0))
+
+    for msg, index in izip(msgs, count(1)):
+        tag = '%d/%d: ' % (index, len(all_msgs))
+        deliver_msg(bot, id, None, msg, tag=tag)
+        yield runtime.sleep(0)
 
     state = get_state()
-    state.msgs = [m for m in state.msgs if m not in all_msgs[:MAX_DELIVER_PM]]
+    state.msgs = [m for m in state.msgs if m not in msgs]
     put_state(state)
 
-    remain = len(all_msgs) - MAX_DELIVER_PM
-    if not remain: return
+    next_msgs = remain_msgs[:MAX_DELIVER_PM]
+    next_remain_msgs = remain_msgs[MAX_DELIVER_PM:]
+    while any(n <= MAX_DELIVER_CHAN
+    for n in Counter(m.channel for m in next_remain_msgs).itervalues()):
+        next_msgs.append(next_remain_msgs.pop(0))
 
-    noun = 'message' if remain == 1 else 'messages'
-    if remain > MAX_DELIVER_PM: reply(bot, id, chan,
+    noun = 'message' if len(remain_msgs) == 1 else 'messages'
+    if next_remain_msgs: reply(bot, id, chan,
         'Say \2!read\2 to read the next %d of %d %s.' % (
-            MAX_DELIVER_PM, remain, noun))
-    elif remain > 0: reply(bot, id, chan,
+        len(next_msgs), len(remain_msgs), noun))
+    elif next_msgs: reply(bot, id, chan,
         'Say \2!read\2 to read the remaining %d %s.' % (
-            remain, noun))
+        len(next_msgs), noun))
     else: reply(bot, id, chan,
-        '(End of messages.)')
+        'End of messages.')
 
 #==============================================================================#
 @link('!tell?', '!page?')
@@ -661,13 +681,14 @@ def deliver_msgs(bot, id, chan, explicit=False):
 
 #==============================================================================#
 # Unconditionally deliver `msg' to `id' in `chan', or by PM if `chan' is None.
-def deliver_msg(bot, id, chan, msg):
+def deliver_msg(bot, id, chan, msg, tag=''):
     delta = datetime.datetime.utcnow() - msg.time_sent
     if delta.total_seconds() < 1: return False
     d_mins, d_secs = divmod(delta.seconds, 60)
     d_hours, d_mins = divmod(d_mins, 60)
 
-    reply(bot, id, chan, '%s said%s on %s UTC (%s ago):' % (
+    reply(bot, id, chan, '%s%s said%s on %s UTC (%s ago):' % (
+        tag,
         '%s!%s@%s' % tuple(msg.from_id),
         (' in %s' % msg.channel) if chan is None else '',
         msg.time_sent.strftime('%d %b %Y, %H:%M'),
