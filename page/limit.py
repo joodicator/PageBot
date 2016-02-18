@@ -54,9 +54,13 @@ def mark_activity(bot, id, notify=False):
 
     if userhost in flood_ignore_new or userhost in flood_ignore_old:
         if notify != False and userhost not in flood_ignore_notify:
+            minutes = FLOOD_IGNORE_PERIOD / 30
+            if minutes == int(minutes):
+                minutes = int(minutes)
             reply(bot, id, notify,
-                'You have been ignored for sending commands too quickly.')
-            flood_ignore_notify.add(userhost)       
+                'You have been ignored for %s minutes for sending'
+                ' commands too quickly.' % minutes)
+            flood_ignore_notify.add(userhost)
         return True
     else:
         return False
