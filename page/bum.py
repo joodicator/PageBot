@@ -49,7 +49,7 @@ def bum_replace(str_msg):
     index = random.choice(indices)
 
     msg[index] = \
-        'BUM' if msg[index].isupper() else \
+        'BUM' if msg[index].isupper() and len(msg[index]) > 1 else \
         'Bum' if msg[index][0].isupper() else \
         'bum'
     return ''.join(msg)
