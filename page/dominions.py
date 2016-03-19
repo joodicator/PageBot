@@ -3,6 +3,7 @@ import traceback
 import urllib2
 import json
 import time
+import sys
 import re
 
 from bs4 import BeautifulSoup
@@ -124,12 +125,15 @@ class Report(Core):
             encoding = stream.info().getparam('charset')
             soup = BeautifulSoup(stream, 'html5lib', from_encoding=encoding)
             self.load_soup(soup)
-        except urllib2.URLError:
-            raise UnreadableURL('Unable to load <%s>.' % url)
-        except ValueError:
-            raise UnreadableURL('Unable to load <%s>.' % url)
-        except UnreadableSoup:
-            raise UnreadableURL('Unable to read status page at <%s>.' % url)
+        except urllib2.URLError as e:
+            e.exc_info = sys.exc_info()
+            raise UnreadableURL('Unable to load <%s>.' % url, exc=e)
+        except ValueError as e:
+            e.exc_info = sys.exc_info()
+            raise UnreadableURL('Unable to load <%s>.' % url, exc=e)
+        except UnreadableSoup as e:
+            e.exc_info = sys.exc_info()
+            raise UnreadableURL('Unable to read status page at <%s>.' % url, exc=e)
 
     def load_soup(self, soup):
         rows = soup.find_all(name='tr')
@@ -221,6 +225,9 @@ class Player(object):
         return hash(self.id())
 
 class UnreadableURL(Exception):
+    def __init__(self, msg, exc=None):
+        super(Exception, self).__init__(msg)
+        self.exc = exc
     pass
 
 class UnreadableSoup(Exception):
@@ -233,10 +240,12 @@ def get_report(url):
     try:
         return Report(url=url)
     except UnreadableURL as exc:
+        traceback.print_exception(*exc.exc.exc_info)
         return ErrorReport(url=url, prev=state.games.get(url), exc=exc)
 
 @util.msub(link, 'dominions.update_urls')
-def update_urls(bot, urls, report_to):
+def update_urls(bot, urls, report_to=None):
+    msgs = []
     for url in urls:
         prev_report = state.games.get(url)
         report = state.games[url] = get_report(url)
@@ -247,60 +256,82 @@ def update_urls(bot, urls, report_to):
 
         for chan, chan_urls in state.channels.iteritems():
             if url not in chan_urls: continue
-            yield update_topic(bot, chan)
             if report_to is not None and chan == report_to.lower():
-                bot.send_msg(chan, report.show_irc())
+                msgs.append((chan, report.show_irc()))
             elif (type(report) is Report and type(prev_report) is Report
             and report.turn > prev_report.turn):
-                bot.send_msg(chan, '\2%s\2 has advanced to turn \2%d\2.'
-                % (report.name, report.turn))
+                msgs.append((chan, '\2%s\2 has advanced to turn \2%d\2.'
+                % (report.name, report.turn)))
             elif type(report) is ErrorReport and report != prev_report:
-                bot.send_msg(chan, report.show_irc())
-    if urls: state.save_path(STATE_FILE)
+                msgs.append((chan, report.show_irc()))
 
-@util.msub(link, 'dominions.update_topic')
-def update_topic(bot, chan):
+    for chan, chan_urls in state.channels.iteritems():
+        if set(chan_urls) & set(urls):
+            explicit = report_to and chan.lower() == report_to.lower()
+            yield update_topic(bot, chan, explicit=explicit)
+
+    for chan, msg in msgs:
+        bot.send_msg(chan, msg)
+
+    if urls:
+        state.save_path(STATE_FILE)
+
+@util.mfun(link, 'dominions.update_topic')
+def update_topic(bot, chan, ret, explicit=False):
     chan = chan.lower()
     new_dyn = '; '.join(
         state.games[url].show_topic()
         for url in state.channels.get(chan, []) if url in state.games)
 
     if new_dyn:
-        if new_dyn in state.set_topic.get(chan, ''): return
+        if not explicit and new_dyn in state.set_topic.get(chan, ''):
+            yield ret()
+            return
+
         topic = yield channel.topic(bot, chan)
-        if new_dyn in topic: return
+
+        if new_dyn in topic:
+            yield ret()
+            return
     
         match = re.search(
             r'(^|-- )(?P<dyn>(.+, turn (\d+|\?) \[[^\]]*\](; )?)+)( --|$)', topic)
         if match:
             start, end = match.span('dyn')
             topic = ''.join((topic[:start], new_dyn, topic[end:]))
-        else:
+        elif topic:
             topic = ' -- '.join((new_dyn, re.sub(r'^\s*(--)?', '', topic)))
+        else:
+            topic = new_dyn
         bot.send_cmd('TOPIC %s :%s' % (chan, topic))
         state.set_topic[chan] = topic
 
+    yield ret()
+
 @link('DOMINIONS_TICK')
 def h_dominions_tick(bot):
-    if not is_installed: return
-    urls = []
-    latest = time.time() + UPDATE_PERIOD_S
-    for chan, chan_urls in state.channels.iteritems():
-        for url in chan_urls:
-            if url in urls:
-                continue
-            if url in state.games and state.games[url].time > latest:
-                continue
-            urls.append(url)
-    yield update_urls(bot, urls, None)
+    try:
+        if not is_installed: return
+        urls = []
+        latest = time.time() + UPDATE_PERIOD_S
+        for chan, chan_urls in state.channels.iteritems():
+            for url in chan_urls:
+                if url in urls:
+                    continue
+                if url in state.games and state.games[url].time > latest:
+                    continue
+                urls.append(url)
+        yield update_urls(bot, urls, None)
+    except:
+        traceback.print_exc()
     yield runtime.sleep(TICK_PERIOD_S)
     yield sign('DOMINIONS_TICK', bot)
 
 @link('!turn')
 def h_turn(bot, id, chan, args, full_msg):
     if chan is None: return
-    for url in state.channels.get(chan.lower(), []):
-        yield update_urls(bot, [url], chan)
+    urls = state.channels.get(chan.lower(), [])
+    yield update_urls(bot, urls, report_to=chan)
 
 @link('!dom+')
 @auth.admin

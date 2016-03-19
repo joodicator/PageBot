@@ -153,11 +153,11 @@ def msign(target, event, *args, **kwds):
 # Returns an object which may be yielded in an untwisted event handler to
 # raise `event' in `mode' with the given arguments, waiting for a response
 # event of the form `(event, *args)' with a single argument, and obtaining
-# this argument. If 'token' is given as a keyword argument, this is used
-# instead of (event, *args).
+# this argument. If 'mcall_token' is given as a keyword argument, this is
+# removed and used instead of (event, args, kwds).
 def mmcall(mode, event, *args, **kwds):
     import untwisted.usual
-    token = kwds.get('token', (event,)+args)
+    token = kwds.pop('mcall_token', (event,) + args)
     def act(source, chain):
         def ret(arg):
             mode.unlink(token, ret)
@@ -166,14 +166,14 @@ def mmcall(mode, event, *args, **kwds):
                 untwisted.usual.chain(source, chain)
             except StopIteration: pass
         mode.link(token, ret)
-        mode.drive(event, *args)
+        mode.drive(event, *args, **kwds)
         raise StopIteration
     return act
 
 # As mmcall, but assumes `mode' is the current mode.
 def mcall(event, *args, **kwds):
     import untwisted.usual
-    token = kwds.get('token', (event,)+args)
+    token = kwds.pop('mcall_token', (event,) + args)
     def act(source, chain):
         def ret(arg):
             source.unlink(token, ret)
@@ -182,7 +182,7 @@ def mcall(event, *args, **kwds):
                 untwisted.usual.chain(source, chain)
             except StopIteration: pass
         source.link(token, ret)
-        source.drive(event, *args)
+        source.drive(event, *args, **kwds)
         raise StopIteration
     return act
 
@@ -206,13 +206,13 @@ def mcall(event, *args, **kwds):
 def mfun(link, event_name):
     def mfun_dec(fun):
         @link(event_name)
-        def mfun_han(token, *args):
+        def mfun_han(token, *args, **kwds):
             from untwisted.magic import sign
-            ret = lambda r: sign(token, r)
-            return fun(*args, ret=ret)
-        def mfun_fun(*args):
+            ret = lambda r=None: sign(token, r)
+            return fun(*args, ret=ret, **kwds)
+        def mfun_fun(*args, **kwds):
             token = ('util.mfun', event_name, object())
-            return mcall(event_name, token, *args, token=token)
+            return mcall(event_name, token, *args, mcall_token=token, **kwds)
         return mfun_fun
     return mfun_dec
 
