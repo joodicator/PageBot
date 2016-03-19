@@ -31,7 +31,7 @@ TIMEOUT_SECONDS = 20
 READ_BYTES_MAX = 1024*1024
 CMDS_PER_LINE_MAX = 6
 
-MAX_AURL = 30
+MAX_AURL = 35
 MAX_YT_DESC = 100
 
 ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
@@ -217,7 +217,15 @@ def get_title_youtube(url, type):
 
         desc_full = desc
         desc = re.sub(r'\r\n|\r|\n', ' ', desc)
-        desc = '%s...' % desc[:MAX_YT_DESC] if len(desc) > MAX_YT_DESC else desc
+        desc = '%s' % desc[:MAX_YT_DESC]
+        full_urls = url_collect.extract_urls(desc_full)
+        for desc_url in url_collect.extract_urls(desc):
+            if (desc_url not in full_urls and desc.endswith(desc_url)
+            and not ABBREV_URL_RE.match(desc_url).group('path')):
+                desc = desc[:-len(desc_url)]
+                break
+        desc = desc + '...' if len(desc) < len(desc_full) else desc
+        
         duration = iso8601_period_human(duration)
 
         return {
@@ -253,7 +261,7 @@ def get_title_imgur(url, type, stream=None):
         img_url = re.sub(r'\.gifv$', '.gif', img_url)
         img_type = 'image/gif'
     
-    title = get_title_image(img_url, img_type)[0]
+    title = get_title_image(img_url, img_type)['title']
     if info and info.get('title') and not URL_PART_RE.match(info['title']):
         title = 'Title: %s -- %s' % (format_title(info['title']), title)
     elif 'html' in type:
@@ -278,13 +286,23 @@ def get_title_imgur(url, type, stream=None):
     return {'title':title, 'info':img_type, 'url':img_url, 'size':size}
 
 #-------------------------------------------------------------------------------
+ABBREV_URL_RE = re.compile(
+    r'(?P<site>.+?://[^/]*)'
+    r'(?P<path>/?.*)')
+
 def abbrev_url(url):
     url = url_to_unicode(url)
-    return '...' + url[-MAX_AURL:] if len(url) > MAX_AURL else url
+    if len(url) > MAX_AURL:
+        url = ABBREV_URL_RE.match(url).group('path')
+        return '...' + url[-(MAX_AURL-3):]
+    else:
+        return url
 
 def abbrev_url_middle(url):
     url = url_to_unicode(url)
-    return url[:MAX_AURL/2] + '...' + url[-MAX_AURL/2:] \
+    site, path = ABBREV_URL_RE.match(url).group('site', 'path')
+    return site + '/...' + \
+           path[1:][min(-MAX_AURL/2, len(path)-1-(MAX_AURL-3)):] \
            if len(url) > MAX_AURL else url
 
 def url_to_unicode(url):
