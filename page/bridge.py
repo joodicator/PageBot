@@ -140,3 +140,16 @@ def h_self_kicked(bot, chan, op_id, msg):
 def h_self_quit(bot, chan):
     cmsg = 'Disconnected from the network.'
     yield sign('IRC', bot, chan, cmsg)
+
+@link('TOPIC')
+def h_topic(bot, source, chan, topic):
+    if isinstance(source, tuple): source = source[0]
+    cmsg = '%s set topic to: %s' % (source, topic) if topic else \
+           '%s unset the topic.' % source
+    yield sign('IRC', bot, chan, cmsg)
+
+@link('MODE')
+def h_mode(bot, source, chan, *modes):
+    if isinstance(source, tuple): source = source[0]
+    cmsg = '%s set mode: %s' % (source, ' '.join(args))
+    yield sign('IRC', bot, chan, cmsg)

@@ -211,7 +211,7 @@ def h_other_nick_chan(bot, id, nnick, chan):
     chan = channel.capitalisation.get(chan.lower(), chan)
     msg = '%s: %s is now known as \2%s\2.' % (chan, id.nick, nnick)
     for lchan in links[chan.lower()]:
-        lnicks = yield channel.nicks(bot, lchan)
+        lnicks = yield channel.names(bot, lchan, include_prefix=False)
         if id.nick.lower() in map(str.lower, lnicks): continue
         bot.send_msg(lchan, msg, no_link=True)
 
@@ -243,7 +243,7 @@ def h_proxy_msg(bot, id, chan, msg, no_link=False, **kwds):
 @link('TOPIC')
 def h_topic(bot, source, chan, topic):
     if chan.lower() not in links: return
-    if isinstance(source, tuple): source = source.nick
+    if isinstance(source, tuple): source = source[0]
     msg = '%s: %s set topic to: %s' % (source, topic) if topic else \
           '%s: %s unset the topic.' % source
     for lchan in links[chan.lower()]: bot.send_msg(lchan, msg, no_link=True)
