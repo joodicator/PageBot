@@ -43,9 +43,12 @@ ab_link = util.LinkSet()
 class MinecraftState(object):
     def __init__(self):
         self.map_name = None
+        self.agent = None
     def reload_from(self, prev):
         if hasattr(prev, 'map_name'):
             self.map_name = prev.map_name
+        if hasattr(prev, 'agent'):
+            self.agent = prev.agent
 
 def init_work(server, reload_from=None, reconnect_from=None):
     sock = socket.socket(server.family, socket.SOCK_STREAM)
@@ -60,6 +63,7 @@ def init_work(server, reload_from=None, reconnect_from=None):
     work.setblocking(0)
     work.connect_ex(server.address)
     h_query(work, 'map')
+    h_query(work, 'agent')
 
 def kill_work(work, remove=True):
     try: work.destroy()
@@ -108,7 +112,7 @@ def uninstall(bot, reload=False):
 
 @ab_link('BRIDGE')
 def ab_bridge(bot, target_chan, msg):
-    msg = re.sub(r'[\x00-\x1f]', '', msg).replace('§', 'S')
+    msg = strip_codes(msg)
     for work in mc_work:
         if work.minecraft.name.lower() != target_chan.lower(): continue
         work.dump(msg + '\n')
@@ -142,37 +146,63 @@ def mc_found(work, line):
         head = 'QUERY_' + type.upper()
         for event in head, (head, key):
             yield sign(event, work, type, key, body)
-
-    if getattr(work.minecraft, 'agent', None):
-        for fmt in '<%s>', '* %s ', '%s ':
-            if line.startswith(fmt % work.minecraft.agent): return
-
-    match = re.match(r'(<\S+>|\[\S+\]) !online(?P<args> .*|$)', line, re.I)
-    if match:
-        args = match.group('args').strip()
-        bridge.notice(ab_mode, work.minecraft.name, 'NAMES_REQ',
-                      work.minecraft.name, args)
-
-    match = re.match(r'(<\S+>|\[\S+\]) !(time|date)( .*|$)', line, re.I)
-    if match:
-        msg = datetime.utcnow().strftime('%H:%M:%S %a %d/%b/%Y UTC')
-        work.dump(msg + '\n')
         return
 
-    if re.match(r'(<\S+> |\[\S+\] |\* \S+ |)!', line): return
+    agent = getattr(work.minecraft_state, 'agent', None)
+    if agent:
+        for fmt in '<%s>', '* %s ', '%s ':
+            if line.startswith(fmt % agent): return
 
+    no_echo = [False]
+    echo_lines = []
+    match = re.match(r'((?P<sn>\[\S+\])|<(?P<mn>\S+)>|\* (?P<an>\S+)) '
+        '(?P<msg>.*)', line)
+    if match:
+        msg = match.group('msg')
+        name = match.group('sn') or match.group('mn') or match.group('an')
+        event = 'ACTION' if match.group('an') else 'MESSAGE'
+        def reply(rmsg=None, from_name=None, prefix=True, no_bridge=False):
+            if from_name is None and rmsg is not None:
+                from_name = lambda name: rmsg
+            if prefix and from_name:
+                _from_name = from_name
+                from_name = lambda name: '%s: %s' % (name, _from_name(name))
+            if from_name:
+                work.dump('%s\n' % strip_codes(from_name(name)))
+            if agent and from_name and not no_bridge:
+                echo_lines.append('<%s> %s' % (
+                    agent, from_name(substitute(work, name))))
+            no_echo[0] = no_echo[0] or no_bridge
+        ab_mode.drive(('BRIDGE', event), ab_mode,
+            name, work.minecraft.name, msg, reply)
+    
+    if not no_echo[0]:
+        for sub_name, find, repl in substitutions:
+            if sub_name.lower() != work.minecraft.name.lower(): continue
+            find = re.escape(find)
+            if re.match(r'[\[\*<]', line):
+                line = re.sub(r'<%s> ' % find, '<%s> ' % repl, line)
+                line = re.sub(r'\* %s ' % find, '* %s ' % repl, line)
+            else:
+                line = re.sub(r'\b%s\b' % find, repl, line)
+        echo(work, line)
+
+    for line in echo_lines:
+        echo(work, line)
+
+def substitute(work, name):
     for sub_name, find, repl in substitutions:
         if sub_name.lower() != work.minecraft.name.lower(): continue
-        find = re.escape(find)
-        if re.match(r'[\[\*<]', line):
-            line = re.sub(r'<%s> ' % find, '<%s> ' % repl, line)
-            line = re.sub(r'\* %s ' % find, '* %s ' % repl, line)
-        else:
-            line = re.sub(r'\b%s\b' % find, repl, line)
+        if name == find: return repl
+    return name
 
-    yield util.msign(ab_mode, 'MINECRAFT', ab_mode,
+def echo(work, line):
+    ab_mode.drive('MINECRAFT', ab_mode,
         work.minecraft.name, line,
         work.minecraft_state.map_name or work.minecraft.display)
+
+def strip_codes(msg):
+    return re.sub(r'[\x00-\x1f]', '', msg).replace('§', 'S')
 
 @mc_link(CLOSE)
 @mc_link(RECV_ERR)
@@ -184,6 +214,10 @@ def mc_close_recv_error(work, *args):
 @mc_link(('QUERY_SUCCESS', 'map'))
 def h_query_success_map(work, type, key, val):
     work.minecraft_state.map_name = val
+
+@mc_link(('QUERY_SUCCESS', 'agent'))
+def h_query_success_map(work, type, key, val):
+    work.minecraft_state.agent = val
 
 
 # (status, value) = yield minecraft.query(key),

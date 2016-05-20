@@ -181,11 +181,9 @@ def te_chat(work, slot, colour, text):
         if cmd.lower() == '!online':
             name = work.terraria.name
             bridge.notice(ab_mode, name, 'NAMES_REQ', name, arg.strip())
-            return
         elif cmd.lower() in ('!time', '!date'):
             msg = datetime.utcnow().strftime('%H:%M:%S %a %d/%b/%Y UTC')
             terraria_protocol.chat(work, msg)
-            return
 
     if slot == 255:
         if len(work.terraria_protocol.players) > 1 or not message_ignored(text):

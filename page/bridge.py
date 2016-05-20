@@ -1,3 +1,4 @@
+from datetime import datetime
 import re
 
 from untwisted.magic import sign
@@ -15,6 +16,10 @@ bridges = util.read_list('conf/bridge.py')
 @link('MINECRAFT')
 @link('TERRARIA')
 def h_msg(bot, source, msg, source_name=None):
+    if source is None:
+        return
+    if type(msg) is unicode:
+        msg = msg.encode('utf8')
     for source, target in targets(source):
         name = source_name or source
         yield sign('BRIDGE', bot, target, '%s: %s' % (name, msg))
@@ -32,10 +37,54 @@ def targets(source_chan, include_self=False):
             if target.lower() != source_chan.lower() or include_self:
                 yield (sources[0], target)
 
+@link(('BRIDGE', 'MESSAGE'), action=False)
+@link(('BRIDGE', 'ACTION'),  action=True)
+def h_bridge_message(bot, name, target, msg, reply, action):
+    match = re.match(r'(?P<cmd>!\S+)\s*(?P<args>.*)', msg)
+    if not match: return
+    event = ('BRIDGE', 'ACTION', match.group('cmd')) if action else \
+            ('BRIDGE',           match.group('cmd'))
+    yield sign(event, bot, name, target, match.group('args'), reply)
+
+
+@link(('BRIDGE', 'HELP'), ('BRIDGE', 'HELP', 'time'))
+def h_help_date_short(bot, reply, args):
+    reply('time',
+    'Displays the current time in UTC.')
+
+@link(('BRIDGE','!time'), ('BRIDGE','!date'))
+def h_date_time(bot, name, target, args, reply):
+    reply(
+        datetime.utcnow().strftime('%H:%M:%S %a %d/%b/%Y UTC'),
+        prefix = False,
+        no_bridge = True)
+
+
+@link('HELP', ('BRIDGE', 'HELP'))
+def h_help_online_short(bot, reply, args):
+    reply('online [LOCATION]',
+    'Lists online users in connected game worlds and IRC channels.')
+
+@link(('HELP', 'online'), ('BRIDGE', 'HELP', 'online'))
+def h_help_online(bot, reply, args):
+    reply('online [MINECRAFT_WORLD | +TERRARIA_WORLD | #IRC_CHANNEL]',
+    'Lists the online users in the specified game world or IRC channel,'
+    ' or if none is specified, lists the users in all connected locations.',
+    'May be used from within a game or from IRC, but must be used from a '
+    ' distinct location that is linked by relay to the target location.')
+
+@link(('SIMPLE', '!online'), ('BRIDGE', '!online'))
+def h_online(bot, name, target, args, reply):
+    if target is None: return
+    include_self = not target.startswith('#')
+    notice(bot, target, 'NAMES_REQ', target, args, include_self=include_self)
+    reply(no_bridge=True)
+
 
 @link(('BRIDGE', 'NAMES_RES'))
 def h_bridge_names_res(bot, target, target_, source_name, names):
-    if target.lower() != target_.lower(): return
+    if target.lower() != target_.lower() and target_ != '*':
+        return
     msg = 'Online in %s: %s.' % (
         source_name, ', '.join(names) if names else '(nobody)')
     yield sign('BRIDGE', bot, target, msg)
@@ -50,27 +99,8 @@ def h_bridge_names_err(bot, target, target_, source_name, error):
 @link('BRIDGE')
 def h_bridge(bot, target_chan, msg):
     if not target_chan.startswith('#'): return
-    bot.send_msg(target_chan, msg)
+    bot.send_msg(target_chan, msg, no_bridge=True)
     yield sign('PROXY_MSG', bot, None, target_chan, msg)
-
-@link('HELP')
-def h_help_online_short(bot, reply, args):
-    reply('online [LOCATION]',
-    'Lists online users in connected game worlds and IRC channels.')
-
-@link(('HELP', 'online'))
-def h_help_online(bot, reply, args):
-    reply('online [MINECRAFT_WORLD | +TERRARIA_WORLD | #IRC_CHANNEL]',
-    'Lists the online users in the specified game world or IRC channel,'
-    ' or if none is specified, lists the users in all connected locations.',
-    'May be used from within a game or from IRC, but must be used from a '
-    ' distinct location that is linked by relay to the target location.')
-
-@link('!online')
-def h_online(bot, id, chan, args, full_msg):
-    if chan is None: return message.reply(bot, id, chan,
-        'The "online" command may not be used by PM.')
-    notice(bot, chan, 'NAMES_REQ', chan, args, include_self=False)
 
 @link(('BRIDGE', 'NAMES_REQ'))
 def h_bridge_names_req(bot, target, source, query):
@@ -80,16 +110,18 @@ def h_bridge_names_req(bot, target, source, query):
     notice(bot, target, 'NAMES_RES', source, target, names)
 
 
-@link('MESSAGE')
-def h_message(bot, id, chan, msg):
+@link('MESSAGE',  a=lambda bot, id, chan, msg:
+                    (bot, id.nick, chan, msg))
+@link('SEND_MSG', a=lambda bot, chan, msg, kwds:
+                    (bot, bot.nick, chan if not kwds.get('no_bridge') else None, msg))
+def h_message(*args, **kwds):
+    bot, nick, chan, msg = kwds['a'](*args)
     if chan is None: return
     match = re.match(r'\x01ACTION (?P<msg>.*)', msg)
     if match:
-        if match.group('msg').startswith('!'): return
-        cmsg = '* %s %s' % (id.nick, match.group('msg'))
+        cmsg = '* %s %s' % (nick, match.group('msg'))
     else:
-        if msg.startswith('!'): return
-        cmsg = '<%s> %s' % (id.nick, msg)
+        cmsg = '<%s> %s' % (nick, msg)
     yield sign('IRC', bot, chan, cmsg)
 
 @link('OTHER_JOIN')
@@ -151,5 +183,5 @@ def h_topic(bot, source, chan, topic):
 @link('MODE')
 def h_mode(bot, source, chan, *modes):
     if isinstance(source, tuple): source = source[0]
-    cmsg = '%s set mode: %s' % (source, ' '.join(args))
+    cmsg = '%s set mode: %s' % (source, ' '.join(modes))
     yield sign('IRC', bot, chan, cmsg)

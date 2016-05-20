@@ -30,12 +30,32 @@ def h_xirclib_msg(event, bot, source, *args):
 
 @link('COMMAND',        action=False)
 @link('ACTION_COMMAND', action=True)
-def h_command(bot, id, target, event, body, message, action):
+def h_command(bot, id, target, event, body, full_msg, action):
     if limit.mark_activity(bot, id, notify=target):
         return
     if action:
         event = ('ACTION', event)
-    yield sign(event, bot, id, target, body, message)
+    bot.activity = False
+    yield sign(event, bot, id, target, body, full_msg)
+    if bot.activity: return
+    yield sign('CMD_IGNORED', event, bot, id, target, body, full_msg)
+
+@link('COMMAND',        action=False)
+@link('ACTION_COMMAND', action=True)
+def h_command(bot, id, target, event, body, full_msg, action):
+    no_echo = [False]
+    event = ('SIMPLE', 'ACTION', event) if action else \
+            ('SIMPLE',           event)
+    def cmd_reply(rmsg=None, from_name=None, no_bridge=False, **kwds):
+        if rmsg is not None or from_name is not None:
+            if rmsg is None: rmsg = from_name(id.nick)
+            reply(bot, id, target, rmsg, **kwds)
+        no_echo[0] = no_echo[0] or no_bridge
+    yield sign(event, bot, id.nick, target, body, cmd_reply)
+    if not no_echo[0]:
+        cmsg = ('* %s %s' if action else '<%s> %s') % (id.nick, full_msg)
+        yield sign('IRC', bot, target, cmsg)
+        
 
 @link('JOIN')
 def join(bot, source, chans, *args):
@@ -124,8 +144,8 @@ def message(bot, id, target, msg):
             match = re.match(r'!(?P<head>\S*)\s*(?P<body>.*)', msg)
             if match: break
 
-        # NICK: CMD [ARGS...]
-        match = re.match(r'(?P<addr>\S+):\s*!?(?P<head>\S*)\s*(?P<body>.*)', msg)
+        # NICK: !CMD [ARGS...]
+        match = re.match(r'(?P<addr>\S+):\s*!(?P<head>\S*)\s*(?P<body>.*)', msg)
         if match and match.group('addr').lower() == bot.nick.lower(): break
 
         return
@@ -140,23 +160,22 @@ def message(bot, id, target, msg):
     raise Stop
 
 
-@link('HELP*')
+@link('HELP*', ('BRIDGE', 'HELP*'))
 def h_help_help_short(bot, reply, args):
     reply('help [COMMAND]',
     'Gives detailed information about COMMAND, or lists all commands.')
 
-@link(('HELP', 'help'))
+@link(('HELP', 'help'), ('BRIDGE', 'HELP', 'help'))
 def h_help_help(bot, reply, args):
     reply('help [COMMAND]',
     'If COMMAND is given, gives detailed information about its usage;'
     ' otherwise, gives a summary of all available commands.')
 
-@link('!help')
-@link('!commands')
-def h_help(bot, id, target, args, full_msg):
+@link(('SIMPLE', '!help'), ('SIMPLE', '!commands'), bridge=False)
+@link(('BRIDGE', '!help'), ('BRIDGE', '!commands'), bridge=True)
+def h_help(bot, name, target, args, reply, bridge):
     lines = []
     callback = lambda *args: lines.append(args)
-    output = lambda msg: bot.send_msg(target or id.nick, msg)
 
     def header(str):
         return '\2%s%s\2' % ('!' if bot.conf['bang_cmd'] else '', str)
@@ -164,28 +183,42 @@ def h_help(bot, id, target, args, full_msg):
     if args:
         # Display help for a particular command.
         cmd, args = re.match(r'!?(\S+)\s*(.*)', args).groups()
-        yield sign(('HELP', cmd.lower()), bot, callback, args)
+        cmd = cmd.lower()
+        yield sign(('BRIDGE', 'HELP', cmd) if bridge else ('HELP', cmd),
+            bot, callback, args)
         if not lines:
-            reply(bot, id, target,
-                'Error: no help is available for "%s".' % cmd)
+            reply('Error: no help is available for "%s".' % cmd, no_bridge=True)
             return
         for line in lines:
-            if line[0]: output(header(line[0]))
+            if line[0]: reply(header(line[0]), prefix=False, no_bridge=True)
             for para in line[1:]:
-                if para: output(para)
-    else:
+                if para: reply(para, prefix=False, no_bridge=True)
+
+    elif not bridge:
         # Display general help and a summary of all commands.
-        output(
-            'Commands are issued by saying%s "%s: COMMAND",'
+        reply(
+            'Commands are issued by saying%s "%s: !COMMAND",'
             ' where COMMAND is the command and its parameters.'
             ' The following commands are available:'
-            % (' "!COMMAND" or' if bot.conf['bang_cmd'] else '', bot.nick))
+            % (' "!COMMAND" or' if bot.conf['bang_cmd'] else '', bot.nick),
+            prefix=False, no_bridge=True)
 
         yield sign('HELP*', bot, callback, args)
         lines = map(lambda l: (header(l[0]),) + l[1:], lines)
-        map(output, util.align_table(lines))
+        for line in util.align_table(lines):
+            reply(line, prefix=False, no_bridge=True)
 
         del lines[:]
         yield sign('HELP', bot, callback, args)
-        if lines: output('Other commands: %s.' % ', '.join(
-            '\2%s\2' % l[0].split()[0] for l in lines))
+        if lines: reply('Other commands: %s.' % ', '.join(
+            '\2%s\2' % l[0].split()[0] for l in lines),
+            prefix=False, no_bridge=True)
+
+    else:
+        yield sign(('BRIDGE', 'HELP*'), bot, callback, args)
+        yield sign(('BRIDGE', 'HELP'), bot, callback, args)
+        if lines:
+            reply('Available commands: %s.' % ', '.join(
+                '\2%s\2' % l[0].split()[0] for l in lines),
+                prefix=False, no_bridge=True)
+        

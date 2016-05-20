@@ -13,14 +13,15 @@ link, install, uninstall = util.LinkSet().triple()
 MAX_ROLL = 99, 9999, 99999999
 
 #===============================================================================
-@link('HELP*')
+@link('HELP*', ('BRIDGE', 'HELP*'))
 def h_help(bot, reply, args):
     reply('roll MdN[+K|-K]', 'Simulates the rolling of dice.')
 
 #===============================================================================
-@link(('HELP', 'roll'), ('HELP', 'r'))
-def h_help_roll(bot, reply, args):
-    if args and int(args) == 2:
+@link(('HELP', 'roll'), ('HELP', 'r'), bridge=False)
+@link(('BRIDGE', 'HELP', 'roll'), ('BRIDGE', 'HELP', 'r'), bridge=True)
+def h_help_roll(bot, reply, args, bridge):
+    if args and int(args) == 2 and not bridge:
         reply('roll ... MdN[+K|-K] ...',
         'Simulates one or more dice rolls. A roll is specified as "MdN",'
         ' "MdN+K", or "MdN-K", where M is the number of dice, N is the number'
@@ -47,22 +48,20 @@ def h_help_roll(bot, reply, args):
         'Simulates the rolling of M dice, each of which has N sides, giving'
         ' the sum of the individual results. Optionally, adds (for MdN+K) or'
         ' subtracts (for MdN-K) a value of K to or from the result. Example:'
-        ' "!roll 2d6+1". For advanced features, see \2!help roll 2\2. See also:'
-        ' \2!help missed-rolls\2.')
+        ' "!roll 2d6+1".' +
+        (' For advanced features, see \2!help roll 2\2. See also: '
+        '\2!help missed-rolls\2.' if not bridge else
+        ' For advanced features, send \2!help roll 2\2 by IRC.'))
 
 #===============================================================================
-@link(          '!r',            '!d',  action=False)
-@link(('ACTION','!r'), ('ACTION','!d'), action=True)
-@modal.when_mode(None)
-def h_roll_abbrev(bot, id, target, args, full_msg, action):
-    return h_roll(bot, id, target, args, full_msg, action)
-
 class UserError(Exception):
     pass
 
-@link(           '!roll',             '!dice',  action=False)
-@link(('ACTION', '!roll'), ('ACTION', '!dice'), action=True)
-def h_roll(bot, id, target, args, full_msg, action):
+@link(('SIMPLE','!roll'), ('SIMPLE','!r'), action=False)
+@link(('BRIDGE','!roll'), ('BRIDGE','!r'), action=False)
+@link(('SIMPLE','ACTION','!roll'), ('SIMPLE','ACTION','!r'), action=True)
+@link(('BRIDGE','ACTION','!roll'), ('BRIDGE','ACTION','!r'), action=True)
+def h_roll(bot, name, target, args, reply, action):
     rolls = []
 
     def check_roll(dice=None, sides=None, add=None):
@@ -108,7 +107,7 @@ def h_roll(bot, id, target, args, full_msg, action):
         return rstr
 
     try:
-        msg = expand_choices(args)
+        msg = args
         msg = re.sub(
             r'\b(?P<bw>[bBwW])(?P<keep>\d*)'
             '\((?P<dice>\d*)[dD](?P<sides>\d+)(?P<add>[+-]\d+)?\)',
@@ -116,18 +115,20 @@ def h_roll(bot, id, target, args, full_msg, action):
         msg = re.sub(
             r'\b(?P<dice>\d*)[dD](?P<sides>\d+)(?P<add>[+-]\d+)?\b',
             roll_sub, msg)
+        msg = expand_choices(msg)
         if msg == args: raise UserError(
             'No dice rolls or choices specified.'
             ' See \2!help roll 2\2 for correct usage.')
         if len(msg) > 400: msg = '%s(...)' % msg[:395]
-        yield sign('DICE_ROLLS', bot, id, target, rolls, msg)
+        if target and target.startswith('#'):
+            id = util.ID(name, '*', '*')
+            yield sign('DICE_ROLLS', bot, id, target, rolls, msg)
         if action:
-            message.reply(bot, id, target, '* %s %s' % (
-                id.nick, msg), prefix=False)
+            reply('* %s %s' % (name, msg), prefix=False)
         else:
-            message.reply(bot, id, target, msg)
+            reply(msg)
     except UserError as e:
-        message.reply(bot, id, target, 'Error: %s' % e.message)
+        reply('Error: %s' % e.message)
 
 #===============================================================================
 def expand_choices(str):
