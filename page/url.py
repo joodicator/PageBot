@@ -265,10 +265,12 @@ def get_title_imgur(url, type, stream=None):
     if info and info.get('title') and not URL_PART_RE.match(info['title']):
         title = 'Title: %s -- %s' % (format_title(info['title']), title)
     elif 'html' in type:
-        (html_title, html_type) = get_title_html(url, type, stream)
-        if html_title and not URL_PART_RE.match(html_title):
+        html_title = get_title_html(url, type, stream)['title']
+        if (html_title and not URL_PART_RE.match(html_title)
+        and html_title != 'Title: \2Imgur: The most awesome images on the Internet\2'
+        and html_title != 'Title: \2Imgur\2'):
             html_title = re.sub(r'^\002(.*) - Imgur\002$', r'\1', html_title)
-            title = 'Title: %s -- %s' % (format_title(html_title), title)
+            title = '%s -- %s' % (html_title, title)
 
     if info and info.get('size'):
         size = info['size']
