@@ -4,6 +4,7 @@ import sys
 import re
 
 from untwisted.magic import sign
+from untwisted.usual import Stop
 
 from util import LinkSet, AlreadyInstalled, NotInstalled
 from message import reply as echo
@@ -128,6 +129,8 @@ def h_reload(bot, id, target, hard):
             try:
                 if not hard and hasattr(module, 'reload_uninstall'):
                     module.reload_uninstall(bot)
+                elif hard and hasattr(module, 'hard_reload_uninstall'):
+                    module.hard_reload_uninstall(bot)
                 else:
                     try:
                         module.uninstall(bot)
@@ -149,6 +152,8 @@ def h_reload(bot, id, target, hard):
             if name not in old_modules: continue
             if hasattr(module, 'reload') and not hard:
                 module.reload(old_modules[name])
+            elif hasattr(module, 'hard_reload') and hard:
+                module.hard_reload(old_modules[name])
             if hasattr(module, 'install'):
                 try:
                     module.install(bot)
@@ -162,3 +167,5 @@ def h_reload(bot, id, target, hard):
 
     yield sign('POST_RELOAD', bot)
     echo(bot, id, target, 'Reload complete.')
+
+    raise Stop

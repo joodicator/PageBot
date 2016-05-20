@@ -1,12 +1,14 @@
 import untwisted.event
 from util import NotInstalled
 
-def install(bot, no_numeric=False):
+def install(bot, no_numeric=False, max_level=0):
     old_drive = bot.drive
     def drive(event, *args, **kwds):
         if event == untwisted.event.TICK: return
         if event == untwisted.event.READ: return
         if event == untwisted.event.WRITE: return
+        if kwds.get('log_level', 0) > max_level: return
+
         if type(event) == int:
             if no_numeric: return
             event = numeric(event)

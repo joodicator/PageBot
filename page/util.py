@@ -175,7 +175,7 @@ def mcall(event, *args, **kwds):
     import untwisted.usual
     token = kwds.pop('mcall_token', (event,) + args)
     def act(source, chain):
-        def ret(arg):
+        def ret(arg, **kwds):
             source.unlink(token, ret)
             try:
                 chain.send(arg)(source, chain)
@@ -208,7 +208,7 @@ def mfun(link, event_name):
         @link(event_name)
         def mfun_han(token, *args, **kwds):
             from untwisted.magic import sign
-            ret = lambda r=None: sign(token, r)
+            ret = lambda r=None: sign(token, r, log_level=kwds.get('log_level'))
             return fun(*args, ret=ret, **kwds)
         def mfun_fun(*args, **kwds):
             token = ('util.mfun', event_name, object())

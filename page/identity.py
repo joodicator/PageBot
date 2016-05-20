@@ -1,4 +1,8 @@
+from __future__ import print_function
+
 import traceback
+import datetime
+import time
 import json
 import re
 
@@ -30,16 +34,18 @@ def h_post_reload(bot):
     all_nicks = set()
     for chan, nicks in channel.track_channels.iteritems():
         all_nicks.update(nick.lower() for nick in nicks)
-    for nick in all_nicks:
-        track_id[nick] = Record()
-        if nick in prev_track_id and hasattr(prev_track_id[nick], 'hostmask'):
-            track_id[nick].hostmask = prev_track_id[nick].hostmask
-    prev_track_id = None
+    if prev_track_id is not None:
+        for nick in all_nicks:
+            track_id[nick] = Record()
+            if nick in prev_track_id and hasattr(prev_track_id[nick], 'hostmask'):
+                track_id[nick].hostmask = prev_track_id[nick].hostmask
+        prev_track_id = None
     yield refresh(bot, list(all_nicks))
 
 #-------------------------------------------------------------------------------
 # track_id[nick.lower()]
-# is a Record instance, which exists only if the bot shares a channel with nick.
+# is a Record instance, which exists only if the bot shares a channel with nick
+# or if nick is the bot's own nick.
 class Record(object):
     __slots__ = 'hostmask', 'access'
     def __init__(self, hostmask=None):
@@ -85,7 +91,7 @@ def read_prev_hosts():
 def write_prev_hosts(new_prev_hosts):
     try:
         with open(PREV_HOSTS_FILE, 'w') as file:
-            json.dump(new_prev_hosts, file)
+            json.dump(new_prev_hosts, file, indent=4)
     except ValueError: traceback.print_exc()
     except IOError:    traceback.print_exc()
 
@@ -176,6 +182,8 @@ def get_hostmask(bot, nick, ret):
     hostmask = '%s!%s@%s' % (r_nick, r_user, r_host)
     if nick in track_id:
         track_id[nick].hostmask = hostmask
+    elif nick.lower() == bot.nick.lower():
+        track_id[nick] = Record(hostmask=hostmask)
     yield ret(hostmask)
 
 #-------------------------------------------------------------------------------
@@ -184,9 +192,12 @@ def get_hostmask(bot, nick, ret):
 def get_id(bot, nick, ret):
     hostmask = yield get_hostmask(bot, nick)
     if hostmask:
-        yield ret(util.ID(*re.match(r'(.*)!(.*)@(.*)$', hostmask).groups()))
+        yield ret(hostmask_to_id(hostmask))
     else:
         yield ret(None)
+
+def hostmask_to_id(hostmask):
+    return util.ID(*re.match(r'(.*)!(.*)@(.*)$', hostmask).groups())
 
 #-------------------------------------------------------------------------------
 # yield refresh(bot, nicks) -> re-check certain credentials for each nick.
@@ -253,19 +264,31 @@ def grant_access(bot, nick_or_id, access_name):
 
 #===============================================================================
 # yield who(bot, query_nick) -> (nick, user, host, real) or None
+whois_cache = dict()
 @util.mfun(link, 'identity.who')
 def who(bot, nick, ret):
-    bot.send_cmd('WHOIS %s' % nick)
-    timeout = yield runtime.timeout(5)
-    result = None
-    while True:
-        event, args = yield hold(bot, RPL_WHOISUSER, timeout)
-        if event != RPL_WHOISUSER: break
-        (e_bot, e_source, e_target,
-         e_nick, e_user, e_host, e_star, e_real) = args
-        if e_nick.lower() != nick.lower(): continue
-        result = (e_nick, e_user, e_host, e_real)
-        break
+    for cnick, (_, ctime) in whois_cache.items():
+        if ctime < time.time() - 10:
+            del whois_cache[cnick]
+
+    cached = whois_cache.get(nick.lower())
+    if cached is not None and cached[0] is not None:
+        result = cached[0]
+    else:
+        if cached is None:
+            bot.send_cmd('WHOIS %s' % nick)
+            whois_cache[nick.lower()] = (None, time.time())
+        timeout = yield runtime.timeout(5)
+        result = None
+        while True:
+            event, args = yield hold(bot, RPL_WHOISUSER, timeout)
+            if event != RPL_WHOISUSER: break
+            (e_bot, e_source, e_target,
+             e_nick, e_user, e_host, e_star, e_real) = args
+            if e_nick.lower() != nick.lower(): continue
+            result = (e_nick, e_user, e_host, e_real)
+            whois_cache[nick.lower()] = (result, time.time())
+    
     yield ret(result)
 
 #===============================================================================
@@ -291,12 +314,17 @@ def h_other_join(bot, id, chan):
     track_id[nick].hostmask = '%s!%s@%s' % id
     yield refresh(bot, [nick])
 
-@link('OTHER_NICK')
-def h_other_nick(bot, id, new_nick):
+@link('SELF_NICK',  a=lambda bot,     new_nick: (None, bot.nick, new_nick))
+@link('OTHER_NICK', a=lambda bot, id, new_nick: (id,   id.nick,  new_nick))
+def h_other_nick(bot, *args, **kwds):
     # Rename any identity-tracking record.
-    if id.nick.lower() in track_id:
-        record = track_id.pop(id.nick.lower())
-        record.hostmask = '%s!%s@%s' % (new_nick, id.user, id.host)
+    id, old_nick, new_nick = kwds.pop('a')(bot, *args, **kwds)
+    if old_nick.lower() in track_id:
+        record = track_id.pop(old_nick.lower())
+        if id is None and record.hostmask:
+            id = hostmask_to_id(record.hostmask)
+        if id is not None:
+            record.hostmask = '%s!%s@%s' % (new_nick, id.user, id.host)
         track_id[new_nick.lower()] = record
 
 @link('CHAN_MODE')

@@ -42,11 +42,16 @@ topic_channels = dict()
 # the canonical capitalisation of chan, according to certain server messages.
 capitalisation = dict()
 
-def reload(prev):
-    if hasattr(prev,'names_channels') and isinstance(prev.names_channels,dict):
-        names_channels.update(prev.names_channels)
+def hard_reload(prev):
+    reload(prev, hard=True)
+
+def reload(prev, hard=False):
     if hasattr(prev,'track_channels') and isinstance(prev.track_channels,dict):
         track_channels.update(prev.track_channels)
+    if hard: return
+
+    if hasattr(prev,'names_channels') and isinstance(prev.names_channels,dict):
+        names_channels.update(prev.names_channels)
     if hasattr(prev,'umode_channels') and isinstance(prev.umode_channels,dict):
         umode_channels.update(prev.umode_channels)
     if hasattr(prev,'cmode_channels') and isinstance(prev.cmode_channels,dict):
