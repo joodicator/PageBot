@@ -31,7 +31,7 @@ def install(bot):
     global is_installed   
     link.install(bot)
     is_installed = True
-    bot.drive('DOMINIONS_TICK', bot)
+    bot.drive('DOMINIONS_TICK', bot, log_level=2)
 
 def uninstall(bot):
     global is_installed
@@ -244,7 +244,7 @@ def get_report(url):
         return ErrorReport(url=url, prev=state.games.get(url), exc=exc)
 
 @util.msub(link, 'dominions.update_urls')
-def update_urls(bot, urls, report_to=None):
+def update_urls(bot, urls, report_to=None, log_level=None):
     msgs = []
     for url in urls:
         prev_report = state.games.get(url)
@@ -268,7 +268,8 @@ def update_urls(bot, urls, report_to=None):
     for chan, chan_urls in state.channels.iteritems():
         if set(chan_urls) & set(urls):
             explicit = report_to and chan.lower() == report_to.lower()
-            yield update_topic(bot, chan, explicit=explicit)
+            yield update_topic(bot, chan,
+                explicit=explicit, log_level=log_level)
 
     for chan, msg in msgs:
         bot.send_msg(chan, msg)
@@ -277,7 +278,7 @@ def update_urls(bot, urls, report_to=None):
         state.save_path(STATE_FILE)
 
 @util.mfun(link, 'dominions.update_topic')
-def update_topic(bot, chan, ret, explicit=False):
+def update_topic(bot, chan, ret, explicit=False, **kwds):
     chan = chan.lower()
     new_dyn = '; '.join(
         state.games[url].show_topic()
@@ -309,7 +310,7 @@ def update_topic(bot, chan, ret, explicit=False):
     yield ret()
 
 @link('DOMINIONS_TICK')
-def h_dominions_tick(bot):
+def h_dominions_tick(bot, log_level=None):
     try:
         if not is_installed: return
         urls = []
@@ -321,11 +322,11 @@ def h_dominions_tick(bot):
                 if url in state.games and state.games[url].time > latest:
                     continue
                 urls.append(url)
-        yield update_urls(bot, urls, None)
+        yield update_urls(bot, urls, log_level=log_level)
     except:
         traceback.print_exc()
     yield runtime.sleep(TICK_PERIOD_S)
-    yield sign('DOMINIONS_TICK', bot)
+    yield sign('DOMINIONS_TICK', bot, log_level=log_level)
 
 @link('!turn')
 def h_turn(bot, id, chan, args, full_msg):
