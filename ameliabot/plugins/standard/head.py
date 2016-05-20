@@ -41,5 +41,6 @@ def tick(bot):
         yield sign(CLOSE, bot)
 
 def handle_close(bot):
-    bot.shutdown(socket.SHUT_RDWR)
+    try: bot.shutdown(socket.SHUT_RDWR)
+    except IOError: pass
     bot.close()
