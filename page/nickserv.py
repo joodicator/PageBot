@@ -7,7 +7,7 @@ import runtime
 import util
 
 link, ls_install, ls_uninstall = util.LinkSet().triple()
-REGISTERED = '001'
+REGISTERED = 'PRE_AUTOJOIN'
 IDENTIFIED = ('AFTER', REGISTERED, __name__)
 
 installed = False
@@ -26,14 +26,26 @@ def uninstall(bot):
     ls_uninstall(bot)
     util.event_sub(bot, IDENTIFIED, REGISTERED)
 
+conf_cache = None
 def conf(*args, **kwds):
-    try:
-        return util.fdict('conf/nickserv.py', util.__dict__).get(*args, **kwds)
-    except IOError:
-        traceback.print_exc()
+    global conf_cache
+    if conf_cache is None:
+        try:
+            conf_cache = util.fdict('conf/nickserv.py', util.__dict__)
+        except IOError:
+            traceback.print_exc()
+            conf_cache = None
+    return conf_cache and conf_cache.get(*args, **kwds)
 
 @link(REGISTERED)
 def registered(bot, *rargs):
+    if conf('password') and bot.nick == getattr(bot, 'auto_nick', None):
+        nick_status = yield status(bot, bot.conf['nick'])
+        if nick_status == 1:
+            bot.send_msg(
+                conf('nickserv').nick,
+                'GHOST %s %s' % (bot.conf['nick'], conf('password')))
+            bot.send_cmd('NICK %s' % bot.conf['nick'])
     if conf('password'):
         timeout = yield runtime.timeout(30)
         yield hold(bot, 'NICKSERV_REGISTERED', timeout)

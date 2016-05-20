@@ -65,6 +65,7 @@ class AmeliaBot(Mac):
         self.link(RPL_WELCOME,          self.h_rpl_welcome)
         self.link(RPL_ISUPPORT,         self.h_rpl_isupport)
         self.link(TICK,                 self.h_tick)
+        self.link('PRE_AUTOJOIN',       self.h_pre_autojoin)
         
         # Load plugins
         self.conf['plugins'][:0] = ['plugins.standard.head']
@@ -110,6 +111,9 @@ class AmeliaBot(Mac):
 
     def h_rpl_welcome(self, *args):
         self.unlink(ERR_NICKNAMEINUSE, self.h_err_nicknameinuse)
+        self.drive('PRE_AUTOJOIN', self)
+
+    def h_pre_autojoin(self, *args):
         for channel in self.conf['channels']:
             self.send_cmd('JOIN %s' % channel)
         self.drive('AUTOJOIN', self)
@@ -118,15 +122,14 @@ class AmeliaBot(Mac):
         return gear.mainloop()
 
     def send_msg(self, target, msg, **kwds):
-        self.send_line('PRIVMSG %s :%s' % (target, msg))
-        self.drive('SEND_MSG', self, target, msg, kwds)
+        self.send_line('PRIVMSG %s :%s' % (target, msg), **kwds)
         self.activity = True
     
-    def send_cmd(self, cmd):
-        self.send_line(cmd)
+    def send_cmd(self, cmd, **kwds):
+        self.send_line(cmd, **kwds)
         self.activity = True
 
-    def send_line(self, line):
+    def send_line(self, line, defer=False, **kwds):
         flood_limits = self.conf['flood_limits']
         now = time.time()
         cut = now - max(s for (s,l) in flood_limits)
@@ -140,20 +143,23 @@ class AmeliaBot(Mac):
                 self.flood_active = True
                 break
 
-        if self.flood_active:
-            self.flood_buffer.append(line)
+        if defer or self.flood_active:
+            self.flood_buffer.append((line, kwds))
         else:
             self.send_times.append(now)
-            self.dump('%s\r\n' % line[:510])
+            line = line[:510]
+            self.dump('%s\r\n' % line)
+            match = re.match(r'PRIVMSG (?P<target>\S+) :(?P<msg>.*)', line)
+            if match: self.drive('SEND_MSG',
+                self, match.group('target'), match.group('msg'), kwds)
 
     def h_tick(self, bot):
-        if not self.flood_active:
-            return
+        if not self.flood_active: return
         lines = self.flood_buffer
         self.flood_buffer = []
         self.flood_active = False
-        for line in lines:
-            self.send_line(line)
+        for line, kwds in lines:
+            self.send_line(line, **kwds)
 
 if __name__ == '__main__':
     gear = AmeliaBot()
