@@ -615,7 +615,13 @@ def h_other_join(bot, id, chan):
 
 @link('MESSAGE')
 def h_message(bot, id, target, msg):
-    if target: deliver_msgs(bot, id, target)
+    if target:
+        deliver_msgs(bot, id, target)
+
+@link('CMD_IGNORED')
+def h_cmd_ignored(cmd, bot, id, target, args, full_msg):
+    if target:
+        deliver_msgs(bot, id, target)
 
 @link('OTHER_NICK_CHAN')
 def h_nick(bot, id, new_nick, chan):
