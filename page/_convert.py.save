@@ -1,0 +1,140 @@
+import numbers
+
+#-------------------------------------------------------------------------------
+class AbstractMethodCall(NotImplementedError):
+    def __init__(self):
+        super(AbstractMethodCall, self).__init__(
+            'This abstract method must be overridden in a subclass.')
+
+#-------------------------------------------------------------------------------
+class Factor(object):
+    def __mul__(self, other):
+        return self.product_type(self) * other
+    def __rmul__(self, other):
+        return other * self.product_type(self)
+
+    def __div__(self, other):
+        return self.product_type(self) / other
+    def __rdiv__(self, other):
+        return other / self.product_type(self)
+
+    def __pow__(self, other):
+        return self.product_type(self) ** other
+
+class Product(Factor):
+    __slots__ = 'factor_powers'
+    factor_type = Factor
+    def __new__(cls, factor=None):
+        if isinstance(factor, Product) and isinstance(factor, cls.factor_type):
+            return factor
+        else:
+            return Factor.__new__(cls, factor)
+
+    def __init__(self, factor=None):
+        if self is factor:
+            return
+        elif factor is None or factor == 1:
+            self.factor_powers = {}
+        elif type(factor) is dict:
+            self.factor_powers = factor
+        elif isinstance(factor, self.factor_type):
+            self.factor_powers = {factor: 1}
+        else:
+            raise ValueError('Invalid factor type: %r' % (factor,))
+
+    def __repr__(self):
+        if self.factor_powers:
+            num = ' * '.join(
+                '%r**%d' % (fac, pow) if pow != 1 else repr(fac)
+                for (fac, pow) in sorted(self.factor_powers.iteritems())
+                if pow > 0)
+            den = ' / '.join(
+                '%r**%d' % (fac, -pow) if pow != -1 else repr(fac)
+                for (fac, pow) in sorted(self.factor_powers.iteritems())
+                if pow < 0)
+            return '%s / %s' % (num or '1', den) if den else num
+        else:
+            return '%s()' % type(self).__name__
+
+    def __mul__(self, other):
+        if other == 1: return self
+        if not isinstance(other, self.factor_type): return NotImplemented
+        powers = dict(type(self)(other).factor_powers)
+        for fac, pow in self.factor_powers.iteritems():
+            pow += powers.get(fac, 0)
+            if pow: powers[fac] = pow
+            else: del powers[fac]
+        return type(self)(powers)
+    def __rmul__(self, other):
+        return self * other
+
+    def __div__(self, other):
+        if other == 1: return self
+        if not isinstance(other, self.factor_type): return NotImplemented
+        return self * other**-1
+    def __rdiv__(self, other):
+        return self**-1 * other
+
+    def __pow__(self, power):
+        if power == 0:
+            return type(self)()
+        elif isinstance(power, numbers.Integral):
+            return type(self)({
+                fac : pow * power
+                for (fac, pow) in self.factor_powers.iteritems() })
+        else:
+            return NotImplemented  
+
+Factor.product_type = Product
+
+#-------------------------------------------------------------------------------
+class Dimension(Factor):
+    subclasses = []
+
+class DimensionProduct(Dimension, Product):
+    factor_type = Dimension
+Dimension.product_type = DimensionProduct
+
+class Length(Dimension):
+    def __str__(self):
+        return 'length'
+Dimension.subclasses.append(Length)
+
+class Mass(Dimension):
+    def __str(self):
+        return 'mass'
+Dimension.subclasses.append(Mass)
+
+class Time(Dimension):
+    def __str__(self):
+        return 'time'
+Dimension.subclasses.append(Time)
+
+class ElectricCurrent(Dimension):
+    def __str__(self):
+        return 'electric current'
+Dimension.subclasses.append(ElectricCurrent)
+
+class ChemicalAmount(Dimension):
+    def __str__(self):
+        return 'chemical amount'
+Dimension.subclass.append(ChemicalAmount)
+
+class LuminousIntensity(Dimension):
+    def __str__(self):
+        return 'luminous intensity'
+Dimension.subclass.append(LuminousIntensity)
+
+class Angle(Dimension):
+    def __str__(self):
+        
+
+#-------------------------------------------------------------------------------
+class Unit(Factor):
+    __slots__ = 'dimension'
+    def __init__(self, dimension):
+        self.dimension = dimension
+
+class UnitProduct(Unit, Product):
+    factor_type = Unit
+Unit.product_type = UnitProduct
