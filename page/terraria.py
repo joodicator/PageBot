@@ -18,8 +18,8 @@ import sys
 import re
 
 #==============================================================================#
-RECONNECT_DELAY_SECONDS = 15
-VERSION_RECONNECT_DELAY_SECONDS = 1
+RECONNECT_DELAY_SECONDS = 30
+VERSION_RECONNECT_DELAY_SECONDS = 5
 MAX_CHAT_LENGTH = 127
 STATE_FILE = 'state/terraria.json'
 
@@ -146,6 +146,7 @@ def kill_work(work, remove=True):
 def ab_bridge(ab_mode, target, msg):
     work = te_work.get(target.lower())
     if work is None or not hasattr(work, 'terraria_protocol'): return
+    msg = strip_codes(msg)
     if MAX_CHAT_LENGTH is not None:
         max_len = MAX_CHAT_LENGTH - len('<%s> ' % work.terraria.user)
         while len(msg) > max_len:
@@ -175,34 +176,67 @@ def h_bridge_names_req(bot, target, source, query):
 #==============================================================================#
 @te_link('CHAT')
 def te_chat(work, slot, colour, text):
-    match = re.match(r'(\[Server\] )?(?P<cmd>!\S+)(?P<arg> .*|$)', text)
-    if match:
-        cmd, arg = match.group('cmd', 'arg')
-        if cmd.lower() == '!online':
-            name = work.terraria.name
-            bridge.notice(ab_mode, name, 'NAMES_REQ', name, arg.strip())
-        elif cmd.lower() in ('!time', '!date'):
-            msg = datetime.utcnow().strftime('%H:%M:%S %a %d/%b/%Y UTC')
-            terraria_protocol.chat(work, msg)
-
+    no_echo = [False]
+    echo_lines = []
+    event_type = None
     if slot == 255:
-        if len(work.terraria_protocol.players) > 1 or not message_ignored(text):
-            if not text.startswith('[Server]'):
-                for sub_name, find, repl in substitutions:
-                    if te_work.get(sub_name.lower()) != work: continue
-                    text = re.sub(r'\b%s\b' % re.escape(find), repl, text)
-            yield sign('TERRARIA', work, text)
-    elif slot != work.terraria_protocol.slot:
-        name = work.terraria_protocol.players.get(slot, slot)
-        for sub_name, find, repl in substitutions:
-            if te_work.get(sub_name.lower()) != work: continue
-            if name.lower() == find.lower(): name = repl
-        yield sign('TERRARIA', work, '<%s> %s' % (name, text))
+        match = re.match(r'((?P<sn>\[\S+\])|\*(?P<an>\S+))\s*(?P<m>.*)', text)
+        if match:
+            event_type = 'MESSAGE' if match.group('sn') else 'ACTION'
+            event_name = match.group('sn') or match.group('an')
+            event_text = match.group('m')
+    else:
+        event_type = 'MESSAGE'
+        event_name = work.terraria_protocol.players.get(slot, slot)
+        event_text = text
+
+    if event_type is not None:
+        def reply(rmsg=None, from_name=None, prefix=True, no_bridge=False):
+            if from_name is None and rmsg is not None:
+                from_name = lambda name: rmsg
+            if prefix and from_name:
+                _from_name = from_name
+                from_name = lambda name: '%s: %s' % (name, _from_name(name))
+            if from_name:
+                terraria_protocol.chat(work,
+                    '%s' % strip_codes(from_name(event_name)))
+            if from_name and not no_bridge:
+                echo_lines.append('<%s> %s' % (
+                    work.terraria.user, from_name(substitute(work, event_name))))
+            no_echo[0] = no_echo[0] or no_bridge
+        yield util.msign(ab_mode, ('BRIDGE', event_type), ab_mode,
+            event_name, work.terraria.name, event_text, reply)
+    
+    if not no_echo[0]:
+        if slot == 255:
+            if len(work.terraria_protocol.players) > 1 or not message_ignored(text):
+                if not text.startswith('[Server]'):
+                    for sub_name, find, repl in substitutions:
+                        if te_work.get(sub_name.lower()) != work: continue
+                        text = re.sub(r'\b%s\b' % re.escape(find), repl, text)
+                yield sign('TERRARIA', work, text)
+        elif slot != work.terraria_protocol.slot:
+            name = work.terraria_protocol.players.get(slot, slot)
+            name = substitute(work, name)
+            yield sign('TERRARIA', work, '<%s> %s' % (name, text))
+
+    for line in echo_lines:
+        yield sign('TERRARIA', work, line)
+
+def substitute(work, name):
+    for sub_name, find, repl in substitutions:
+        if te_work.get(sub_name.lower()) != work: continue
+        if name.lower() == find.lower(): return repl
+    return name
+
+def strip_codes(msg):
+    return re.sub(r'[\x00-\x1f]', '', msg)
 
 #-------------------------------------------------------------------------------
 @te_link('DISCONNECT')
 def te_disconnect(work, msg):
-    if msg != 'You are not using the same version as this server.': return
+    if not msg.endswith('You are not using the same version as this server.'):
+        return
 
     state = get_state()
     state = state.get(repr(work.terraria.address), dict())

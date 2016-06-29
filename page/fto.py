@@ -1,46 +1,5 @@
 # coding: utf8
 
-#===============================================================================
-#
-#                        PLAY TO FIND OUT WHAT HAPPENS.
-#
-#   Yes, I'm talking to you, little buddy. Just go ahead and close that tab.
-#
-#===============================================================================
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 from untwisted.magic import sign, hold
 
 import re
@@ -250,7 +209,7 @@ def h_fto_msg(bot, id, target, msg):
     #---------------------------------------------------------------------------
     # Hanazawa Kana - Renai Circulation
     # http://www.youtube.com/watch?v=lWTuzLz1C6o
-    elif strip(msg).startswith(strip('Se~ no')):
+    elif strip(msg).startswith(sstrip('se+no')):
         write = ['Se~ no', 'Demo sonnanja dame', 'Mou sonnanja hora~',
                  'Kokoro wa shinka suru yo motto motto~']
         read = ''
@@ -378,6 +337,16 @@ def h_fto_msg(bot, id, target, msg):
         else:
             reply('\2Saataa andaagii!')
 
+    #---------------------------------------------------------------------------
+    # 1-800-CONTACTS TV Advert - "Overly Dramatic Dramatization"
+    # https://www.youtube.com/watch?v=f9YBwa0O1Zc
+    elif ('your contact lenses just arrived' in sstrip(msg)
+    and 'my brand' not in sstrip(msg) and 'special eyes' not in sstrip(msg)):
+        reply("1-800-CONTACTS? They can't have my brand! I have special eyes...")
+    elif ('look with your special eyes' in sstrip(msg)
+    and 'my brand' not in sstrip(msg)):
+        reply("My brand!")
+
 #===============================================================================
 @link('!nuke')
 def h_nuke(bot, id, target, args, full_msg):
@@ -394,7 +363,7 @@ def h_nuke(bot, id, target, args, full_msg):
 
     message.reply(bot, id, target, 'Nuclear launch detected.', prefix=False)
     yield runtime.sleep(15)
-    bot.send_cmd('KICK %s %s :*mushroom cloud*' % (target, id.nick))
+    bot.send_cmd('KICK %s %s :GIANT ASPARAGUS!' % (target, id.nick))
     
     ERR_CHANOPRIVSNEEDED = '482'
     UNREAL_ERR_CANNOTDOCOMMAND = '972'
@@ -412,12 +381,8 @@ def h_nuke(bot, id, target, args, full_msg):
             if e_chan.lower() != target.lower(): continue
             message.reply(bot, id, target,
                 'Nuclear launch failed: "%s".' % e_args, prefix=False)
-#        elif event == timeout:
-#            message.reply(bot, id, target,
-#                'Nuclear launch failed.', prefix=False)
-        else:
-            continue
-        break
+        elif event == timeout:
+            break
 
     nuclear_launch.discard(target_id)
 

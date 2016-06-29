@@ -262,6 +262,24 @@ def grant_access(bot, nick_or_id, access_name):
     
     yield sign('GAIN_ACCESS', bot, nick, access_name)
 
+# yield enum_access(bot, access_name) -> [nick1, nick2, ...]
+# A sequence of nicks which can be found currently online and authenticated to
+# the given access name. Cached authentication records and static 'known_as'
+# records are used as a heuristic for the search.
+@util.mfun(link, 'identity.enum_access')
+def enum_access(bot, access_name, ret):
+    access_name = access_name.lower()
+    nicks = set()
+    for nick, record in track_id.iteritems():
+        if access_name in record.access:
+            nicks.add(nick)
+    for nick in known_as(access_name):
+        nick = nick.lower()
+        access = yield check_access(bot, nick, access_name)
+        if access:
+            nicks.add(nick)
+    yield ret(tuple(nicks))
+
 #===============================================================================
 # yield who(bot, query_nick) -> (nick, user, host, real) or None
 whois_cache = dict()
@@ -290,6 +308,15 @@ def who(bot, nick, ret):
             whois_cache[nick.lower()] = (result, time.time())
     
     yield ret(result)
+
+# A sequence of nicks by which the given access name is known, according to
+# 'known_as' records in the credentials file, but which are not necessarily
+# online or authenticated to the given access name.
+def known_as(access_name):
+    return tuple(nick
+        for cred in credentials.get(access_name.lower(), ())
+        if cred[0] == 'known_as' and len(cred) > 1
+        for nick in cred[1])
 
 #===============================================================================
 @link('NAMES_SYNC')
