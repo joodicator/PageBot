@@ -76,11 +76,13 @@ def refresh_conf_entry(bot, entry):
                     msg = '[QdbS] New quote #%d: %r' % (qid, quote)
                     bot.send_msg(nick, msg)
 
-            last_quote = max(last_quote, max(qid for (qid, quote) in quotes))
-            name_state['last_quote'] = last_quote
-            url_state[entry.access_name.lower()] = name_state
-            state[entry.admin_url] = url_state
-            write_state(state)
+            if quotes:
+                last_quote = max(
+                    last_quote, max(qid for (qid, quote) in quotes))
+                name_state['last_quote'] = last_quote
+                url_state[entry.access_name.lower()] = name_state
+                state[entry.admin_url] = url_state
+                write_state(state)
     except:
         traceback.print_exc()
 

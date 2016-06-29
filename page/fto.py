@@ -209,16 +209,24 @@ def h_fto_msg(bot, id, target, msg):
     #---------------------------------------------------------------------------
     # Hanazawa Kana - Renai Circulation
     # http://www.youtube.com/watch?v=lWTuzLz1C6o
-    elif strip(msg).startswith(sstrip('se+no')):
-        write = ['Se~ no', 'Demo sonnanja dame', 'Mou sonnanja hora~',
-                 'Kokoro wa shinka suru yo motto motto~']
+    elif re.match(r'se+no', strip(msg)):
+        write = [
+            ('Se~ no',
+            r'se+no'),
+            ('Demo sonnanja dame',
+            r'demosonn?anjadame'),
+            ('Mou sonnanja hora~',
+            r'mou?sonn?anjahora'),
+            ('Kokoro wa shinka suru yo motto motto~',
+            r'kokorowashinkasuruyomott?omott?o')]
         read = ''
         smsg = strip(msg)
-        while write and smsg.startswith(read + strip(write[0])):
-            read += strip(write.pop(0))
-        if smsg != read: return
+        while write and re.match(read + write[0][1], smsg):
+            read += write.pop(0)[1]
+        if not re.match(read + r'$', smsg):
+            return
         for line in write:
-            reply(line)
+            reply(line[0])
             yield runtime.sleep(1)
 
     #---------------------------------------------------------------------------
