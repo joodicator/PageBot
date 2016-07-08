@@ -15,4 +15,5 @@ imgur_client_id.txt
 identity.py
 ignore.txt
 substitute.py
-qdbs.py
+qdbs_public.py
+qdbs_private.py
