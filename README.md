@@ -3,11 +3,17 @@ PageBot
 
 A general-purpose, modular, extensible IRC robot written in Python 2, based on the *untwisted* network framework.
 
+It includes plugins for a public messaging system (`tell`), URL scanning (`url`), dice rolling (`dice`), auto channel operator management (`aop`), information about channel users' last activity (`seen`), connecting channels to Minecraft servers (`bridge` and `minecraft`), and numerous others.
+
 Requirements
 ------------
 * [Python](https://python.org) 2.7
 * A POSIX-compliant shell interpreter such as `bash`. This dependency may be removed in the future.
 * Further requirements of individual plugins used. See below for details.
+
+Contributing
+------------
+Bug reports and feature requests may be submitted to this repository using the issue tracker, and are more than welcome. Pull requests fixing bugs are welcome, and pull requests adding or changing features will be duly considered.
 
 Installation and Usage
 ----------------------
