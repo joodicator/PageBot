@@ -46,7 +46,6 @@ class State(object):
     def __init__(self, path=None, jdict=None):
         self.channels = dict()
         self.games = dict()
-        self.set_topic = dict()
         if path is not None: self.load_path(path)
         if jdict is not None: self.load_jdict(jdict)
 
@@ -61,16 +60,15 @@ class State(object):
 
     def save_path(self, path):
         with open(path, 'w') as file:
-            json.dump(self.save_jdict(), file)
+            json.dump(self.save_jdict(), file, indent=4)
 
     def load_jdict(self, jdict):
         all_urls = set()
-        for chan, urls in jdict.get('channels', dict()).iteritems():
-            chan = chan.lower()
-            if chan not in self.channels:
-                self.channels[chan] = []
-            self.channels[chan].extend(urls)
-            all_urls.update(urls)
+        for chan, cdict in jdict.get('channels', dict()).iteritems():
+            cobj = Channel(cdict)
+            if not cobj.games: continue
+            self.channels[chan.lower()] = cobj
+            all_urls.update(cobj.games)
         for url, report in jdict.get('games', dict()).iteritems():
             if url not in all_urls: continue
             if report.get('type') == 'report':
@@ -78,14 +76,33 @@ class State(object):
             elif report.get('type') == 'error':
                 self.games[url] = ErrorReport(url=url, jdict=report)
         for chan, topic in jdict.get('set_topic', dict()).iteritems():
+            # Backward compatibility for an obsolete format.
             chan = chan.lower()
             if chan not in self.channels: continue
-            self.set_topic[chan] = topic
+            self.channels[chan].set_topic = topic
 
     def save_jdict(self):
-        jdict = dict(self.__dict__)
-        jdict['games'] = {u:r.save_jdict() for (u,r) in self.games.iteritems()}
-        return jdict
+        return {
+            'games': {
+                u: r.save_jdict() for (u,r) in self.games.iteritems()},
+            'channels': {
+                k: c.save_jdict() for (k,c) in self.channels.iteritems()}}
+
+class Channel(object):
+    def __init__(self, jdict=None):
+        self.games = []
+        self.set_topic = ''
+        if jdict is not None:
+            self.load_jdict(jdict)
+    def load_jdict(self, jdict):
+        if isinstance(jdict, list):
+            # Backward compatibility for an obsolete format.
+            self.games = jdict
+        else:
+            self.games = jdict.get('games', [])
+            self.set_topic = jdict.get('set_topic', '')
+    def save_jdict(self):
+        return dict(self.__dict__)
 
 class Core(object):
     def __eq__(self, other):
@@ -254,7 +271,8 @@ def update_urls(bot, urls, report_to=None, log_level=None):
         and all(p.status in (PLAYED, AI) for p in report.players)):
             continue
 
-        for chan, chan_urls in state.channels.iteritems():
+        for chan, cobj in state.channels.iteritems():
+            chan_urls = cobj.games
             if url not in chan_urls: continue
             if report_to is not None and chan == report_to.lower():
                 msgs.append((chan, report.show_irc()))
@@ -265,7 +283,8 @@ def update_urls(bot, urls, report_to=None, log_level=None):
             elif type(report) is ErrorReport and report != prev_report:
                 msgs.append((chan, report.show_irc()))
 
-    for chan, chan_urls in state.channels.iteritems():
+    for chan, cobj in state.channels.iteritems():
+        chan_urls = cobj.games
         if set(chan_urls) & set(urls):
             explicit = report_to and chan.lower() == report_to.lower()
             yield update_topic(bot, chan,
@@ -282,10 +301,11 @@ def update_topic(bot, chan, ret, explicit=False, **kwds):
     chan = chan.lower()
     new_dyn = '; '.join(
         state.games[url].show_topic()
-        for url in state.channels.get(chan, []) if url in state.games)
+        for (c, cobj) in state.channels.iteritems() if c == chan
+        for url in cobj.games if url in state.games)
 
     if new_dyn:
-        if not explicit and new_dyn in state.set_topic.get(chan, ''):
+        if not explicit and new_dyn in state.channels[chan].set_topic:
             yield ret()
             return
 
@@ -305,7 +325,7 @@ def update_topic(bot, chan, ret, explicit=False, **kwds):
         else:
             topic = new_dyn
         bot.send_cmd('TOPIC %s :%s' % (chan, topic))
-        state.set_topic[chan] = topic
+        state.channels[chan].set_topic = topic
 
     yield ret()
 
@@ -315,8 +335,8 @@ def h_dominions_tick(bot, log_level=None):
         if not is_installed: return
         urls = []
         latest = time.time() + UPDATE_PERIOD_S
-        for chan, chan_urls in state.channels.iteritems():
-            for url in chan_urls:
+        for chan, cobj in state.channels.iteritems():
+            for url in cobj.games:
                 if url in urls:
                     continue
                 if url in state.games and state.games[url].time > latest:
@@ -331,7 +351,8 @@ def h_dominions_tick(bot, log_level=None):
 @link('!turn')
 def h_turn(bot, id, chan, args, full_msg):
     if chan is None: return
-    urls = state.channels.get(chan.lower(), [])
+    cobj = state.channels.get(chan.lower())
+    urls = cobj.games if cobj else []
     yield update_urls(bot, urls, report_to=chan)
 
 @link('!dom+')
@@ -342,18 +363,19 @@ def h_dom_add(bot, id, chan, add_spec, full_msg, cont):
         if chan is None: return
         chan = chan.lower()
         aurls = re.findall(r'\S+', add_spec.lower())
+        if chan in state.channels:
+            cobj = state.channels[chan]
+        else:
+            cobj = state.channels[chan] = Channel()
         for aurl in aurls:
-            if aurl in state.channels.get(chan, []):
+            if aurl in cobj.games:
                 message.reply(bot, id, chan,
                     'Error: "%s" is already monitored here.' % aurl)
                 break
         else:
-            if chan not in state.channels:
-                state.channels[chan] = []
             for aurl in aurls:
-                if aurl not in state.channels[chan]:
-                    state.channels[chan].append(aurl)
-        
+                cobj.games.append(aurl)
+
             try:
                 state.save_path(STATE_FILE)
             except Exception as e:
@@ -372,12 +394,14 @@ def h_dom_del(bot, id, chan, del_spec, full_msg, cont):
     try:
         if chan is None: return
         chan = chan.lower()
+        if chan not in state.channels: return
+
         del_spec = re.findall(r'\S+', del_spec.lower())
         if not del_spec: return
     
         del_urls = []
         for spec in del_spec:
-            for i, iurl in izip(count(), state.channels.get(chan, [])):
+            for i, iurl in izip(count(), state.channels[chan].games):
                 if spec == iurl: break
                 if spec == str(i+1): break
                 if iurl in state.games and spec == state.games[iurl].name: break
@@ -389,14 +413,17 @@ def h_dom_del(bot, id, chan, del_spec, full_msg, cont):
         
         del_count = 0
         for durl in del_urls:
-            if durl in state.channels[chan]:
-                state.channels[chan].remove(durl)
+            if durl in state.channels[chan].games:
+                state.channels[chan].games.remove(durl)
                 del_count += 1
-            for ochan, ocurls in state.channels.iteritems():
-                if durl in ocurls: break
+            for ochan, ocobj in state.channels.iteritems():
+                if durl in ocobj.games: break
             else:
                 if durl in state.games: del state.games[durl]
-    
+
+        if not state.channels[chan].games:
+            del state.channels[chan]
+
         try:
             state.save_path(STATE_FILE)
         except Exception as e:
@@ -412,7 +439,8 @@ def h_dom_del(bot, id, chan, del_spec, full_msg, cont):
 def h_dom_query(bot, id, chan, args, full_msg, cont):
     try:
         if chan is None: return
-        urls = state.channels.get(chan.lower(), [])
+        cobj = state.channels.get(chan.lower())
+        urls = cobj.games if cobj else []
         if urls:
             for index, url in izip(count(), urls):
                 name = getattr(state.games[url], 'name', None) \
