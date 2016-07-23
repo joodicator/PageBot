@@ -1,9 +1,0 @@
-<Vaylon> Hey, joo, you should give PageBot a function to print local time and temperature in Celsius.
-
-<Vaylon> I'd like a way of converting a particular game time into real time. Say, for example, I wanted to know what time 4 Vasa, 319 is in CDT. I'd put that information into PageBot and it would tell us the hour and day.
-
-<Vaylon> I'd also like the ability to calculate time between two given in-game times.
-
-<@shinichizio> joo, get on adding random tea service to PageBot, stat
-
-<Broose> joo, you should program the 'big-ass car' to 'big ass-car' feature into PageBot.
