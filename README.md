@@ -61,7 +61,7 @@ This file is located at `conf/bot.py` and configures the core features of the bo
 |`bang_cmd`     |`True` or `False`          | If False, bot commands must be prefixed by `NICK: `, where `NICK` is the bot's nick. This is useful if there are multiple bots present which may respond to commands of the form `!COMMAND`. |
 |`flood_limits` |`list` of `(Number,Number)`| Each list item `(lines, seconds)` enforces a serverbound flood protection rule preventing the bot from sending more than `lines` IRC messages in any period of `seconds` seconds. This is useful to prevent the bot from being disconnected by an IRC server's flood protection mechanisms. In practice, IRC servers often have multiple such mechanisms, hence the need for multiple rules. |
 
-If any of these are not specified, the default values in [`main.py`](main.py) or [`amelia/amelia.py`](amelia/amelia.py) (in that order) are used.
+If any of these are not specified, the default values in [`main.py`](main.py) or [`ameliabot/amelia.py`](ameliabot/amelia.py) (in that order) are used.
 
 ## Core Modules
 ### runtime
