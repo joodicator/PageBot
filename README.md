@@ -7,11 +7,12 @@ It includes plugins for a [public messaging system](#tell), [URL scanning](#url)
 ## Contents
 1. [Requirements](#requirements)
 2. [Contributing](#contributing)
-3. [Installation and Usage](#installation-and-usage)
-4. [Overview of Files](#overview-of-files)
-5. [Main Configuration File](#main-configuration-file)
-6. [Core Modules](#core-modules)
-7. [Available Plugins](#available-plugins)
+3. [License](#license)
+4. [Installation and Usage](#installation-and-usage)
+5. [Overview of Files](#overview-of-files)
+6. [Main Configuration File](#main-configuration-file)
+7. [Core Modules](#core-modules)
+8. [Available Plugins](#available-plugins)
 
 ## Requirements
 * [Python](https://python.org) 2.7
@@ -20,6 +21,16 @@ It includes plugins for a [public messaging system](#tell), [URL scanning](#url)
 
 ## Contributing
 Bug reports and feature requests may be submitted to this repository using the issue tracker, and are more than welcome. Pull requests fixing bugs are welcome, and pull requests adding or changing features will be duly considered.
+
+## License
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the 
+Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of 
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License along with this program. If not, see http://www.gnu.org/licenses/.
 
 ## Installation and Usage
 * Clone this repository, or download an archive of the code and extract it, into an empty directory.
