@@ -7,7 +7,7 @@ It includes plugins for a [public messaging system](#tell), [URL scanning](#url)
 ## Contents
 1. [Requirements](#requirements)
 2. [Contributing](#contributing)
-3. [License](#license)
+3. [Copying](#copying)
 4. [Installation and Usage](#installation-and-usage)
 5. [Overview of Files](#overview-of-files)
 6. [Main Configuration File](#main-configuration-file)
@@ -22,13 +22,13 @@ It includes plugins for a [public messaging system](#tell), [URL scanning](#url)
 ## Contributing
 Bug reports and feature requests may be submitted to this repository using the issue tracker, and are more than welcome. Pull requests fixing bugs are welcome, and pull requests adding or changing features will be duly considered.
 
-## License
+## Copying
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the 
 Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of 
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the [GNU Lesser General Public License](COPYING.LESSER) for more details.
 
 You should have received a copy of the GNU Lesser General Public License along with this program. If not, see http://www.gnu.org/licenses/.
 
