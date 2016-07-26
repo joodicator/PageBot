@@ -114,4 +114,8 @@ Manages state information relating to IRC channels.
 * `conf/quiet_channels.txt` - one channel name per line in which certain automatic messages from the bot, such as those from `bum`, will be suppressed.
 
 ## Available Plugins
-*To be completed...*
+
+### aop
+When the bot has mode `+o` in a channel, this module allows the bot to automatically give `+o` to other users when they join the channel, when they issue `!update`, and when the bot joins the channel. This plugin automatically loads [`identity`](#identity).
+* `conf/aop.txt` - a sequence of *channel sections*, where a *channel section* starts with a single line containing one or more channel names (each starting with `#`) separated by spaces, and is followed by a list of *user specifications*, each on a separate line. A *user specification* is a hostmask of the form `NICK!USER@HOST`, possibly including wildcard characters `*` and `?`, or an *access name* from the [`identity`](#identity) module. Each *user specification* causes the corresponding user to be automatically opped in each channel named in the corresponding *channel section*. Additional whitespace and empty lines are ignored. *Comments* start with `--` and cause the remainder of the line to be ignored.
+* `!update` - give `+o` to the user issuing this command, if they do not have it and are subject to automatic op.
