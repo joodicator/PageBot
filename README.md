@@ -12,7 +12,8 @@ It includes plugins for a [public messaging system](#tell), [URL scanning](#url)
 5. [Overview of Files](#overview-of-files)
 6. [Main Configuration File](#main-configuration-file)
 7. [Core Modules](#core-modules)
-8. [Available Plugins](#available-plugins)
+8. [Support Modules](#support-modules)
+9. [Available Plugins](#available-plugins)
 
 ## Requirements
 * [Python](https://python.org) 2.7
@@ -33,16 +34,16 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the [GNU Lesser General
 You should have received a copy of the GNU Lesser General Public License along with this program. If not, see http://www.gnu.org/licenses/.
 
 ## Installation and Usage
-* Clone this repository, or download an archive of the code and extract it, into an empty directory.
-* Copy `conf/templates/bot.py` to `conf/bot.py` and edit it to configure the basic parameters of the bot. See [Main Configuration File](#main-configuration-file).
-* As needed for any plugins loaded, copy additional files from `conf/templates/` into `conf/` and edit them. The plugins listed in [Core Modules](#core-modules) should usually be present at the beginning of this list, in the same order.
-* If the bot should identify to NickServ, create [`conf/nickserv.py`](#nickserv) with the relevant information. If you wish to be able to issue admin-only commands to the bot, add yourself to `conf/admins.txt` and/or set a password in `conf/auth_password.txt` and then use the [`!identify`](#auth) command.
-* Run `main`, and the bot will connect to the configured IRC server and print a log of sent and received IRC messages to `stdout`. The bot currently has no built-in daemon mode, but it can be left running in the background using a terminal multiplexer such as GNU `screen`. To restart the bot, issue `Ctrl+C` once and wait or twice to terminate it. It may also be caused to restart with a particular quit message using the admin command [`!raw QUIT :message`](#control).
-* There are at least three ways to cause the bot to join IRC channels:
+1. Clone this repository, or download an archive of the code and extract it, into an empty directory.
+2. Copy `conf/templates/bot.py` to `conf/bot.py` and edit it to configure the basic parameters of the bot. See [Main Configuration File](#main-configuration-file).
+3. As needed for any plugins loaded, copy additional files from `conf/templates/` into `conf/` and edit them. The plugins listed in [Core Modules](#core-modules) should usually be present at the beginning of this list, in the same order.
+4. If the bot should identify to NickServ, create [`conf/nickserv.py`](#nickserv) with the relevant information. If you wish to be able to issue admin-only commands to the bot, add yourself to `conf/admins.txt` and/or set a password in `conf/auth_password.txt` and then use the [`!identify`](#auth) command.
+5. Run `main`, and the bot will connect to the configured IRC server and print a log of sent and received IRC messages to `stdout`. The bot currently has no built-in daemon mode, but it can be left running in the background using a terminal multiplexer such as GNU `screen`. To restart the bot, issue `Ctrl+C` once and wait or twice to terminate it. It may also be caused to restart with a particular quit message using the admin command [`!raw QUIT :message`](#control).
+6. There are at least three ways to cause the bot to join IRC channels:
     1. Configure the channels statically in [`conf/bot.py`](#main-configuration-file), and they will be automatically joined.
     2. If the [`invite`](#invite) plugin is loaded: configure the channels dynamically (while the bot is running) using the IRC `INVITE` and `KICK` commands to cause it to join or leave channels. You must usually be a channel operator to do this. This will be remembered when the bot is restarted.
     3. If you are a bot administrator, use the [`!join` and `!part`](#control) commands in a channel or by private message. These settings will *not* be remembered when the bot is restarted.
-* While the bot is running, if you are an administrator, modules can be dynamically installed, uninstalled and reloaded from disk using the [`!load`, `!unload`, `!reload` and `hard-reload`](#control) commands.
+7. While the bot is running, if you are an administrator, modules can be dynamically installed, uninstalled and reloaded from disk using the [`!load`, `!unload`, `!reload` and `hard-reload`](#control) commands.
 
 ## Overview of Files
 * `main` - The POSIX shell script used to run PageBot.
@@ -75,25 +76,27 @@ This file is located at `conf/bot.py` and configures the core features of the bo
 If any of these are not specified, the default values in [`main.py`](main.py) or [`ameliabot/amelia.py`](ameliabot/amelia.py) (in that order) are used.
 
 ## Core Modules
-### runtime
+These plugins implement the basic functionality of PageBot beyond that provided by the code of *ameliabot*, and should usually be present in the `plugins` section of [`conf/bot.py`](#main-configuration-file) and loaded at all times, in order for the bot to work properly.
+
+### `runtime`
 Actively performs miscellaneous tasks essential to the bot and other modules.
 
-### message
+### `message`
 Manages basic IRC message events from `xirclib` and provides the `!help` command.
 * `!help` - shows information about (most) user commands.
 * `conf/ignore.txt` - one `nick!user@host` wildcard expression per line to ignore all messages from.
 
-### nickserv
+### `nickserv`
 Communicates with the network service known as NickServ on most IRC networks.
 * `conf/nickserv.py` - contains network-specific information used to identify NickServ, and the bot's own password used to identify to NickServ, if it has one.
 
-### auth
+### `auth`
 Provides authentication of bot administrators.
 * `!id PASS`, `!identify PASS` - cause the bot to recognise the user issuing this command as an administrator. 
 * `conf/admins.txt` - one `nick!user@host` wildcard expression, or, if `identity` is installed, one access name from `conf/identity.py`, which is allowed to use admin commands.
 * `conf/auth_password.txt` - the password, if any, accepted by `!identify`.
 
-### control
+### `control`
 Provides admin commands for control of the bot's basic functions.
 * `!echo MSG` - [admin] repeat `MSG` in the same channel or back by PM to the sender.
 * `!raw CMD` - [admin] send `CMD` to the server as a [raw IRC message](https://tools.ietf.org/html/rfc2812).
@@ -109,13 +112,34 @@ Provides admin commands for control of the bot's basic functions.
 * `!reload` - [admin] reload the code of all reloadable modules (those in `page/` and certain others) from their source files, and reinstall all installed plugin modules, possibly retaining the state of the old instances.
 * `!hard-reload` - [admin] as `!reload`, but discard as much old state information as possible, thus resetting the state of most modules.
 
-### channel
-Manages state information relating to IRC channels.
-* `conf/quiet_channels.txt` - one channel name per line in which certain automatic messages from the bot, such as those from `bum`, will be suppressed.
+### `channel`
+Manages state information relating to IRC channels. Also defines the concept of a *quiet* channel: a channel is quiet if it is listed in the corresponding configuration file, or if it has mode `+m` active. Several plugins modify their behaviour to suppress frivolous messages to quiet channels.
+* `conf/quiet_channels.txt` - a list of channels, one per line, which are always considered to be *quiet*.
+
+## Support Modules
+These plugins do not by themselves implement functionality useful to the user, but are required by some other plugins. Unless otherwise noted, they do not need to be explicitly installed, as they will be automatically loaded by the plugins that depend on them.
+
+### `bridge`
+Allows groups of channels - each of which is either an IRC channel or a special type of channel external to the IRC network, provided by a module such as [`minecraft`](`#minecraft`) - to be *bridged* together, such that any message sent to one will also be relayed to the others by the bot. Also causes certain commands to work in the aforementioned non-IRC channels.
+* `conf/bridge.py` - one tuple (comma-separated list) of strings (which start or end with `'` or `"`) per line, each of which represents a group of channels bridged together. Each string is either an IRC channel name starting with `#` or the identifier of a non-IRC channel.
+* `!online` - lists the names of users present in any channels bridged to this channel, including the channel itself if it is not an IRC channel.
+* `!time`, `!date` - tells the current time and date in UTC. Only available in non-IRC channels.
+
+### `chan_link`
+Allows pairs of channels to be linked together, so that messages from one channel are relayed to the other. This is the same functionality provided by [`bridge`](#bridge), except that: it only affects IRC channels, and as such uses a somewhat different format for displaying messages; it allows finer control over the nature of the channel links; and it allows links to be created dynamically by admin commands or programmatically by other plugins. A channel link is *mutual* if messages are relayed in both directions; otherwise, they are only relayed from one channel to another. A channel link is *persistent* if it is saved in the state file so that it is re-established when the bot is restarted.
+* `!add-chan-link CHAN` - [admin] creates a mutual, persistent link between this channel and `CHAN`.
+* `!add-chan-link-from CHAN` [admin] creates a non-mutual, persistent link from `CHAN` to this channel.
+* `!del-chan-link CHAN` - [admin] permanently removes any link involving `CHAN` and this channel.
+* `!online` - lists the users in any channels linked to this channel.
+* `state/chan_link_persistent.txt` - a newline-separated list of Python tuples of strings `(CHAN1, CHAN2)` representing a persistent link from `CHAN1` to `CHAN2`. The link is mutual if and only if `(CHAN2, CHAN1)` is also present in the list.
 
 ## Available Plugins
 
-### aop
+### `aop`
 When the bot has mode `+o` in a channel, this module allows the bot to automatically give `+o` to other users when they join the channel, when they issue `!update`, and when the bot joins the channel. This plugin automatically loads [`identity`](#identity).
 * `conf/aop.txt` - a sequence of *channel sections*, where a *channel section* starts with a single line containing one or more channel names (each starting with `#`) separated by spaces, and is followed by a list of *user specifications*, each on a separate line. A *user specification* is a hostmask of the form `NICK!USER@HOST`, possibly including wildcard characters `*` and `?`, or an *access name* from the [`identity`](#identity) module. Each *user specification* causes the corresponding user to be automatically opped in each channel named in the corresponding *channel section*. Additional whitespace and empty lines are ignored. *Comments* start with `--` and cause the remainder of the line to be ignored.
 * `!update` - give `+o` to the user issuing this command, if they do not have it and are subject to automatic op.
+
+### `bum`
+In channels which are not [*quiet*](#channel), replaces a word in some messages (chosen with a small constant probability) with "bum", repeating the message. Inspired by https://github.com/ollien/buttbot.
+* `static/bum_ignore.txt` - words which will *not* be replaced; generated by [PageBot-words](//github.com/joodicator/PageBot-words).
