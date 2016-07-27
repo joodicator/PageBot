@@ -154,6 +154,9 @@ Manages sets of credentials used to recognise particular IRC users.
 Provides programmatic access to [`Imgur`](http://imgur.com)'s API.
 * `conf/imgur_client_id.txt` - the `client_id` associated with the account used to access Imgur's API. According to Imgur's instructions, a different `client_id` should be used for each separate instance of the bot. See https://api.imgur.com/ to register an account.
 
+#### `limit`
+Implements per-user flood protection for user commands and other actions causing processor or network usage, to curtail denial-of-service attacks against the bot. When a user exceeds the limits defined in [`flood.py`](page/flood.py), they are ignored for a period of time and given a notification of this.
+
 ## Available Plugins
 
 ### Admin Tools
@@ -171,6 +174,12 @@ Communicates with the network services known as ChanServ on most IRC networks. C
 #### `debug`
 Displays on the console extended information about the internals of the bot's operation. When loaded, shows most *untwisted* events passing through the bot's primary `Mode` instance, and possibly also those passing through auxiliary `Mode` instances created by plugins. Events which occur so frequently as to make the console unreadable are suppressed.
 
+#### `invite`
+Causes the bot to join channels when invited, and indefinitely remembers `INVITE`d and `KICK`ed channels.
+* `INVITE` messages, issued in most clients by `/invite NICK [CHANNEL]`, cause the bot to join the corresponding channel and save this channel in a dynamic auto-join list that persists when the bot is restarted.
+* `KICK` messages, issued in most clients by `/kick [CHANNEL] NICK [MESSAGE]`, remove the corresponding channel from the auto-join list if it is present.
+* `state/channel_invite.txt` - a newline-separated list of channels which the bot has been invited to and will automatically join.
+
 ### User Tools
 
 #### `convert`
@@ -184,10 +193,15 @@ Simulates dice rolls and other random choices. Uses Python 2's standard random n
 
 Multiple dice rolls or choices may be made in the same `!roll` invocation by writing them one after the other, possibly separated by other text, which will be repeated in the result. Moreover, the two types of random sampling may be mixed together, and lists of choices may be nested within each other. See `!help roll` for more information and additional features.
 
+#### `kakasi`
+Shows the Hepburn romanisation of Japanese text. Where there is more than one possible reading of a sequence of kanji, the alternatives are shown within braces. Any messages detected to contain a majority of Japanese text will be automatically transliterated. Requires [KAKASI](http://kakasi.namazu.org/) and in particular the shared library `libkakasi.so` to be present on the system.
+* `!rj`, `!romaji TEXT` - explicitly transliterate `TEXT` from Japanese characters to romaji.
+* `page/kakasi_lib.py` - support module implementing the reusable library component of `kakasi`.
+
 ### Games
 
 #### `chess`
-Allows two-player games of chess to be played on IRC using a textual interface. This is done by connecting to [this chess engine](//github.com/joodicator/chess) through a UNIX domain socket created by [pipeserv](//github.com/joodicator/pipeserv), both of which must be installed and run separately.
+Allows two-player games of chess to be played on IRC using a textual interface. This is done by connecting to [this chess engine](//github.com/joodicator/chess) through a socket created by [pipeserve](//github.com/joodicator/pipeserve), both of which must be installed and run separately.
 * `!chess SUBCOMMAND` - issues `SUBCOMMAND` to the chess engine. See the output of `!help chess` for available subcommands.
 * `state/chess` - the UNIX domain socket allowing communication with an instance of the chess engine. This must be created before the plugin is loaded.
 
@@ -215,6 +229,19 @@ Assists with running games of [Dungeon World](http://www.dungeon-world.com) on I
     2       | `CHAN`                | `str`             | Channel where rolls were made. |
     3       | `(NICK,USER,HOST)`    | `tuple` of `str`  | The user who made the rolls. |
     4       | `LABEL`               | `str`             | Usually the result message from `!roll`. |
+
+#### `minecraft`
+Relays messages between [Minecraft](https://minecraft.net/) servers and other channels. The plugin connects to Minecraft servers via [`pipeserve`](//github.com/joodicator/pipeserve) and [`mcchat2`](//github.com/joodicator/mcchat2), both of which must be installed and run separately. The [`bridge`](#bridge) plugin must also be separately installed, and configured to connect Minecraft servers to other channels.
+* `conf/minecraft.py` - a list of Minecraft server connections specified by a CSV-style newline-separated list of tuples under the header `'name', 'address', 'family', 'display'`, whose columns have the following meanings:
+
+    Field       | Type                              | Description
+    ------------|-----------------------------------|------------
+    `name`      | `str`                             | The name of the special channel representing this server, to be used with `bridge`. Must begin with an alphanumeric character.
+    `address`   | `str` or `(str,int)`              | The address of the socket created by [`pipeserve`](//github.com/joodicator/pipeserve) giving access to the instance of [`mcchat2`](//github.com/joodicator/mcchat2) for this server. This should usually be a UNIX domain socket, in which case it is a string giving the filename of the socket; but it may also be the hostname and port number of a TCP/IP socket.
+    `family`    | `AF_UNIX`, `AF_INET` or `AF_INET6`| The address family of the socket address given in `address`. This must be `AF_UNIX` if it is the path of a UNIX domain socket, or `AF_INET` or `AF_INET6` if it gives a TCP/IPv4 or TCP/IPv6 address. Note that these are the names of constants and not strings, e.g. `AF_UNIX` and not `'AF_UNIX'`.
+    `display`   | `str` or `None`                   | A user-readable name to be used to refer to this server in case a name cannot be retrieved from the server's query interface. The server name and the availability of the query interface can both be set in [server.properties](http://minecraft.gamepedia.com/Server.properties). If not specified, the identifier from `name` will be used as a default.
+
+* `conf/substitute.py` - a newline-separated list of tuples `'CONTEXT', 'OLD_NAME', 'NEW_NAME'` representing substitutions to be made to player names mentioned in messages from Minecraft servers. When `CONTEXT` equals the special channel name of a Minecraft server, all occurrences of `OLD_NAME` (except those written by players in chat messages) will be replaced with `NEW_NAME` when a message is relayed to other channels. This can be useful when a Minecraft player's account name is the same as their IRC nick, and they wish to avoid being highlighted on IRC every time they send a message from Minecraft.
 
 ### Miscellaneous
 
