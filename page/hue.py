@@ -4,6 +4,7 @@ import re
 import time
 
 from message import reply
+import channel
 import util
 
 link, install, uninstall = util.LinkSet().triple()
@@ -21,6 +22,7 @@ def laugh():
     return heahuea(length())
 
 @link('MESSAGE')
+@channel.not_quiet
 def h_message(bot, id, target, msg):
     now = time.time()
     if target and target in last and now < last[target] + PERIOD:

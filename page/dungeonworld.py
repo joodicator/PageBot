@@ -136,8 +136,8 @@ def h_delete_missed_roll(bot, id, target, args, full_msg, reply):
         for roll in all_rolls:
             print(roll, file=file)
 
-    reply('Deleted 1 missed roll by %s%s.'
-        % (r_id[0], label and ': "%s"' % label))
+    reply('Deleted %d missed roll%s by %s%s.' % (
+        failed, 's' if failed != 1 else '', r_id[0], label and ': "%s"' % label))
 
 #-------------------------------------------------------------------------------
 @link('DICE_ROLLS')
