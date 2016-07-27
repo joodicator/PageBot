@@ -65,14 +65,14 @@ This file is located at `conf/bot.py` and configures the core features of the bo
 
 | Name          | Type                      | Description                                                                            |
 |---------------|---------------------------|----------------------------------------------------------------------------------------|
-|`server`       |`string`                   | The hostname of the IRC server to which to connect. |
+|`server`       |`str`                      | The hostname of the IRC server to which to connect. |
 |`port`         |`int`                      | The port number to which to connect. Usually 6667. Plain IRC connections must be accepted on this port, as PageBot does not (currently) support SSL. |
-|`nick`         |`string`                   | The nickname for the bot to use on IRC. |
-|`user`         |`string`                   | The username for the bot to use on IRC. |
-|`name`         |`string`                   | The "real name" for the bot to use on IRC. |
-|`host`         |`string`                   | The bot's own hostname reported to the IRC server. In practice, this is usually ignored by the server, and can be anything. |
-|`channels`     |`list` of `string`         | The channels to join automatically after connecting. |
-|`plugins`      |`list` of `string`         | The plugins to load automatically. |
+|`nick`         |`str`                      | The nickname for the bot to use on IRC. |
+|`user`         |`str`                      | The username for the bot to use on IRC. |
+|`name`         |`str`                      | The "real name" for the bot to use on IRC. |
+|`host`         |`str`                      | The bot's own hostname reported to the IRC server. In practice, this is usually ignored by the server, and can be anything. |
+|`channels`     |`list` of `str`            | The channels to join automatically after connecting. |
+|`plugins`      |`list` of `str`            | The plugins to load automatically. |
 |`timeout`      |`Number`                   | The number of seconds of latency after which the connection will time out and restart. |
 |`bang_cmd`     |`True` or `False`          | If False, bot commands must be prefixed by `NICK: `, where `NICK` is the bot's nick. This is useful if there are multiple bots present which may respond to commands of the form `!COMMAND`. |
 |`flood_limits` |`list` of `(Number,Number)`| Each list item `(lines, seconds)` enforces a serverbound flood protection rule preventing the bot from sending more than `lines` IRC messages in any period of `seconds` seconds. This is useful to prevent the bot from being disconnected by an IRC server's flood protection mechanisms. In practice, IRC servers often have multiple such mechanisms, hence the need for multiple rules. |
@@ -80,27 +80,27 @@ This file is located at `conf/bot.py` and configures the core features of the bo
 If any of these are not specified, the default values in [`main.py`](main.py) or [`ameliabot/amelia.py`](ameliabot/amelia.py) (in that order) are used.
 
 ## Core Modules
-These plugins implement the basic functionality of PageBot beyond that provided by the code of *ameliabot*, and should usually be present in the `plugins` section of [`conf/bot.py`](#main-configuration-file) and loaded at all times, in order for the bot to work properly.
+These plugins implement the basic functionality of PageBot beyond that provided by the code of *ameliabot*, and should usually be present in the `plugins` section of [`conf/bot.py`](#main-configuration-file) and loaded at all times, in order for the bot to work properly. Additionally, the user may wish to edit some of the configuration files listed here to use certain features.
 
-### `runtime`
+#### `runtime`
 Actively performs miscellaneous tasks essential to the bot and other modules.
 
-### `message`
+#### `message`
 Manages basic IRC message events from `xirclib` and provides the `!help` command.
 * `!help` - shows information about (most) user commands.
 * `conf/ignore.txt` - one `nick!user@host` wildcard expression per line to ignore all messages from.
 
-### `nickserv`
+#### `nickserv`
 Communicates with the network service known as NickServ on most IRC networks.
 * `conf/nickserv.py` - contains network-specific information used to identify NickServ, and the bot's own password used to identify to NickServ, if it has one.
 
-### `auth`
-Provides authentication of bot administrators.
+#### `auth`
+Provides authentication of bot administrators. Requires [`identity`](#identity) to be separately installed for certain features.
 * `!id PASS`, `!identify PASS` - cause the bot to recognise the user issuing this command as an administrator. 
 * `conf/admins.txt` - one `nick!user@host` wildcard expression, or, if `identity` is installed, one access name from `conf/identity.py`, which is allowed to use admin commands.
 * `conf/auth_password.txt` - the password, if any, accepted by `!identify`.
 
-### `control`
+#### `control`
 Provides admin commands for control of the bot's basic functions.
 * `!echo MSG` - [admin] repeat `MSG` in the same channel or back by PM to the sender.
 * `!raw CMD` - [admin] send `CMD` to the server as a [raw IRC message](https://tools.ietf.org/html/rfc2812).
@@ -116,26 +116,43 @@ Provides admin commands for control of the bot's basic functions.
 * `!reload` - [admin] reload the code of all reloadable modules (those in `page/` and certain others) from their source files, and reinstall all installed plugin modules, possibly retaining the state of the old instances.
 * `!hard-reload` - [admin] as `!reload`, but discard as much old state information as possible, thus resetting the state of most modules.
 
-### `channel`
+#### `channel`
 Manages state information relating to IRC channels. Also defines the concept of a *quiet* channel: a channel is quiet if it is listed in the corresponding configuration file, or if it has mode `+m` active. Several plugins modify their behaviour to suppress frivolous messages to quiet channels.
 * `conf/quiet_channels.txt` - a list of channels, one per line, which are always considered to be *quiet*.
 
 ## Support Modules
-These plugins do not by themselves implement functionality useful to the user, but are required by some other plugins. Unless otherwise noted, they do not need to be explicitly installed, as they will be automatically loaded by the plugins that depend on them.
+These plugins do not by themselves implement functionality useful to the user, but are required by some other plugins. Unless otherwise noted, they do not need to be explicitly installed, as they will be automatically loaded by the plugins that depend on them. However, many of them do have configuration files that may need to be edited by the user.
 
-### `bridge`
+#### `bridge`
 Allows groups of channels - each of which is either an IRC channel or a special type of channel external to the IRC network, provided by a module such as [`minecraft`](`#minecraft`) - to be *bridged* together, such that any message sent to one will also be relayed to the others by the bot. Also causes certain commands to work in the aforementioned non-IRC channels.
 * `conf/bridge.py` - one tuple (comma-separated list) of strings (which start or end with `'` or `"`) per line, each of which represents a group of channels bridged together. Each string is either an IRC channel name starting with `#` or the identifier of a non-IRC channel.
 * `!online` - lists the names of users present in any channels bridged to this channel, including the channel itself if it is not an IRC channel.
 * `!time`, `!date` - tells the current time and date in UTC. Only available in non-IRC channels.
 
-### `chan_link`
+#### `chan_link`
 Allows pairs of channels to be linked together, so that messages from one channel are relayed to the other. This is the same functionality provided by [`bridge`](#bridge), except that: it only affects IRC channels, and as such uses a somewhat different format for displaying messages; it allows finer control over the nature of the channel links; and it allows links to be created dynamically by admin commands or programmatically by other plugins. A channel link is *mutual* if messages are relayed in both directions; otherwise, they are only relayed from one channel to another. A channel link is *persistent* if it is saved in the state file so that it is re-established when the bot is restarted.
 * `!add-chan-link CHAN` - [admin] creates a mutual, persistent link between this channel and `CHAN`.
 * `!add-chan-link-from CHAN` [admin] creates a non-mutual, persistent link from `CHAN` to this channel.
 * `!del-chan-link CHAN` - [admin] permanently removes any link involving `CHAN` and this channel.
 * `!online` - lists the users in any channels linked to this channel.
 * `state/chan_link_persistent.txt` - a newline-separated list of Python tuples of strings `(CHAN1, CHAN2)` representing a persistent link from `CHAN1` to `CHAN2`. The link is mutual if and only if `(CHAN2, CHAN1)` is also present in the list.
+
+#### `identity`
+Manages sets of credentials used to recognise particular IRC users.
+* `conf/identity.py` - a Python 2.7 source file whose top-level bindings of the form `NAME = [CRED1, CRED2, ...]` each define an *access name* `NAME` referring to a particular person, and the *credentials* `CRED1, CRED2, ...` used to authenticate them. An IRC user may be successfully recognised as belonging to an access name if the user satisfies *any* one of the credentials, which may take any of the following forms:
+
+    Format                          | Criteria
+    --------------------------------|----------
+    `('hostmask', 'NICK!USER@HOST')`| The user's IRC nick, user and hostnames must match the given hostmask, which may include wildcard characters `*` and `?`. This must be used with care, as there are a number of subtleties involved in the assignment of IRC usernames and hostnames; however, a combination of `*!USER@HOST` with no additional wildcards is *usually* safe.
+    `('nickserv', 'ACCOUNT')`       | The user must be identified to NickServ using the given account name. Currently, it is assumed that the user's nick is always equal to their account name, as is the case on some but not all IRC networks.
+    `('prev_hosts', COUNT)`         | The user's `USER@HOST` equals one of the `COUNT` most recent recorded values which successfully identified to this access name by *any* method. This can be useful, in combination with a `'nickserv'` credential, to allow a user to still be recognised when NickServ is absent from the network or the user has not yet manually identified. A reasonable value for `COUNT` is `3`.
+    `('access', 'NAME')`            | The user is identified as belonging to another access name, which validates this access name by proxy.
+
+* `state/identity_hosts.json` - records needed to implement the `'prev_hosts'` credential. A JSON object `{'NAME1': ['USER11@HOST11', 'USER12@HOST12', ...], 'NAME2': ['USER21@HOST21', 'USER22@HOST22', ...], ...}` giving the most recent identified hosts, in chronological order and starting with the least recent, for each access name on record.
+
+#### `imgur`
+Provides programmatic access to [`Imgur`](http://imgur.com)'s API.
+* `conf/imgur_client_id.txt` - the `client_id` associated with the account used to access Imgur's API. According to Imgur's instructions, a different `client_id` should be used for each separate instance of the bot. See https://api.imgur.com/ to register an account.
 
 ## Available Plugins
 
@@ -165,7 +182,7 @@ Simulates dice rolls and other random choices. Uses Python 2's standard random n
 * `!r`, `!roll MdN+K`, `!roll MdN-K` - Simulate rolling `M` dice, each with `N` sides, and add or subtract `K` to the result.
 * `!r`, `!roll {WEIGHT1: CHOICE1, WEIGHT2: CHOICE2, ...}` - Return one of the given `CHOICE`s, each of which has probability proportional to its associated `WEIGHT` of being chosen. The `WEIGHT: ` prefix may be omitted, in which case the weight defaults to 1.
 
-Multiple dice rolls or choices may be made in the same `!roll` invocation by writing them one after the other, possibly separated by other text, which will be repeated in the result. Moreover, the two types of random sampling may be mixed together, and lists of choices may be nested within each other. See `!help roll` for more information.
+Multiple dice rolls or choices may be made in the same `!roll` invocation by writing them one after the other, possibly separated by other text, which will be repeated in the result. Moreover, the two types of random sampling may be mixed together, and lists of choices may be nested within each other. See `!help roll` for more information and additional features.
 
 ### Games
 
@@ -184,8 +201,26 @@ Displays updates from [Dominions 4: Thrones of Ascension](http://www.illwinter.c
 
 The commands `!dom+`, `!dom-` and `!dom?` have the special property that they may be followed by a new command (introduced with the `!` character as usual) on the same line, for convenience when issuing multiple commands at once.
 
+#### `dungeonworld`
+Assists with running games of [Dungeon World](http://www.dungeon-world.com) on IRC. Supplements the functionality of the [`dice`](#dice) plugin, which should be separately installed. Requires the [`pastebin`](#pastebin) module to be configured with a valid API key.
+* `!missed-rolls` - shows a tally of the *move rolls* which were *missed* in this channel, grouped by nick, since the last time this command was issued. In Dungeon World and related games, a *move roll* is a roll involving a number of 6-sided dice such that exactly 2 dice are used in the result - for example: `2d6`, `2d6+1`, `b2[3d6]` or `w2[3d6-1]`; and such a roll is *missed* if its result is less than 7. This is useful for recording the XP that characters gain for failed moves at the end of a session.
+* `!insert-missed-roll [NICK [LABEL]]` - insert an artificial missed roll into the record. If specified, the roll is attributed to `NICK`, or otherwise it is attributed to the user issuing this command. If a `LABEL` is given, this will be used later to describe the roll when listing missed rolls.
+* `!delete-missed-roll [NICK]` - delete from the record the most recent *matching* group of missed rolls. A group of rolls consists of all the rolls made on the same line, i.e. in a single IRC message. If `NICK` is specified, a roll is *matching* if it was made by `NICK`; otherwise, every roll is *matching*.
+* `state/dungeonworld_rolls.txt` - a newline-separated list of Python tuples `(MISSES, ROLLS, CHAN, (NICK,USER,HOST), LABEL)` each representing a group of *move rolls*:
+
+    Index   | Field                 | Type              | Description   |
+    --------|-----------------------|-------------------|---------------|
+    0       | `MISSES`              | `int`             | Number of *move rolls* in group which *missed*. |
+    1       | `ROLLS`               | `int`             | Total number of *move rolls* in group. |
+    2       | `CHAN`                | `str`             | Channel where rolls were made. |
+    3       | `(NICK,USER,HOST)`    | `tuple` of `str`  | The user who made the rolls. |
+    4       | `LABEL`               | `str`             | Usually the result message from `!roll`. |
+
 ### Miscellaneous
 
 #### `bum`
 Occasionally repeats people's messages, with one word replaced with "bum". Suppressed in [quiet](#channel) channels. Inspired by https://github.com/ollien/buttbot.
 * `static/bum_ignore.txt` - words which will *not* be replaced; generated by [PageBot-words](//github.com/joodicator/PageBot-words).
+
+#### `hue`
+[Racist] Whenever onamatapoeic laughter is detected in the channel, the bot joins in with a "Brazilian laugh" similar to "HUEHUEHUE". Suppressed in [quiet](#channel) channels.
