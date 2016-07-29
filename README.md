@@ -123,6 +123,8 @@ Manages state information relating to IRC channels. Also defines the concept of 
 ## Support Modules
 These plugins do not by themselves implement functionality useful to the user, but are required by some other plugins. Unless otherwise noted, they do not need to be explicitly installed, as they will be automatically loaded by the plugins that depend on them. However, many of them do have configuration files that may need to be edited by the user.
 
+### Infrastructure
+
 #### `bridge`
 Allows groups of channels - each of which is either an IRC channel or a special type of channel external to the IRC network, provided by a module such as [`minecraft`](`#minecraft`) - to be *bridged* together, such that any message sent to one will also be relayed to the others by the bot. Also causes certain commands to work in the aforementioned non-IRC channels.
 * `conf/bridge.py` - one tuple (comma-separated list) of strings (which start or end with `'` or `"`) per line, each of which represents a group of channels bridged together. Each string is either an IRC channel name starting with `#` or the identifier of a non-IRC channel.
@@ -137,6 +139,24 @@ Allows pairs of channels to be linked together, so that messages from one channe
 * `!online` - lists the users in any channels linked to this channel.
 * `state/chan_link_persistent.txt` - a newline-separated list of Python tuples of strings `(CHAN1, CHAN2)` representing a persistent link from `CHAN1` to `CHAN2`. The link is mutual if and only if `(CHAN2, CHAN1)` is also present in the list.
 
+#### `limit`
+Implements per-user flood protection for user commands and other actions causing processor or network usage, to curtail denial-of-service attacks against the bot. When a user exceeds the limits defined in [`flood.py`](page/flood.py), they are ignored for a period of time and given a notification of this.
+
+#### `modal`
+Allows different plugins to share access to limited resources associated with IRC channels, such as the right to respond to a command whose name is the same for two different plugins. Access is mediated based on a centrally managed *mode* determining which plugin has access at any given time. See comments in [`modal.py`](page/modal.py) for more information.
+
+### External API Access
+
+#### `imgur`
+Provides programmatic access to [`Imgur`](http://imgur.com)'s API.
+* `conf/imgur_client_id.txt` - the `client_id` associated with the account used to access Imgur's API. According to Imgur's instructions, a different `client_id` should be used for each separate instance of the bot. See https://api.imgur.com/ for more information.
+
+#### `pastebin`
+Provides programmatic access to [Pastebin](http://pastebin.com)'s API.
+* `conf/pastebin_dev_key.txt` - the Developer API Key associated with the account used to access Pastebin's API. See http://pastebin.com/api/ for more information.
+
+### Other
+
 #### `identity`
 Manages sets of credentials used to recognise particular IRC users.
 * `conf/identity.py` - a Python 2.7 source file whose top-level bindings of the form `NAME = [CRED1, CRED2, ...]` each define an *access name* `NAME` referring to a particular person, and the *credentials* `CRED1, CRED2, ...` used to authenticate them. An IRC user may be successfully recognised as belonging to an access name if the user satisfies *any* one of the credentials, which may take any of the following forms:
@@ -149,13 +169,6 @@ Manages sets of credentials used to recognise particular IRC users.
     `('access', 'NAME')`            | The user is identified as belonging to another access name, which validates this access name by proxy.
 
 * `state/identity_hosts.json` - records needed to implement the `'prev_hosts'` credential. A JSON object `{'NAME1': ['USER11@HOST11', 'USER12@HOST12', ...], 'NAME2': ['USER21@HOST21', 'USER22@HOST22', ...], ...}` giving the most recent identified hosts, in chronological order and starting with the least recent, for each access name on record.
-
-#### `imgur`
-Provides programmatic access to [`Imgur`](http://imgur.com)'s API.
-* `conf/imgur_client_id.txt` - the `client_id` associated with the account used to access Imgur's API. According to Imgur's instructions, a different `client_id` should be used for each separate instance of the bot. See https://api.imgur.com/ to register an account.
-
-#### `limit`
-Implements per-user flood protection for user commands and other actions causing processor or network usage, to curtail denial-of-service attacks against the bot. When a user exceeds the limits defined in [`flood.py`](page/flood.py), they are ignored for a period of time and given a notification of this.
 
 ## Available Plugins
 
@@ -198,6 +211,31 @@ Shows the Hepburn romanisation of Japanese text. Where there is more than one po
 * `!rj`, `!romaji TEXT` - explicitly transliterate `TEXT` from Japanese characters to romaji.
 * `page/kakasi_lib.py` - support module implementing the reusable library component of `kakasi`.
 
+#### `mirror`
+Automatically copies resources from URLs known to expire after a short time, for posterity. When such a URL is posted in a channel, the bot will copy it to a permanent location and provide a link to the copy. Currently, this consists of copying PNG, GIF or JPEG images hosted on [4chan](http://4chan.org) to [Imgur](http://imgur.com), but more schemes may be added in future. This plugin requires the [`imgur`](#imgur) module to be configured with a valid `client_id`.
+
+#### `qdbs`
+Notifies channels and users of new entries posted to a [QdbS](http://www.qdbs.org) quote database. This plugin automatically loads the [`identity`](#identity) module.
+* `conf/qdbs_public.py` - Allows channels to be notified when a new quote has been approved and is publically visible. A CSV-style newline-separated list of Python tuples, under the header `'channel', 'index_url', 'remote_index_url'`, whose columns have the following meanings:
+
+    Field               | Type  | Description
+    --------------------|-------|-------------
+    `channel`           | `str` | The IRC channel to be notified of public updates.
+    `index_url`         | `str` | The URL of the index page of the quote database, to be accessed by the bot. This may refer to a host on a private network local to the machine on which the bot is running.
+    `remote_index_url`  | `str` | The URL of the index page of the quote database, to be posted in the channel. This should usually be a URL accessible from the public Internet, and must refer to the same quote database as `index_url`.
+
+* `conf/qdbs_private.py` - Allows certain IRC users, who are authenticated by [`identity`](#identity), to be notified by private message when a new quote has been submitted for approval. A CSV-style newline-separated list of Python tuples under the header `'access_name', 'qdb_username', 'qdb_password', 'admin_url', 'remote_admin_url'`, whose columns have the following meanings:
+
+    Field               | Type  | Description
+    --------------------|-------|-------------
+    `access_name`       | `str` | The *access name* configured in `conf/identity.py` of the user who is to receive notifications.
+    `qdb_username`      | `str` | The username of the QdbS admin account of this user.
+    `qdb_password`      | `str` | The password hash cookie, set by QdbS upon logging in, of the admin account of this user.
+    `admin_url`         | `str` | The URL of the admin page of the quote database, to be accessed by the bot. This may refer to a host on a private network local to the machine on which the bot is running.
+    `remote_admin_url`  | `str` | The URL of the admin page of the quote database, to be sent by PM to the user. This should usually be a URL accessible from the public Internet, and must refer to the same quote database as `admin_url`.
+
+* `state/qdbs.json` - records state information for this plugin, including the last quote that each channel or user has been notified of.
+
 ### Games
 
 #### `chess`
@@ -216,7 +254,7 @@ Displays updates from [Dominions 4: Thrones of Ascension](http://www.illwinter.c
 The commands `!dom+`, `!dom-` and `!dom?` have the special property that they may be followed by a new command (introduced with the `!` character as usual) on the same line, for convenience when issuing multiple commands at once.
 
 #### `dungeonworld`
-Assists with running games of [Dungeon World](http://www.dungeon-world.com) on IRC. Supplements the functionality of the [`dice`](#dice) plugin, which should be separately installed. Requires the [`pastebin`](#pastebin) module to be configured with a valid API key.
+Assists with running games of [Dungeon World](http://www.dungeon-world.com) on IRC. Supplements the functionality of the [`dice`](#dice) plugin, which should be separately installed. Requires the [`pastebin`](#pastebin) module to be configured with a valid developer key.
 * `!missed-rolls` - shows a tally of the *move rolls* which were *missed* in this channel, grouped by nick, since the last time this command was issued. In Dungeon World and related games, a *move roll* is a roll involving a number of 6-sided dice such that exactly 2 dice are used in the result - for example: `2d6`, `2d6+1`, `b2[3d6]` or `w2[3d6-1]`; and such a roll is *missed* if its result is less than 7. This is useful for recording the XP that characters gain for failed moves at the end of a session.
 * `!insert-missed-roll [NICK [LABEL]]` - insert an artificial missed roll into the record. If specified, the roll is attributed to `NICK`, or otherwise it is attributed to the user issuing this command. If a `LABEL` is given, this will be used later to describe the roll when listing missed rolls.
 * `!delete-missed-roll [NICK]` - delete from the record the most recent *matching* group of missed rolls. A group of rolls consists of all the rolls made on the same line, i.e. in a single IRC message. If `NICK` is specified, a roll is *matching* if it was made by `NICK`; otherwise, every roll is *matching*.
@@ -243,7 +281,7 @@ Relays messages between [Minecraft](https://minecraft.net/) servers and other ch
 
 * `conf/substitute.py` - a newline-separated list of tuples `'CONTEXT', 'OLD_NAME', 'NEW_NAME'` representing substitutions to be made to player names mentioned in messages from Minecraft servers. When `CONTEXT` equals the special channel name of a Minecraft server, all occurrences of `OLD_NAME` (except those written by players in chat messages) will be replaced with `NEW_NAME` when a message is relayed to other channels. This can be useful when a Minecraft player's account name is the same as their IRC nick, and they wish to avoid being highlighted on IRC every time they send a message from Minecraft.
 
-### Miscellaneous
+### Other
 
 #### `bum`
 Occasionally repeats people's messages, with one word replaced with "bum". Suppressed in [quiet](#channel) channels. Inspired by https://github.com/ollien/buttbot.
