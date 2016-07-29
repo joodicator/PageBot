@@ -13,11 +13,14 @@ It includes plugins for a [public messaging system](#tell), [URL scanning](#url)
 6. [Main Configuration File](#main-configuration-file)
 7. [Core Modules](#core-modules)
 8. [Support Modules](#support-modules)
+    1. [Infrastructure](#infrastructure)
+    2. [External API Access](#external-api-access)
+    3. [Other Modules](#other-modules)
 9. [Available Plugins](#available-plugins)
     1. [Admin Tools](#admin-tools)
     2. [User Tools](#user-tools)
     3. [Games](#games)
-    4. [Miscellaneous](#miscellaneous)
+    4. [Other Plugins](#other-plugins)
 
 ## Requirements
 * [Python](https://python.org) 2.7
@@ -155,7 +158,7 @@ Provides programmatic access to [`Imgur`](http://imgur.com)'s API.
 Provides programmatic access to [Pastebin](http://pastebin.com)'s API.
 * `conf/pastebin_dev_key.txt` - the Developer API Key associated with the account used to access Pastebin's API. See http://pastebin.com/api/ for more information.
 
-### Other
+### Other Modules
 
 #### `identity`
 Manages sets of credentials used to recognise particular IRC users.
@@ -281,7 +284,7 @@ Relays messages between [Minecraft](https://minecraft.net/) servers and other ch
 
 * `conf/substitute.py` - a newline-separated list of tuples `'CONTEXT', 'OLD_NAME', 'NEW_NAME'` representing substitutions to be made to player names mentioned in messages from Minecraft servers. When `CONTEXT` equals the special channel name of a Minecraft server, all occurrences of `OLD_NAME` (except those written by players in chat messages) will be replaced with `NEW_NAME` when a message is relayed to other channels. This can be useful when a Minecraft player's account name is the same as their IRC nick, and they wish to avoid being highlighted on IRC every time they send a message from Minecraft.
 
-### Other
+### Other Plugins
 
 #### `bum`
 Occasionally repeats people's messages, with one word replaced with "bum". Suppressed in [quiet](#channel) channels. Inspired by https://github.com/ollien/buttbot.
