@@ -239,6 +239,34 @@ Notifies channels and users of new entries posted to a [QdbS](http://www.qdbs.or
 
 * `state/qdbs.json` - records state information for this plugin, including the last quote that each channel or user has been notified of.
 
+#### `seen`
+Tells when users were last seen by the bot in a channel.
+* `!seen NICK` - shows information about the most recently observed activity in this channel of anyone using `NICK`.
+* `!seen NICK!USER@HOST` - shows information about the most recently observed activity in this channel of any user matching the given hostmask, which may include wildcard characters `*` and `?`.
+* `state/seen.json` - the database recording the last activity of every user in every channel.
+
+#### `tell`
+Allows users to leave public messages for each other in channels. This is similar to the service provided by *MemoServ* on many IRC networks, but can be useful when MemoServ is not available, or when the recipient may not be logged in to a NickServ account or may not notice that they have a memo.
+
+* User commands:
+    * **`!tell USER MSG`** - leave a message to be delivered to `USER` when they are next seen in this channel. If `USER` contains `!` or `@`, it must match the recipient's `NICK!USER@HOST`; otherwise, it must only match their `NICK`; in either case, it may contain wildcard characters `*` and `?`. Additionally, `USER` may consist of multiple alternatives separated by `/` (with no spaces) - the message will be delivered to the first one of these which is seen.
+    * **`!tell USER1[, USER2, ...]: MSG`** - leave multiple copies of the same message, each for one of several recipients. A comma-separated list of recipients, each accepting the same syntax as above, terminated by a colon, is used to address the message.
+    * **`!untell [USER1, USER2, ...]`** - if a list of recipients is given, delete the last message sent in this channel, to each of them, by the user issuing this command. Otherwise, delete the last such message sent to any recipient. If given, a recipient specification must equal exactly that used with `!tell` to send the message.
+    * **`!dismiss [NICK[!USER@HOST]]`** - delete the least recent pending message in this channel addressed to the user issuing this command which is from the given `NICK` or `NICK!USER@HOST` if specified, or from any sender. This can be useful when the recipient of a message has observed the message being sent, is already aware of its contents, and wishes to avoid it being repeated. Up to 3 additional `!dismiss` commands may be included on the same line as this command.
+    * **`!undismiss [NICK[!USER@HOST]]`** - restore the message which was most recently deleted using `!dismiss`, is from the given `NICK` or `NICK!USER@HOST` if specified, or from any sender. This can be useful to reverse an accidental usage of `!dismiss`.
+    * **`!read`** - if used in a channel, delivers any messages addressed to the user issuing this command. If used by PM, delivers any messages which have been designated to be read privately. This only happens when a user has too many messages to comfortably display in a channel, and after the user is explicitly notified of this in-channel.
+
+* Admin commands:
+    * **`!tell? [QUERY]`** - list all pending messages in the current channel (or in all channels if used by PM) where the sender's `NICK!USER@HOST`, the recipient specification, or the message content itself contains the text of the given `QUERY` (or all such messages if none is given).
+    * **`!tell+ FROM_NICK!USER@HOST, RECIPIENT, #CHAN, YYYY-MM-DD HH:MM, MESSAGE`** - insert an artifical pending message into the record, with the given sender, recipient specification, channel of delivery, sent time, and message content.
+    * **`!tell- INDEX1, INDEX2, ...`** - delete some messages according to the index numbers displayed with them in the output from `!tell?`. Note that the assignment of index numbers to messages changes in different channels, when sending commands by PM, and after messages are created or deleted.
+    * **`!tell-clear`** - delete all pending messages and other state information (except for the states accessible via `!tell-undo` and `!tell-redo`).
+    * **`!tell-undo`** - restore the plugin's state to how it was before the most recent change (which was not caused by `!tell-undo` or `!tell-redo`).
+    * **`!tell-redo`** - restore the plugin's state to how it was before the most recent use of `!tell-undo`.
+
+* Files:
+    * **`state/tell.pickle`** - the database of pending messages and other information, in the form of a [pickled](https://docs.python.org/2/library/pickle.html) Python 2.7 object.
+
 ### Games
 
 #### `chess`
