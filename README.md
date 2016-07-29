@@ -241,8 +241,7 @@ Notifies channels and users of new entries posted to a [QdbS](http://www.qdbs.or
 
 #### `seen`
 Tells when users were last seen by the bot in a channel.
-* **`!seen NICK`** - shows information about the most recently observed activity in this channel of anyone using `NICK`.
-* **`!seen NICK!USER@HOST`** - shows information about the most recently observed activity in this channel of any user matching the given hostmask, which may include wildcard characters `*` and `?`.
+* **`!seen NICK[!USER@HOST]`** - shows information about the most recently observed activity in this channel of any user matching the given nickname or full hostmask, which may include wildcard characters `*` and `?`.
 * **`state/seen.json`** - the database recording the last activity of every user in every channel.
 
 #### `tell`
@@ -266,6 +265,8 @@ Allows users to leave public messages for each other in channels. This is simila
 
 * Files:
     * **`state/tell.pickle`** - the database of pending messages and other information, in the form of a [pickled](https://docs.python.org/2/library/pickle.html) Python 2.7 object.
+
+If the user issuing `!tell` or `!untell` is a bot administrator, the arguments of the command may be prefixed with the name of a channel so that it affects that channel rather than any current channel. Additionally, the commands `!tell`, `!untell`, `!tell?`, `!tell+`, `!tell-`, `!tell-clear`, `!tell-undo` and `!tell-redo` may equivalently be written as `!page`, `!unpage`, `!page?`, `!page+`, `!page-`, `!page-clear`, `!page-undo` and `!page-redo`, respectively.
 
 ### Games
 
