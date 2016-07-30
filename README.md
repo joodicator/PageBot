@@ -326,6 +326,17 @@ Relays messages between [Terraria](https://terraria.org/) servers and other chan
 * **`conf/substitute.py`** - a newline-separated list of tuples of strings `'CONTEXT', 'OLD_NAME', 'NEW_NAME'`, some of which may represent substitutions to be made to character names mentioned in messages from Terraria servers. When `CONTEXT` equals the special channel name of a Terraria server, all occurrences of `OLD_NAME` (except those written by players in chat messages) will be replaced with `NEW_NAME` when a message is relayed to other channels. This can be useful when a Terraria player's character name is the same as their IRC nick, and they wish to avoid being highlighted on IRC every time they send a message from Terraria.
 * **`state/terraria.json`** - cached information about Terraria servers, including the last known protocol version used by each server. 
 
+#### `upoopia`
+Allows two-player games of [Upoopia](http://www.unicorn7.org/games/game/553) to be played on IRC using a textual interface. Because of the imperfect information each player is supposed to receive, this is implemented with each player residing in separate IRC channel where private information is sent by the bot, with any other public messages being relayed between the two channels (using the [`chan_link`](#chan-link) module). The bot must be present in both channels, as may spectators, but a player should never join their opponent's channel while a game is being played.
+* **`!upoopia #OTHER_CHAN [COLOUR]`** - initiate a game of Upoopia against an opponent residing in `#OTHER_CHAN`. To start a game, both players must have `+o` in their respective channels, and both must issue this command against the other channel. Each player may indicate their preferred `COLOUR`, either `b`/`blue` or `r`/`red`, with the convention that *blue* has the first move. If the preferences cannot be resolved, the colours will be assigned randomly.
+* **`!r[ed]`**, **`! r[ed]`**, **`!move r[ed] DIR NUM`** - make a move by using a red die of value `NUM` to move the red worm `NUM` units in direction `DIR`: one of `l`/`left`, `r`/`right`, `u`/`up` or `d`/`down`.
+* **`!b[lue]`**, **`! b[lue]`**, **`!move b[lue] DIR NUM`** - make a move by using a blue die of value `NUM` to move the blue worm `NUM` units in direction `DIR`: one of `l`/`left`, `r`/`right`, `u`/`up` or `d`/`down`.
+* **`!xray NUM`** - make a move by sacrificing a die of the opponent's colour, of value `NUM`, in order to see their dice for the remainder of the round.
+* **`!resign`** - concede defeat, ending the game in victory for the opponent.
+* **`!cancel`** - end a pending or ongoing game without any result.
+* **`!board`** - display the current state of the game board.
+* **`page/upoopia_lib.py`** - a support module implementing the reusable library component of `upoopia`.
+
 ### Other Plugins
 
 #### `bum`
