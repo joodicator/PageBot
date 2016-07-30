@@ -19,8 +19,9 @@ It includes plugins for a [public messaging system](#tell), [URL scanning](#url)
 9. [Available Plugins](#available-plugins)
     1. [Admin Tools](#admin-tools)
     2. [User Tools](#user-tools)
-    3. [Games](#games)
-    4. [Other Plugins](#other-plugins)
+    3. [Game Tools](#game-tools)
+    4. [IRC Games](#irc-games)
+    5. [Other Plugins](#other-plugins)
 
 ## Requirements
 * [Python](https://python.org) 2.7
@@ -283,12 +284,7 @@ Shows information about URLs mentioned in the channel. The title, file size and 
 
 Up to 5 additional `!url` invocations, introduced by `!` as usual, may be included on the same line as the first `!url` command. This can be useful to view the titles of several recently mentioned URLs at once.
 
-### Games
-
-#### `chess`
-Allows two-player games of chess to be played on IRC using a textual interface. This is done by connecting to [this chess engine](//github.com/joodicator/chess) through a socket created by [pipeserve](//github.com/joodicator/pipeserve), both of which must be installed and run separately.
-* **`!chess SUBCOMMAND`** - issues `SUBCOMMAND` to the chess engine. See the output of `!help chess` for available subcommands.
-* **`state/chess`** - the UNIX domain socket allowing communication with an instance of the chess engine. This must be created before the plugin is loaded.
+### Game Tools
 
 #### `dominions`
 Displays updates from [Dominions 4: Thrones of Ascension](http://www.illwinter.com/dom4) multiplayer servers. The game must be hosted using Dominion's TCP server, with the `--statuspage` option used to generate an HTML document accessible to the bot by HTTP or in the local file system. The bot will periodically read this document to discover updates in the game's status. See [this document](http://www.illwinter.com/dom4/startoptions.pdf) for more information about the command-line options of Dominions 4.
@@ -340,6 +336,13 @@ Relays messages between [Terraria](https://terraria.org/) servers and other chan
     `display`   | `str`                 | A user-readable name to be used to refer to the server in case the world name cannot be retrieved from it.
 * **`conf/substitute.py`** - a newline-separated list of tuples of strings `'CONTEXT', 'OLD_NAME', 'NEW_NAME'`, some of which may represent substitutions to be made to character names mentioned in messages from Terraria servers. When `CONTEXT` equals the special channel name of a Terraria server, all occurrences of `OLD_NAME` (except those written by players in chat messages) will be replaced with `NEW_NAME` when a message is relayed to other channels. This can be useful when a Terraria player's character name is the same as their IRC nick, and they wish to avoid being highlighted on IRC every time they send a message from Terraria.
 * **`state/terraria.json`** - cached information about Terraria servers, including the last known protocol version used by each server. 
+
+### IRC Games
+
+#### `chess`
+Allows two-player games of chess to be played on IRC using a textual interface. This is done by connecting to [this chess engine](//github.com/joodicator/chess) through a socket created by [pipeserve](//github.com/joodicator/pipeserve), both of which must be installed and run separately.
+* **`!chess SUBCOMMAND`** - issues `SUBCOMMAND` to the chess engine. See the output of `!help chess` for available subcommands.
+* **`state/chess`** - the UNIX domain socket allowing communication with an instance of the chess engine. This must be created before the plugin is loaded.
 
 #### `upoopia`
 Allows two-player games of [Upoopia](http://www.unicorn7.org/games/game/553) to be played on IRC using a textual interface. Because of the imperfect information each player is supposed to receive, this is implemented with each player residing in separate IRC channel where private information is sent by the bot, with any other public messages being relayed between the two channels (using the [`chan_link`](#chan-link) module). The bot must be present in both channels, as may spectators, but a player should never join their opponent's channel while a game is being played.
