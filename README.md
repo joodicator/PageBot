@@ -158,6 +158,10 @@ Provides programmatic access to [`Imgur`](http://imgur.com)'s API.
 Provides programmatic access to [Pastebin](http://pastebin.com)'s API.
 * **`conf/pastebin_dev_key.txt`** - the Developer API Key associated with the account used to access Pastebin's API. See http://pastebin.com/api/ for more information.
 
+#### `youtube`
+Provides programmatic access to [YouTube](http://youtube.com)'s API. Requires [google-api-python-client](//github.com/google/google-api-python-client) to be separately installed in the same Python distribution used to run the bot.
+* **`conf/youtube_api_key`** - the developer key used to access YouTube's Data API version 3. See https://developers.google.com/youtube/v3/getting-started for more information.
+
 ### Other Modules
 
 #### `identity`
@@ -172,6 +176,9 @@ Manages sets of credentials used to recognise particular IRC users.
     `('access', 'NAME')`            | The user is identified as belonging to another access name, which validates this access name by proxy.
 
 * **`state/identity_hosts.json`** - records needed to implement the `'prev_hosts'` credential. A JSON object `{'NAME1': ['USER11@HOST11', 'USER12@HOST12', ...], 'NAME2': ['USER21@HOST21', 'USER22@HOST22', ...], ...}` giving the most recent identified hosts, in chronological order and starting with the least recent, for each access name on record.
+
+#### `util`
+Provides various miscellaneous classes and functions shared by many different modules.
 
 ## Available Plugins
 
@@ -267,6 +274,14 @@ Allows users to leave public messages for each other in channels. This is simila
     * **`state/tell.pickle`** - the database of pending messages and other information, in the form of a [pickled](https://docs.python.org/2/library/pickle.html) Python 2.7 object.
 
 If the user issuing `!tell` or `!untell` is a bot administrator, the arguments of the command may be prefixed with the name of a channel so that it affects that channel rather than any current channel. Additionally, the commands `!tell`, `!untell`, `!tell?`, `!tell+`, `!tell-`, `!tell-clear`, `!tell-undo` and `!tell-redo` may equivalently be written as `!page`, `!unpage`, `!page?`, `!page+`, `!page-`, `!page-clear`, `!page-undo` and `!page-redo`, respectively.
+
+#### `url`
+Shows information about URLs mentioned in the channel. The title, file size and MIME type are shown, if available. For links to images, the "best guess" provided by [Google](http://google.com)'s reverse image search is also shown. If the [`imgur`](#imgur) module is configured with a valid client ID, additional information is shown for Imgur URLs. If the [`youtube`](#youtube) module is configured with a valid API key, additional information is shown for YouTube videos.
+* **`!title`**, **`!url`** - show information about each URL in the most recent channel message containing URLs. The message in question is then removed from the record, such that `!url` issued again will show information about the second most recent such message, and so forth.
+* **`!title`** **`!url TEXT`** - show information about each URL occurring in the given `TEXT`.
+* **`page/url_collect.py`** - a support module implementing the component of `url` responsible for maintaining a public list of recently-mentioned URLs in each channel, accessible to other modules and independent of the main functionality of `!url`.
+
+Up to 5 additional `!url` invocations, introduced by `!` as usual, may be included on the same line as the first `!url` command. This can be useful to view the titles of several recently mentioned URLs at once.
 
 ### Games
 
