@@ -3,7 +3,7 @@
 A general-purpose, modular, extensible IRC robot written in Python 2. Includes numerous plugins for various different purposes.
 
 ## Contents
-1. [Requirements](#requirements)
+1. [Dependencies](#dependencies)
 2. [Contributing](#contributing)
 3. [Copying](#copying)
 4. [Installation and Usage](#installation-and-usage)
@@ -33,10 +33,19 @@ A general-purpose, modular, extensible IRC robot written in Python 2. Includes n
         - [`terraria`](#terraria) - connect channels to *Terraria* servers.
     4. [Other Plugins](#other-plugins)
 
-## Requirements
-* [Python](https://python.org) 2.7
-* A POSIX-compliant shell interpreter such as `bash`. This dependency may be removed in the future.
-* Further requirements of individual plugins used. See [Available Plugins](#available-plugins) for details.
+## Dependencies
+
+### Required
+* [Python](https://python.org) 2.7.
+* A POSIX shell, such as [Bash](https://www.gnu.org/software/bash).
+
+### Optional
+* [BeautifulSoup 4](https://pypi.python.org/pypi/beautifulsoup4), for [`dominions`](#dominions), [`qdbs`](#qdbs) and [`url`](#url).
+* [google-api-python-client](//github.com/google/google-api-python-client), for some features of [`url`](#url).
+* [KAKASI](http://kakasi.namazu.org), for [`kakasi`](#kakasi).
+* [joodicator/pipeserve](//github.com/joodicator/pipeserve), for [`minecraft`](#minecraft) and [`chess`](#chess).
+* [joodicator/mcchat2](//github.com/joodicator/mcchat2), for [`minecraft`](#minecraft).
+* [joodicator/chess](//github.com/joodicator/chess), for [`chess`](#chess).
 
 ## Contributing
 Bug reports and feature requests may be submitted to this repository using the issue tracker, and are more than welcome. Pull requests fixing bugs are welcome, and pull requests adding or changing features will be duly considered.
@@ -236,7 +245,7 @@ Shows the Hepburn romanisation of Japanese text. Where there is more than one po
 Automatically copies resources from URLs known to expire after a short time, for posterity. When such a URL is posted in a channel, the bot will copy it to a permanent location and provide a link to the copy. Currently, this consists of copying PNG, GIF or JPEG images hosted on [4chan](http://4chan.org) to [Imgur](http://imgur.com), but more schemes may be added in future. This plugin requires the [`imgur`](#imgur) module to be configured with a valid `client_id`.
 
 #### `qdbs`
-Notifies channels and users of new entries posted to a [QdbS](http://www.qdbs.org) quote database. This plugin automatically loads the [`identity`](#identity) module.
+Notifies channels and users of new entries posted to a [QdbS](http://www.qdbs.org) quote database. This plugin automatically loads the [`identity`](#identity) module. Requires [BeautifulSoup 4](https://pypi.python.org/pypi/beautifulsoup4).
 * **`conf/qdbs_public.py`** - Allows channels to be notified when a new quote has been approved and is publically visible. A CSV-style newline-separated list of Python tuples, under the header `'channel', 'index_url', 'remote_index_url'`, whose columns have the following meanings:
 
     Field               | Type  | Description
@@ -287,7 +296,7 @@ Allows users to leave public messages for each other in channels. This is simila
 If the user issuing `!tell` or `!untell` is a bot administrator, the arguments of the command may be prefixed with the name of a channel so that it affects that channel rather than any current channel. Additionally, the commands `!tell`, `!untell`, `!tell?`, `!tell+`, `!tell-`, `!tell-clear`, `!tell-undo` and `!tell-redo` may equivalently be written as `!page`, `!unpage`, `!page?`, `!page+`, `!page-`, `!page-clear`, `!page-undo` and `!page-redo`, respectively.
 
 #### `url`
-Shows information about URLs mentioned in the channel. The title, file size and MIME type are shown, if available. For links to images, the "best guess" provided by [Google](http://google.com)'s reverse image search is also shown. If the [`imgur`](#imgur) module is configured with a valid client ID, additional information is shown for Imgur URLs. If the [`youtube`](#youtube) module is configured with a valid API key, additional information is shown for YouTube videos.
+Shows information about URLs mentioned in the channel. The title, file size and MIME type are shown, if available. For links to images, the "best guess" provided by [Google](http://google.com)'s reverse image search is also shown. If the [`imgur`](#imgur) module is configured with a valid client ID, additional information is shown for Imgur URLs. If the [`youtube`](#youtube) module is configured with a valid API key, additional information is shown for YouTube videos. Requires [BeautifulSoup 4](https://pypi.python.org/pypi/beautifulsoup4).
 * **`!title`**, **`!url`** - show information about each URL in the most recent channel message containing URLs. The message in question is then removed from the record, such that `!url` issued again will show information about the second most recent such message, and so forth.
 * **`!title`** **`!url TEXT`** - show information about each URL occurring in the given `TEXT`.
 * **`page/url_collect.py`** - a support module implementing the component of `url` responsible for maintaining a public list of recently-mentioned URLs in each channel, accessible to other modules and independent of the main functionality of `!url`.
@@ -297,7 +306,7 @@ Up to 5 additional `!url` invocations, introduced by `!` as usual, may be includ
 ### Game Tools
 
 #### `dominions`
-Displays updates from [Dominions 4: Thrones of Ascension](http://www.illwinter.com/dom4) multiplayer servers. The game must be hosted using Dominion's TCP server, with the `--statuspage` option used to generate an HTML document accessible to the bot by HTTP or in the local file system. The bot will periodically read this document to discover updates in the game's status. See [this document](http://www.illwinter.com/dom4/startoptions.pdf) for more information about the command-line options of Dominions 4.
+Displays updates from [Dominions 4: Thrones of Ascension](http://www.illwinter.com/dom4) multiplayer servers. The game must be hosted using Dominion's TCP server, with the `--statuspage` option used to generate an HTML document accessible to the bot by HTTP or in the local file system. The bot will periodically read this document to discover updates in the game's status. See [this document](http://www.illwinter.com/dom4/startoptions.pdf) for more information about the command-line options of Dominions 4. Requires [BeautifulSoup 4](https://pypi.python.org/pypi/beautifulsoup4).
 * **`!dom+ URL1 URL2 ...`** - [admin] add games to be monitored in this channel. Each `URL` must give the location of a corresponding status page; supported URL schemes include `http://`, `https://`, and `file://`. Whenever the current turn advances, the bot will send a message to the channel. Moreover, if the bot can change the channel's topic, it will add a section showing the turn number and which non-AI players have taken their turns.
 * **`!dom?`** - [admin] show the number, URL and (if known) name of each game being monitored in this channel.
 * **`!dom- SPEC1 SPEC2 ...`** - [admin] remove monitored games from this channel. Each `SPEC` is either a URL as in `!dom+` or a game number as displayed by `!dom?`.
