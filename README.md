@@ -5,7 +5,7 @@ A general-purpose, modular, extensible IRC robot written in Python 2. Includes n
 ## Contents
 1. [Dependencies](#dependencies)
 2. [Contributing](#contributing)
-3. [Copying](#copying)
+3. [License](#license)
 4. [Installation and Usage](#installation-and-usage)
 5. [Overview of Files](#overview-of-files)
 6. [Main Configuration File](#main-configuration-file)
@@ -50,7 +50,7 @@ A general-purpose, modular, extensible IRC robot written in Python 2. Includes n
 ## Contributing
 Bug reports and feature requests may be submitted to this repository using the issue tracker, and are more than welcome. Pull requests fixing bugs are welcome, and pull requests adding or changing features will be duly considered.
 
-## Copying
+## License
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the 
 Free Software Foundation, either version 3 of the License, or (at your option) any later version.
