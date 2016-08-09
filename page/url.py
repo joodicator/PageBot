@@ -76,9 +76,9 @@ def h_url(bot, id, target, args, full_msg, reply):
                 yield sign('PROXY_MSG', bot, None, target, result['proxy_msg'],
                     full_msg=result['proxy_msg_full'])
             yield runtime.sleep(0.01)
-        except (socket.error, urllib2.URLError, PageURLError) as e:
+        except Exception as e:
             traceback.print_exc()
-            reply('Error: %s [%s]' % (e, abbrev_url(url)))    
+            reply('Error: %s [%s]' % (e, abbrev_url(url)))
 
 #==============================================================================#
 # May be raised by get_title, get_title_proxy, etc, to indicate that the
@@ -343,7 +343,7 @@ def google_image_title_soup(url):
         text = stream.read(READ_BYTES_MAX)
         with open('/tmp/url', 'w') as file:
             file.write(text)
-        return BeautifulSoup(text, 'html5lib')
+        return BeautifulSoup(text)
 
 #==============================================================================#
 # True if the given hostname or IPV4 or IPV6 address string is not in any

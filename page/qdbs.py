@@ -159,7 +159,7 @@ class Private(Configuration):
             'Cookie': 'qdb_username=%s; qdb_password=%s' % (
                 self.qdb_username, self.qdb_password)}))
         encoding = stream.info().getparam('charset')
-        return BeautifulSoup(stream, 'html5lib', from_encoding=encoding)
+        return BeautifulSoup(stream, from_encoding=encoding)
 
 Private.class_init()
 
@@ -224,6 +224,6 @@ class Public(Configuration):
     def soup(self):
         stream = urllib2.urlopen(self.index_url)
         encoding = stream.info().getparam('charset')
-        return BeautifulSoup(stream, 'html5lib', from_encoding=encoding)
+        return BeautifulSoup(stream, from_encoding=encoding)
 
 Public.class_init()

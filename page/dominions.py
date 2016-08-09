@@ -140,7 +140,7 @@ class Report(Core):
         try:
             stream = urllib2.urlopen(url)
             encoding = stream.info().getparam('charset')
-            soup = BeautifulSoup(stream, 'html5lib', from_encoding=encoding)
+            soup = BeautifulSoup(stream, from_encoding=encoding)
             self.load_soup(soup)
         except urllib2.URLError as e:
             e.exc_info = sys.exc_info()
