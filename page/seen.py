@@ -46,8 +46,9 @@ def get_state():
     try:
         with open(STATE_FILE) as file:
             global_state = json.load(file)
-    except ValueError: traceback.print_exc()
-    except IOError: traceback.print_exc()
+    except (ValueError, IOError):
+        traceback.print_exc()
+    global_state = util.recursive_encode(global_state, 'utf-8')
     return global_state
 
 #-------------------------------------------------------------------------------
@@ -55,10 +56,11 @@ def put_state(new_state):
     global global_state
     global_state = prune_state(new_state)
     try:
+        data = json.dumps(global_state, ensure_ascii=False)
         with open(STATE_FILE, 'w') as file:
-            json.dump(global_state, file)
-    except ValueError: traceback.print_exc()
-    except IOError: traceback.print_exc()
+            file.write(data)
+    except (ValueError, IOError):
+        traceback.print_exc()
 
 #-------------------------------------------------------------------------------
 def prune_state(state):

@@ -341,8 +341,6 @@ def google_image_title_soup(url):
     with closing(urllib2.urlopen(request,
     timeout=TIMEOUT_SECONDS, context=ssl_context)) as stream:
         text = stream.read(READ_BYTES_MAX)
-        with open('/tmp/url', 'w') as file:
-            file.write(text)
         return BeautifulSoup(text)
 
 #==============================================================================#

@@ -30,7 +30,7 @@ install, uninstall = util.depend(install, link.uninstall, 'identity')
 def read_state():
     try:
         with open(STATE_FILE, 'r') as file:
-            return json.load(file)
+            return util.recursive_encode(json.load(file), 'utf-8')
     except IOError as e:
         if e.errno != 2: raise
     except:
@@ -38,8 +38,9 @@ def read_state():
     return dict()
 
 def write_state(wstate):
+    data = json.dumps(wstate, indent=4, ensure_ascii=False)
     with open(STATE_FILE, 'w') as file:
-        json.dump(wstate, file)
+        file.write(data)
 
 state = read_state()
 

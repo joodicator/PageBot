@@ -45,14 +45,14 @@ ab_link = util.LinkSet()
 def get_state():
     try:
         with open(STATE_FILE) as file:
-            return json.load(file)
-    except ValueError: pass
-    except IOError: pass
-    return dict()
+            return util.recursive_encode(json.load(file), 'utf-8')
+    except (ValueError, IOError):
+        return dict()
 
 def put_state(state):
+    data = json.dumps(state, indent=4, ensure_ascii=False)
     with open(STATE_FILE, 'w') as file:
-        json.dump(state, file)
+        file.write(data)
 
 #==============================================================================#
 def install(bot):

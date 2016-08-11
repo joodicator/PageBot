@@ -56,11 +56,13 @@ class State(object):
         except:
             jdict = dict()
             traceback.print_exc()
+        jdict = util.recursive_encode(jdict, 'utf-8')
         self.load_jdict(jdict)
 
     def save_path(self, path):
+        data = json.dumps(self.save_jdict(), indent=4, ensure_ascii=False)
         with open(path, 'w') as file:
-            json.dump(self.save_jdict(), file, indent=4)
+            file.write(data)
 
     def load_jdict(self, jdict):
         all_urls = set()

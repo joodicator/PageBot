@@ -83,17 +83,19 @@ def read_prev_hosts():
     new_prev_hosts = dict()
     try:
         with open(PREV_HOSTS_FILE) as file:
-            new_prev_hosts = util.recursive_encode(json.load(file), 'utf8')
-    except ValueError: traceback.print_exc()
-    except IOError:    traceback.print_exc()
+            new_prev_hosts = json.load(file)
+    except (ValueError, IOError):
+        traceback.print_exc()
+    new_prev_hosts = util.recursive_encode(new_prev_hosts, 'utf-8')
     return new_prev_hosts
 
 def write_prev_hosts(new_prev_hosts):
     try:
+        data = json.dumps(new_prev_hosts, indent=4, ensure_ascii=False)
         with open(PREV_HOSTS_FILE, 'w') as file:
-            json.dump(new_prev_hosts, file, indent=4)
-    except ValueError: traceback.print_exc()
-    except IOError:    traceback.print_exc()
+            file.write(data)
+    except (ValueError, IOError):
+        traceback.print_exc()
 
 prev_hosts = read_prev_hosts()
 

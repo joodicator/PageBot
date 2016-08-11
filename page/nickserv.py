@@ -88,7 +88,7 @@ def status(bot, nick, ret):
 #-------------------------------------------------------------------------------
 # sdict = yield statuses(bot, nicks) - sdict[nick.lower()] is STATUS of nick.
 STATUS_BATCH = 1
-STATUS_CACHE_SECONDS = 3
+STATUS_CACHE_SECONDS = 15
 status_cache = dict()
 @util.mfun(link, 'nickserv.statuses')
 def statuses(bot, nicks, ret):
