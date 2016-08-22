@@ -49,6 +49,16 @@ def _join(bot, id, target, args, full_msg):
 def _part(bot, id, target, args, full_msg):
     bot.send_cmd('PART :%s' % (args or target))
 
+@link('!quit')
+@admin
+def _quit(bot, id, target, args, full_msg):
+    bot.send_cmd('QUIT :%s' % args if args else 'QUIT')
+
+@link('!restart')
+@admin
+def _restart(bot, id, target, args, full_msg):
+    bot.send_cmd('QUIT :Restarting.')
+
 @link('!eval')
 @admin
 def _eval(bot, id, target, args, full_msg):
