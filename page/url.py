@@ -205,14 +205,12 @@ def get_title_youtube(url, type):
     try:
         from youtube import youtube
         result = youtube.videos().list(id=video_id,
-            part='snippet,statistics,contentDetails').execute()['items'][0]
+            part='snippet,contentDetails').execute()['items'][0]
 
         title = result['snippet']['title']
         desc = result['snippet']['description']
-        channel = result['snippet']['channelTitle']
-        #views = result['statistics']['viewCount']
-        #likes = result['statistics']['likeCount']
-        #dislikes = result['statistics']['dislikeCount']
+        channel = result['snippet']['channelId']
+        channel = result['snippet'].get('channelTitle', channel)
         duration = result['contentDetails']['duration']
 
         desc_full = desc
