@@ -9,6 +9,7 @@ import traceback
 import urllib
 import urllib2
 import socket
+import zlib
 import ssl
 import re
 
@@ -27,6 +28,7 @@ import url_collect
 link, install, uninstall = util.LinkSet().triple()
 
 AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:23.0) Gecko/20100101 Firefox/23.0'
+ACCEPT_ENCODING = 'gzip, deflate'
 TIMEOUT_SECONDS = 20
 READ_BYTES_MAX = 1024*1024
 CMDS_PER_LINE_MAX = 6
@@ -72,9 +74,9 @@ def h_url(bot, id, target, args, full_msg, reply):
         try:
             result = get_title_proxy(url)
             reply(result['title'])
-            if target:
-                yield sign('PROXY_MSG', bot, None, target, result['proxy_msg'],
-                    full_msg=result['proxy_msg_full'])
+            if target and result['proxy_msg'] is not None:
+                yield sign('PROXY_MSG', bot, None, target,
+                    result['proxy_msg'], full_msg=result['proxy_msg_full'])
             yield runtime.sleep(0.01)
         except Exception as e:
             traceback.print_exc()
@@ -105,6 +107,7 @@ def get_title_proxy(url):
 
     request = urllib2.Request(url)
     request.add_header('User-Agent', AGENT)
+    request.add_header('Accept-Encoding', ACCEPT_ENCODING)
 
     host = request.get_host()
     if not is_global_address(host): raise PageURLError(
@@ -177,14 +180,29 @@ def get_title_html(url, type, stream=None):
     if stream is None:
         request = urllib2.Request(url)
         request.add_header('User-Agent', AGENT)
+        request.add_header('Accept-Encoding', ACCEPT_ENCODING)
         stream = urllib2.urlopen(
             request, timeout=TIMEOUT_SECONDS, context=ssl_context)
-    
-    with closing(stream):
-        soup = BeautifulSoup(
-            stream.read(READ_BYTES_MAX),
-            from_encoding = stream.info().getparam('charset'))
 
+    with closing(stream):
+        charset = stream.info().getparam('charset')
+        content_enc = stream.info().dict.get('content-encoding', 'identity')
+        if content_enc == 'identity':
+            data = stream.read(READ_BYTES_MAX)
+        elif content_enc == 'gzip':
+            raw_data = stream.read(READ_BYTES_MAX)
+            data = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(raw_data)
+        elif content_enc == 'deflate':
+            raw_data = stream.read(READ_BYTES_MAX)
+            try:
+                data = zlib.decompressobj().decompress(raw_data)
+            except zlib.error:
+                data = zlib.decompressobj(-zlib.MAX_WBITS).decompress(raw_data)
+        else:
+            raise PageURLError(
+                'Unsupported content-encoding: "%s"' % content_enc)
+
+    soup = BeautifulSoup(data, from_encoding=charset)
     title = soup.find('title')
     if title:
         title = 'Title: %s' % format_title(title.text.strip())
@@ -263,7 +281,7 @@ def get_title_imgur(url, type, stream=None):
     if info and info.get('title') and not URL_PART_RE.match(info['title']):
         title = 'Title: %s -- %s' % (format_title(info['title']), title)
     elif 'html' in type:
-        html_title = get_title_html(url, type, stream)['title']
+        html_title = getattr(get_title_html(url, type, stream), 'title', None)
         if (html_title and not URL_PART_RE.match(html_title)
         and html_title != 'Title: \2Imgur: The most awesome images on the Internet\2'
         and html_title != 'Title: \2Imgur\2'):
