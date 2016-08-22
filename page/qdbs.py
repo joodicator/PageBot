@@ -16,7 +16,7 @@ import runtime
 import identity
 
 STATE_FILE = 'state/qdbs.json'
-MAX_REPORT = 3
+MAX_REPORT = 4
 MAX_QUOTE_LEN = 300
 TICK_PERIOD_S = 60
 
@@ -53,7 +53,7 @@ def h_qdbs_tick(bot, log_level=None):
     yield sign('QDBS_TICK', bot, log_level=log_level)
 
 def format_quote(quote):
-    quote = re.sub(r'[\r\n]+', ' ', quote)
+    quote = re.sub(r'[\r\n]+', '  ', quote)
     if len(quote) > MAX_QUOTE_LEN:
         quote = quote[:MAX_QUOTE_LEN-5] + '(...)'
     return quote
@@ -118,7 +118,7 @@ class Private(Configuration):
     
                 for qid, quote in sorted(quotes):
                     if qid > last_quote:
-                        msg = '[QdbS] New quote #%d <%s>: %s' % (
+                        msg = '[QdbS] New quote #%d <%s>: "%s"' % (
                             qid, self.remote_admin_url, format_quote(quote))
                         bot.send_msg(nick, msg)
     
@@ -179,15 +179,17 @@ class Public(Configuration):
 
             quotes = sorted(
                 (qid, quote) for (qid, quote) in quotes if qid > last_quote)
-            for qid, quote in quotes[:MAX_REPORT]:
+            sample = quotes if len(quotes) <= MAX_REPORT else \
+                     quotes[:MAX_REPORT-1]
+            for qid, quote in sample:
                 quote_url = '%s?%s' % (self.remote_index_url, qid)
                 msg = '%s: new quote added: %s "%s"' % (
                     title, quote_url, format_quote(quote))
                 bot.send_msg(self.channel, msg)
 
-            if len(quotes) > MAX_REPORT:
-                msg = '%s: ...and %d other(s). See: <%s>.' % (
-                    title, len(quotes)-MAX_REPORT, self.remote_index_url)
+            if len(quotes) > len(sample):
+                msg = '%s: ...and %d others. See: <%s>.' % (
+                    title, len(quotes)-len(sample), self.remote_index_url)
                 bot.send_msg(self.channel, msg)
 
             if quotes:
