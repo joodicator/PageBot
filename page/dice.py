@@ -40,8 +40,8 @@ def h_help_roll(bot, reply, args, bridge):
         ' chooses one item at random and replaces the list with that item.'
         ' Items are selected with probability proportional to their WEIGHT,'
         ' which can be specified as a positive number followed by a colon'
-        ' before the item, or otherwise defaults to 1. Each item may itself'
-        ' contain further brace-delimited lists, which will be recursively'
+        ' before the item, or otherwise defaults to 1. Each item may contain'
+        ' dice rolls, or further brace-delimited lists to be recursively'
         ' evaluated in the same way.')
     else:
         reply('roll MdN\2 or \2!roll MdN+K\2 or \2!roll MdN-K',
