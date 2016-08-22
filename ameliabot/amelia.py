@@ -130,6 +130,9 @@ class AmeliaBot(Mac):
         self.activity = True
 
     def send_line(self, line, defer=False, **kwds):
+        if type(line) is unicode:
+            line = line.encode('utf-8')
+
         flood_limits = self.conf['flood_limits']
         now = time.time()
         cut = now - max(s for (s,l) in flood_limits)

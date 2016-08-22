@@ -430,8 +430,8 @@ def depend(install, uninstall, *deps):
     return depend_install, depend_uninstall
 
 #===============================================================================
-# Given a structure of dicts and lists, returns an equivalent structure with
-# encode() mapped over all unicode values contained therein.
+# Given a structure of dicts, lists and tuples, returns an equivalent structur
+# with encode() mapped over all unicode values contained therein.
 def recursive_encode(object, codec, done=None):
     if done is None:
         done = dict()
@@ -439,15 +439,18 @@ def recursive_encode(object, codec, done=None):
         return done[id(object)]
 
     result = None
-    if type(object) == unicode:
+    if type(object) is unicode:
         result = object.encode(codec)
-    elif type(object) == dict:
+    elif type(object) is dict:
         result = { recursive_encode(k, codec, done)
                    : recursive_encode(v, codec, done)
                    for (k,v) in object.iteritems() }
-    elif type(object) == list:
+    elif type(object) is list:
         result = [ recursive_encode(v, codec, done)
                    for v in object ]
+    elif type(object) is tuple:
+        result = tuple( recursive_encode(v, codec, done)
+                        for v in object )
     else:
         result = object
 
