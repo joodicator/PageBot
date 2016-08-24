@@ -22,7 +22,7 @@ def laugh():
     return heahuea(length())
 
 @link('MESSAGE')
-@channel.not_quiet
+@channel.not_quiet()
 def h_message(bot, id, target, msg):
     now = time.time()
     if target and target in last and now < last[target] + PERIOD:

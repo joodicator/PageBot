@@ -5,6 +5,7 @@ import datetime
 import time
 import json
 import re
+import os.path
 
 from untwisted.magic import sign, hold
 
@@ -66,12 +67,13 @@ def add_credentials(name, *creds):
     credentials[name.lower()] = new_creds
 
 def read_credentials():
-    try:
-        raw_creds = util.fdict(CREDENTIALS_FILE)
-    except Exception:
-        traceback.print_exc()
-        return dict()
-    return { name.lower():creds for (name,creds) in raw_creds.iteritems() }
+    if os.path.exists(CREDENTIALS_FILE):
+        try:
+            raw_creds = util.fdict(CREDENTIALS_FILE)
+            return {name.lower():creds for (name,creds) in raw_creds.iteritems()}
+        except Exception:
+            traceback.print_exc()
+    return {}    
 
 credentials = read_credentials()
 
@@ -81,11 +83,12 @@ credentials = read_credentials()
 # in chronological order with the most recent last.
 def read_prev_hosts():
     new_prev_hosts = dict()
-    try:
-        with open(PREV_HOSTS_FILE) as file:
-            new_prev_hosts = json.load(file)
-    except (ValueError, IOError):
-        traceback.print_exc()
+    if os.path.exists(PREV_HOSTS_FILE):
+        try:
+            with open(PREV_HOSTS_FILE) as file:
+                new_prev_hosts = json.load(file)
+        except (ValueError, IOError):
+            traceback.print_exc()
     new_prev_hosts = util.recursive_encode(new_prev_hosts, 'utf-8')
     return new_prev_hosts
 
