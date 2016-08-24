@@ -8,24 +8,12 @@ import re
 
 import limit
 
-IGNORE_FILE = 'conf/ignore.txt'
-
 link, install, uninstall = LinkSet().triple()
-
-try:
-    with open(IGNORE_FILE) as file:
-        ignore_re = '|'.join(
-            '(%s)' % util.wc_to_re(line)
-            for raw_line in file for line in [raw_line.strip()] if line)
-        ignore_re = re.compile(ignore_re, re.I) if ignore_re else None
-except IOError:
-    ignore_re = None
 
 @link('XIRCLIB_EVENT')
 def h_xirclib_msg(event, bot, source, *args):
-    if ignore_re and isinstance(source, tuple) \
-    and ignore_re.match('%s!%s@%s' % source):
-        return    
+    if type(source) is tuple:
+        source = ID(*source)
     yield sign(event, bot, source, *args)
 
 @link('COMMAND',        action=False)
@@ -58,8 +46,7 @@ def h_command(bot, id, target, event, body, full_msg, action):
         
 
 @link('JOIN')
-def join(bot, source, chans, *args):
-    id = ID(*source)
+def join(bot, id, chans, *args):
     for chan in chans.split(','):
         yield sign('SOME_JOIN', bot, id, chan)
         if (id.nick.lower() == bot.nick.lower()):
@@ -68,8 +55,7 @@ def join(bot, source, chans, *args):
             yield sign('OTHER_JOIN', bot, id, chan)
 
 @link('PART')
-def part(bot, source, chans, msg=None, *args):
-    id = ID(*source)
+def part(bot, id, chans, msg=None, *args):
     for chan in chans.split(','):
         yield sign('SOME_PART', bot, id, chan, msg)
         if (id.nick.lower() == bot.nick.lower()):
@@ -81,7 +67,6 @@ def part(bot, source, chans, msg=None, *args):
 
 @link('KICK')
 def kicked(bot, op_id, chan, other_nick, msg=None, *args):
-    op_id = ID(*op_id)
     yield sign('SOME_KICKED', bot, other_nick, op_id, chan, msg)
     if (other_nick.lower() == bot.nick.lower()):
         yield sign('SELF_KICKED', bot, chan, op_id, msg)
@@ -91,8 +76,7 @@ def kicked(bot, op_id, chan, other_nick, msg=None, *args):
         yield sign('OTHER_KICKED_FINAL', bot, other_nick, op_id, chan, msg)
 
 @link('QUIT')
-def quit(bot, source, msg=None, *args):
-    id = ID(*source)
+def quit(bot, id, msg=None, *args):
     if (id.nick.lower() == bot.nick.lower()):
         yield sign('SELF_QUIT', bot, msg)
     else:
@@ -100,7 +84,6 @@ def quit(bot, source, msg=None, *args):
 
 @link('NICK')
 def nick(bot, id, new_nick, *args):
-    id = ID(*id)
     if id.nick.lower() == bot.nick.lower():
         yield sign('SELF_NICK', bot, new_nick)
         bot.nick = new_nick
@@ -111,21 +94,19 @@ def nick(bot, id, new_nick, *args):
 @link('PRIVMSG')
 def privmsg(bot, source, target, msg, *args):
     if target.lower() == bot.nick.lower(): target = None
-    if type(source) == tuple:
-        id = ID(*source)
+    if isinstance(source, tuple):
         bot.activity = False
-        yield sign('MESSAGE', bot, id, target, msg)
+        yield sign('MESSAGE', bot, source, target, msg)
         if bot.activity: return
-        yield sign('MESSAGE_IGNORED', bot, id, target, msg)
-    elif type(source) == str:
+        yield sign('MESSAGE_IGNORED', bot, source, target, msg)
+    elif isinstance(source, str):
         yield sign('SMESSAGE', bot, source, target, msg)
 
 @link('NOTICE')
 def notice(bot, source, target, msg, *args):
     if target == bot.nick: target = None
-    if type(source) == tuple:
-        id = ID(*source)
-        yield sign('UNOTICE', bot, id, target, msg)
+    if isinstance(source, tuple):
+        yield sign('UNOTICE', bot, source, target, msg)
     elif type(source) == str:
         yield sign('SNOTICE', bot, source, target, msg)
 

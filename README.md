@@ -111,7 +111,6 @@ Actively performs miscellaneous tasks essential to the bot and other modules.
 #### `message`
 Manages basic IRC message events from `xirclib` and provides the `!help` command.
 * **`!help`** - shows information about (most) user commands.
-* **`conf/ignore.txt`** - one `nick!user@host` wildcard expression per line to ignore all messages from.
 
 #### `nickserv`
 Communicates with the network service known as NickServ on most IRC networks.
