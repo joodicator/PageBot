@@ -3,9 +3,12 @@ from collections import namedtuple
 import time
 import array
 import re
+import os.path
 
 import util
 link, install, uninstall = util.LinkSet().triple()
+
+CONF_CHANS_FILE = 'conf/flood_chans.conf'
 
 HISTORY_SECONDS = 3600
 HISTORY_ENTRIES = 250
@@ -22,21 +25,40 @@ Msg = namedtuple('Msg', ('time', 'id', 'text'))
 # chan_history[chan.lower()] = [Msg(...), Msg(...), ...]
 chan_history = defaultdict(list)
 
+if os.path.exists(CONF_CHANS_FILE):
+    conf_chans = {
+        record.channel.lower(): record
+        for record in util.table(CONF_CHANS_FILE) }
+else:
+    conf_chans = {}
+
+def reload(prev):
+    if hasattr(prev, 'chan_history') \
+    and isinstance(prev.chan_history, dict):
+        for chan, prev_history in prev.chan_history.iteritems():
+            if chan not in conf_chans: continue
+            history = chan_history[chan]
+            history.update(prev_history)
+            chan_history[chan] = history
+
 @link('PRIVMSG')
 @link('UNOTICE')
 def h_message(bot, id, chan, text):
     if not chan.startswith('#'): return
-    flooding = handle_message()
-
-    msg = Msg(time=time.time(), id=id, text=text)
-    score = handle_message(msg, id, chan)
-    if score > SCORE_THRESHOLD:
-        punish(bot, id, chan)
+    if chan not in conf_chans: return
+    score = handle_message(Msg(time.time(), id, text), chan)
+    if score > SCORE_THRESHOLD: punish(bot, id, chan)
 
 def punish(bot, id, chan):
-    pass
+    bot.send_cmd(conf_chans[chan].punish_cmd % {
+        'nick': id.nick,
+        'user': id.user,
+        'host': id.host,
+        'chan': chan,
+        'reason': 'Flooding detected.',
+    })
 
-def handle_msg(msg, id, chan):
+def handle_msg(msg, chan):
     chan = chan.lower()
     history = chan_history[chan]
     del history[:len(history)-HISTORY_ENTRIES]
@@ -62,7 +84,6 @@ def score_msg(msg, history):
         part *= (1 + SCORE_POLE_SEC/max(tmin, tdif))
         part *= SCORE_MUL_10MSG**(i/10.0)
         score += part
-
     return score
 
 def same_user(id1, id2):
