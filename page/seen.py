@@ -6,6 +6,7 @@ import datetime
 import time
 import json
 import re
+import os.path
 
 from util import LinkSet
 from message import reply
@@ -43,11 +44,12 @@ def get_state():
     if global_state is not None:
         return global_state
     global_state = dict()
-    try:
-        with open(STATE_FILE) as file:
-            global_state = json.load(file)
-    except (ValueError, IOError):
-        traceback.print_exc()
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE) as file:
+                global_state = json.load(file)
+        except (ValueError, IOError):
+            traceback.print_exc()
     global_state = util.recursive_encode(global_state, 'utf-8')
     return global_state
 

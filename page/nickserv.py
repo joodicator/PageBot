@@ -1,10 +1,13 @@
 import traceback
 import time
 import re
+import os.path
 
 from untwisted.magic import sign, hold
 import runtime
 import util
+
+CONF_FILE = 'conf/nickserv.py'
 
 link, ls_install, ls_uninstall = util.LinkSet().triple()
 REGISTERED = 'PRE_AUTOJOIN'
@@ -29,12 +32,11 @@ def uninstall(bot):
 conf_cache = None
 def conf(*args, **kwds):
     global conf_cache
-    if conf_cache is None:
+    if conf_cache is None and os.path.exists(CONF_FILE):
         try:
-            conf_cache = util.fdict('conf/nickserv.py', util.__dict__)
+            conf_cache = util.fdict(CONF_FILE, util.__dict__)
         except IOError:
             traceback.print_exc()
-            conf_cache = None
     return conf_cache and conf_cache.get(*args, **kwds)
 
 @link(REGISTERED)

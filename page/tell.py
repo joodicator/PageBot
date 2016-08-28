@@ -31,7 +31,6 @@ from message import reply
 from util import multi, wc_to_re
 from auth import admin
 import runtime
-import identity
 import channel
 import util
 import auth
@@ -40,11 +39,7 @@ import auth
 #==============================================================================#
 link, install, uninstall = util.LinkSet().triple()
 install, uninstall = util.depend(install, uninstall,
-    'auth', 'identity')
-
-identity.add_credentials('tell.Broose',
-    ('access',     'Broose'),
-    ('prev_hosts', 3))
+    'auth')
 
 #==============================================================================#
 # Memory-cached plugin state.
@@ -232,6 +227,7 @@ def h_tell(bot, id, target, args, full_msg):
 
     to, msg = match.groups()
     to_nicks = [nick.strip() for nick in to.strip(':').split(',')]
+    sent_msgs = []
     state = get_state()
     for to_nick in to_nicks:
         if re.search(r'[#]', to_nick):
@@ -247,6 +243,7 @@ def h_tell(bot, id, target, args, full_msg):
             to_nick     = to_nick,
             message     = msg)
         state.msgs.append(record)
+        sent_msgs.append(record)
 
     sent_count = len(to_nicks)
     same_sent = [m for m in state.msgs if same_sender(m.from_id, id)
@@ -272,14 +269,16 @@ def h_tell(bot, id, target, args, full_msg):
                 return
 
     put_state(state)
+    yield untwisted.magic.sign('TELL_SENT', bot, id, target, sent_msgs)
 
-    father = yield identity.check_access(bot, id, 'tell.Broose')
-    affirm = 'Yes, father' if father else 'It shall be done'
-
-    if sent_count > 1: reply(bot, id, target,
-        '%s (%s messages sent).' % (affirm, sent_count))
+@link('TELL_SENT')
+def h_tell_sent(bot, id, target, sent_msgs, reply_msg=None):
+    if reply_msg is None:
+        reply_msg = 'It shall be done'
+    if len(sent_msgs) > 1: reply(bot, id, target,
+        '%s (%s messages sent).' % (reply_msg, len(sent_msgs)))
     else: reply(bot, id, target,
-        '%s (1 message sent to "%s").' % (affirm, to_nick))
+        '%s (1 message sent to "%s").' % (reply_msg, sent_msgs[0].to_nick))
 
 #==============================================================================#
 @link('HELP')

@@ -1,7 +1,8 @@
+from collections import defaultdict
 import re
 import random
 import traceback
-from collections import defaultdict
+import os.path
 
 from untwisted.magic import sign
 
@@ -21,18 +22,19 @@ DELAY_RAND_S = 3
 def read_conf():
     conf = defaultdict(list)
     chans = None
-    try:
-        with open('conf/aop.txt') as file:
-            for line in file:
-                line = re.sub(r'--.*', r'', line).strip().lower()
-                if not line: continue
-                if line.startswith('#'):
-                    chans = line.split()
-                    continue
-                for chan in chans:
-                    conf[chan].append(line.strip())
-    except IOError:
-        traceback.print_exc()
+    if os.path.exists(CONF_PATH):
+        try:
+            with open(CONF_PATH) as file:
+                for line in file:
+                    line = re.sub(r'--.*', r'', line).strip().lower()
+                    if not line: continue
+                    if line.startswith('#'):
+                        chans = line.split()
+                        continue
+                    for chan in chans:
+                        conf[chan].append(line.strip())
+        except IOError:
+            traceback.print_exc()
     return conf
 
 conf = read_conf()

@@ -1,15 +1,14 @@
-server   = 'irc.newnet.net'
+server   = 'localhost'
 port     = 6667
-nick     = 'Page'
-user     = 'Page'
+nick     = 'PageBot'
+user     = 'PageBot'
 name     = 'https://github.com/joodicator/PageBot'
 
-channels = ['#Page']
+channels = ['#PageBot']
 
 plugins  = [
     'runtime',
     'message',
-    'nickserv',
     'auth',
     'control',
     'channel',

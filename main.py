@@ -9,12 +9,11 @@ if __name__ == '__main__':
     conf = {
         'server':   'localhost',
         'port':     6667,
-        'nick':     'Page',
-        'user':     'Page',
-        'name':     'https://github.com/JosephCrowe/page-ircbot',
-        'channels': ['#page'],
-        'plugins':  ['runtime', 'message', 'nickserv', 'auth', 'control',
-                     'channel', 'tell']
+        'nick':     'PageBot',
+        'user':     'PageBot',
+        'name':     'https://github.com/joodicator/PageBot',
+        'channels': ['#PageBot'],
+        'plugins':  ['runtime', 'message', 'auth', 'control', 'channel', 'tell']
     }
     execfile('conf/bot.py', conf)
     
