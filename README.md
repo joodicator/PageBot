@@ -16,6 +16,7 @@ A general-purpose, modular, extensible IRC robot written in Python 2. Includes n
         - [`aop`](#aop) - give channel op status to users.
         - [`chanserv`](#chanserv) - keep ChanServ out of channels.
         - [`debug`](#debug) - print debugging information to the console.
+        - [`flood`](#flood) - defend against flooding attacks.
         - [`invite`](#invite) - join channels when invited.
     2. [User Tools](#user-tools)
         - [`convert`](#convert) - convert between units of measurement.
@@ -217,6 +218,26 @@ Communicates with the network services known as ChanServ on most IRC networks. C
 
 #### `debug`
 Displays on the console extended information about the internals of the bot's operation. When loaded, shows most *untwisted* events passing through the bot's primary `Mode` instance, and possibly also those passing through auxiliary `Mode` instances created by plugins. Events which occur so frequently as to make the console unreadable are suppressed.
+
+#### `flood`
+Employs heuristic measurements to detect when a user is maliciously flooding a channel with repetitive messages, either alone in concert with other users. When such behaviour is detected, the bot will ban and kick the offending user or perform some other action according to its configuration.
+* **`conf/flood_channels.py`** - A CSV-style newline-separated list of tuples under the header `'channel', 'punish_commands'`, whose columns have the following meanings:
+
+    Field             | Type                          | Description
+    ------------------|-------------------------------|-------------
+    `channel`         | `str`                         | The name of a channel, which should start with `#`, in which the bot will actively defend against flooding attacks.
+    `punish_commands` | `list` of `str`, or `DEFAULT` | The sequence of commands that the bot shall issue when a flooding user is detected. Each item is a raw IRC command, possibly including format specifiers as defined below. `DEFAULT` is equivalent to `['MODE %(chan)s +b %(hostmask)s', 'KICK %(chan)s %(nick)s :%(reason)s']`.
+
+    The following format specifiers may occur in `punish_commands`:
+
+    Specifier      | Description
+    ---------------|-------------
+    `%(nick)s`     | The nickname of the flooding user.
+    `%(user)s`     | The username of the flooding user.
+    `%(host)s`     | The hostname of the flooding user.
+    `%(hostmask)s` | `*!%(user)s@%(host)s` if the username does not start with `~`, or otherwise `*!*@%(host)s`.
+    `%(chan)s`     | The channel in which the flooding occurred.
+    `%(reason)s`   | A message describing why the user was targeted. Currently, this is always `Flooding detected.`
 
 #### `invite`
 Causes the bot to join channels when invited, and indefinitely remembers `INVITE`d and `KICK`ed channels.
