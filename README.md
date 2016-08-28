@@ -80,6 +80,7 @@ You should have received a copy of the GNU Lesser General Public License along w
 * **`state/`** - Data saved dynamically by PageBot to persist when it is restarted.
 * **`static/`** - Static data files which are not program code.
 * **`page/`** - Plugins and support modules that extend ameliabot to implement most of PageBot's functionality.
+* **`tools/`** - Auxiliary programs, mostly used for testing and development.
 * **`ameliabot/`** - A heavily modified version of http://sourceforge.net/projects/ameliabot/.
 * **`lib/untwisted/`** - A modified version of http://sourceforge.net/p/untwisted/.
 * **`lib/xirclib.py`** - A lightweight implementation of IRC for untwisted.
@@ -220,7 +221,7 @@ Communicates with the network services known as ChanServ on most IRC networks. C
 Displays on the console extended information about the internals of the bot's operation. When loaded, shows most *untwisted* events passing through the bot's primary `Mode` instance, and possibly also those passing through auxiliary `Mode` instances created by plugins. Events which occur so frequently as to make the console unreadable are suppressed.
 
 #### `flood`
-Employs heuristic measurements to detect when a user is maliciously flooding a channel with repetitive messages, either alone in concert with other users. When such behaviour is detected, the bot will ban and kick the offending user or perform some other action according to its configuration.
+Employs heuristic measurements to detect when a user is maliciously flooding a channel with repetitive messages, either alone or in concert with other users. This is especially useful against automated spam-bot attacks. When such behaviour is detected, the bot will ban and kick the offending user or perform some other action according to its configuration.
 * **`conf/flood_channels.py`** - A CSV-style newline-separated list of tuples under the header `'channel', 'punish_commands'`, whose columns have the following meanings:
 
     Field             | Type                          | Description
@@ -238,6 +239,8 @@ Employs heuristic measurements to detect when a user is maliciously flooding a c
     `%(hostmask)s` | `*!%(user)s@%(host)s` if the username does not start with `~`, or otherwise `*!*@%(host)s`.
     `%(chan)s`     | The channel in which the flooding occurred.
     `%(reason)s`   | A message describing why the user was targeted. Currently, this is always `Flooding detected.`
+
+* **`tools/test_flood.py`** - a console program which reads from standard input an [irssi](https://irssi.org)-formatted IRC log and simulates the behaviour of the `flood` module on messages from the log. The *score* of each message, which is a measure of how close it is being considered part of a flood, is shown next to each message, and any message whose score exceeds the threshold is separated from its score by an exclamation mark and highlighted in red. This is useful for tuning the parameters in [`flood.py`](page/flood.py) to eliminate false positives and false negatives.
 
 #### `invite`
 Causes the bot to join channels when invited, and indefinitely remembers `INVITE`d and `KICK`ed channels.
