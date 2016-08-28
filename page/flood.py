@@ -63,7 +63,7 @@ def punish(bot, id, chan):
         '*' if id.user.startswith('~') else id.user, id.host)
     commands = conf_chans[chan].punish_commands or [
         'MODE %(chan)s +b %(hostmask)s',
-        'KICK %(nick)s :%(reason)s']
+        'KICK %(chan)s %(nick)s :%(reason)s']
     for command in commands:
         bot.send_cmd(command % {
             'nick':     id.nick,
