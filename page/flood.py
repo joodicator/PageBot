@@ -34,7 +34,8 @@ chan_history = defaultdict(list)
 if os.path.exists(CONF_CHANS_FILE):
     conf_chans = {
         record.channel.lower(): record
-        for record in util.table(CONF_CHANS_FILE) }
+        for record in util.table(CONF_CHANS_FILE,
+        globals={'DEFAULT':None}) }
 else:
     conf_chans = {}
 
@@ -60,14 +61,17 @@ def h_message(bot, id, chan, text):
 def punish(bot, id, chan):
     hostmask = '*!%s@%s' % (
         '*' if id.user.startswith('~') else id.user, id.host)
-    bot.send_cmd(conf_chans[chan].punish_command % {
-        'nick':     id.nick,
-        'user':     id.user,
-        'host':     id.host,
-        'hostmask': hostmask,
-        'chan':     chan,
-        'reason':   'Flooding detected.',
-    })
+    commands = conf_chans[chan].punish_commands or [
+        'MODE %(chan)s +b %(hostmask)s',
+        'KICK %(nick)s :%(reason)s']
+    for command in commands:
+        bot.send_cmd(command % {
+            'nick':     id.nick,
+            'user':     id.user,
+            'host':     id.host,
+            'hostmask': hostmask,
+            'chan':     chan,
+            'reason':   'Flooding detected.'})
 
 def handle_msg(msg, chan):
     chan = chan.lower()
