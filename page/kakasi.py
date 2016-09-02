@@ -14,10 +14,14 @@ link, install, uninstall = util.LinkSet().triple()
 @link('MESSAGE')
 @not_quiet()
 def h_message(bot, id, target, msg):
-    if kakasi_lib.is_ja(msg):
-        if limit.mark_activity(bot, id):
-            return
-        kakasi(bot, id, target, msg, target is not None)
+    if not kakasi_lib.is_ja(msg) or limit.mark_activity(bot, id): return
+    kakasi(bot, id, target or id.nick, msg, target is not None)
+
+@link('PROXY_MSG')
+@not_quiet()
+def h_proxy_message(bot, id, target, msg, no_kakasi=False, **kwds):
+    if no_kakasi or not kakasi_lib.is_ja(msg): return
+    kakasi(bot, id, target, msg, target.startswith('#'), **kwds)
 
 #===============================================================================
 @link('HELP')
@@ -37,10 +41,15 @@ def h_help_romaji(bot, reply, args):
 @link('!romaji')
 @link('!rj')
 def h_romaji(bot, id, target, args, full_msg):
-    kakasi(bot, id, target, args, prefix=target is not None)
+    kakasi(bot, id, target or id.nick, args, target is not None)
 
 #===============================================================================
-def kakasi(bot, id, target, msg, prefix=True):
-    reply = kakasi_lib.kakasi(msg)
-    if prefix: reply = '<%s> %s' % (id.nick, reply)
-    message.reply(bot, id, target, reply, prefix=False)
+def kakasi(bot, id, target, msg, prefix=True, **kwds):
+    raw_reply = kakasi_lib.kakasi(msg)
+    if id is None:
+        reply = raw_reply
+    else:
+        reply = '<%s> %s' % (id.nick, raw_reply) if prefix else raw_reply
+    bot.send_msg(target, reply)
+    bot.drive('PROXY_MSG', bot, id, target, raw_reply,
+        **dict(kwds, no_kakasi=True))

@@ -74,9 +74,21 @@ def h_url(bot, id, target, args, full_msg, reply):
         try:
             result = get_title_proxy(url)
             reply(result['title'])
-            if target and result['proxy_msg'] is not None:
-                yield sign('PROXY_MSG', bot, None, target,
-                    result['proxy_msg'], full_msg=result['proxy_msg_full'])
+
+            # Generate a URL-suppressed proxy message for the basic component.
+            btitle = result['title_bare']
+            if isinstance(btitle, unicode): btitle = btitle.encode('utf-8')
+            yield sign('PROXY_MSG', bot, None, target or id.nick, btitle,
+                       no_url=True)
+
+            if result.get('proxy'):
+                # Generate a quiet proxy message for the parenthetical component.
+                pmsg, fmsg = result['proxy'], result['proxy_full']
+                if isinstance(pmsg, unicode): pmsg = pmsg.encode('utf-8')
+                if isinstance(fmsg, unicode): fmsg = fmsg.encode('utf-8')
+                yield sign('PROXY_MSG', bot, None, target or id.nick, pmsg,
+                           full_msg=fmsg, quiet=True)
+
             yield runtime.sleep(0.01)
         except Exception as e:
             traceback.print_exc()
@@ -95,6 +107,7 @@ def get_title(url):
 
 # Returns a dictionary containing the following keys:
 #   'title':          An IRC string describing the URL, including its title.
+#   'title_bare':     'title' without any parenthetical information.
 #   'proxy_msg':      The part of 'title' considered to be a proxy message.
 #   'proxy_msg_full': The unabbreviated version of 'proxy_msg'.
 def get_title_proxy(url):
@@ -123,7 +136,6 @@ def get_title_proxy(url):
 
     title = parts.get('title', 'Title: (none)')
     extra = parts.get('info', ctype)
-    extra_full = parts.get('info_full', extra)
     final_url = parts.get('url', final_url)
     size = parts.get('size', size)
 
@@ -141,19 +153,21 @@ def get_title_proxy(url):
     if is_nsfw: url_info = '%s \2NSFW\2' % url_info
 
     return {
-        'title':          '%s [%s]' % (title, url_info),
-        'proxy_msg':      extra,
-        'proxy_msg_full': extra_full }
+        'title':      '%s [%s]' % (title, url_info),
+        'title_bare': title,
+        'proxy':      parts.get('proxy'),
+        'proxy_full': parts.get('proxy_full') }
 
 #-------------------------------------------------------------------------------
 # Given a URL and its MIME type (according to HTTP), and possibly also given a
 # file object containing a stream with the contents of the URL, returns a
 # dictionary containing some or all of the following keys:
-#   'title':     the main title of the URL.
-#   'info':      a string with supplementary information about the URL.
-#   'info_full': if 'info' has been abbreviated, the unabbreviated version.
-#   'url':       the (new) URL to which the original URL ultimately directs.
-#   'size':      the size in bytes of the resource given by the 'url' key.
+#   'title':      the main title of the URL.
+#   'info':       a string with supplementary information about the URL.
+#   'url':        the (new) URL to which the original URL ultimately directs.
+#   'size':       the size in bytes of the resource given by the 'url' key.
+#   'proxy':      the part of 'info' (if any) considered to be a proxy message.
+#   'proxy_full': the unabbreviated version (if any) of 'proxy'.
 def get_title_parts(url, type, stream=None):
     match = URL_PART_RE.match(url)
     path, query = decode_url_path(match.group('path'))
@@ -245,14 +259,11 @@ def get_title_youtube(url, type):
         duration = iso8601_period_human(duration)
 
         return {
-            'title':
-                'Title: %s' % format_title(title),
-            'info':
-                'Duration: %s; Channel: %s; Description: "%s"'
-                % (duration, channel, desc),
-            'info_full':
-                'Duration: %s; Channel: %s; Description: "%s"'
-                % (duration, channel, desc_full) }
+            'title':        'Title: %s' % format_title(title),
+            'info':         'Duration: %s; Channel: %s; Description: "%s"'
+                            % (duration, channel, desc),
+            'proxy':        'Description: "%s"' % desc,
+            'proxy_full':   'Description: "%s"' % desc_full}
     except Exception as e:
         traceback.print_exc(e)
 
@@ -338,7 +349,7 @@ def bytes_to_human_size(bytes):
     for (m,s) in (1,'B'),(2**10,'KiB'),(2**20,'MiB'),(2**30,'GiB'):
         units = bytes / m
         if units >= 1024: continue
-        return '%.1f %s' % (units, s)
+        return ('%.1f %s' if m>1 else '%d %s') % (units, s)
 
 #===============================================================================
 # Returns the "best guess" phrase that Google's reverse image search offers to

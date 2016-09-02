@@ -56,6 +56,8 @@ def format_quote(quote):
     quote = re.sub(r'[\r\n]+', '  ', quote)
     if len(quote) > MAX_QUOTE_LEN:
         quote = quote[:MAX_QUOTE_LEN-5] + '(...)'
+    if isinstance(quote, unicode):
+        quote = quote.encode('utf-8')
     return quote
 
 #===============================================================================
@@ -118,9 +120,11 @@ class Private(Configuration):
     
                 for qid, quote in sorted(quotes):
                     if qid > last_quote:
+                        fquote = format_quote(quote)
                         msg = '[QdbS] New quote #%d <%s>: "%s"' % (
-                            qid, self.remote_admin_url, format_quote(quote))
+                            qid, self.remote_admin_url, fquote)
                         bot.send_msg(nick, msg)
+                        yield sign('PROXY_MSG', bot, None, nick, fquote, quiet=True)
     
                 if quotes:
                     last_quote = max(
@@ -183,9 +187,11 @@ class Public(Configuration):
                      quotes[:MAX_REPORT-1]
             for qid, quote in sample:
                 quote_url = '%s?%s' % (self.remote_index_url, qid)
+                fquote = format_quote(quote)
                 msg = '%s: new quote added: %s "%s"' % (
-                    title, quote_url, format_quote(quote))
+                    title, quote_url, fquote)
                 bot.send_msg(self.channel, msg)
+                yield sign('PROXY_MSG', bot, None, self.channel, fquote, quiet=True)
 
             if len(quotes) > len(sample):
                 msg = '%s: ...and %d others. See: <%s>.' % (

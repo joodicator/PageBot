@@ -19,18 +19,6 @@ def h_xirclib_msg(event, bot, source, *args):
 @link('COMMAND',        action=False)
 @link('ACTION_COMMAND', action=True)
 def h_command(bot, id, target, event, body, full_msg, action):
-    if limit.mark_activity(bot, id, notify=target):
-        return
-    if action:
-        event = ('ACTION', event)
-    bot.activity = False
-    yield sign(event, bot, id, target, body, full_msg)
-    if bot.activity: return
-    yield sign('CMD_IGNORED', event, bot, id, target, body, full_msg)
-
-@link('COMMAND',        action=False)
-@link('ACTION_COMMAND', action=True)
-def h_command(bot, id, target, event, body, full_msg, action):
     no_echo = [False]
     event = ('SIMPLE', 'ACTION', event) if action else \
             ('SIMPLE',           event)
@@ -44,6 +32,17 @@ def h_command(bot, id, target, event, body, full_msg, action):
         cmsg = ('* %s %s' if action else '<%s> %s') % (id.nick, full_msg)
         yield sign('IRC', bot, target, cmsg)
         
+@link('COMMAND',        action=False)
+@link('ACTION_COMMAND', action=True)
+def h_command(bot, id, target, event, body, full_msg, action):
+    if limit.mark_activity(bot, id, notify=target):
+        return
+    if action:
+        event = ('ACTION', event)
+    bot.activity = False
+    yield sign(event, bot, id, target, body, full_msg)
+    if bot.activity: return
+    yield sign('CMD_IGNORED', event, bot, id, target, body, full_msg)
 
 @link('JOIN')
 def join(bot, id, chans, *args):

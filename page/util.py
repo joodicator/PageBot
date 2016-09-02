@@ -456,3 +456,62 @@ def recursive_encode(object, codec, done=None):
 
     done[id(object)] = result
     return result
+
+# The longest (contiguous) substring common to seq1 and seq2.
+# Computed in O(len(seq1)*len(seq2)) time and space.
+def longest_common_substr(seq1, seq2):
+    len1, len2 = len(seq1), len(seq2)
+    if len1 > len2:
+        seq1, seq2, len1, len2 = seq2, seq1, len2, len1
+    bend, blen = 0, 0
+    for d in xrange(len2-1):
+        cend, clen = 0, 0
+        for i in xrange(min(len1, len2-d)):
+            if seq1[i] == seq2[i+d]:
+                cend, clen = i+1, clen+1
+                if clen > blen:
+                    bend, blen = cend, clen
+            else:
+                clen = 0
+    return seq1[bend-blen:bend]
+
+# The longest common subsequence of s and t, as a list.
+def longest_common_subseq(s, t):
+    l = longest_common_subseq_len_matrix(s, t)
+    i, j, r = len(s), len(t), []
+    while l[i][j]:
+        if l[i][j] == l[i-1][j-1]:
+            i -= 1
+        elif l[i][j] == l[i][j-1]:
+            j -= 1
+        else:
+            i -= 1
+            j -= 1
+            r.insert(0, s[i])
+    return r
+
+# len(longest_common_subseq(s, t))
+def longest_common_subseq_len(s, t):
+    return longest_common_subseq_len_matrix(s, t)[-1][-1]
+
+# A list of lists l with the property:
+#   l[i][j] == longest_common_subseq_len(s[:i], t[:j])
+#   for all i in range(len(s)+1), j in range(len(t)+1)
+# computed using O(len(s)*len(t)) time and space.
+def longest_common_subseq_len_matrix(s, t):
+    m, n = len(s), len(t)
+    l = [[0 for j in xrange(n+1)] for i in xrange(m+1)]
+    for i in xrange(1, m+1):
+        for j in xrange(1, n+1):
+            if s[i-1] == t[j-1]:
+                l[i][j] = l[i-1][j-1] + 1
+            else:
+                l1 = l[i-1][j]
+                l2 = l[i][j-1]
+                l[i][j] = l1 if l1 > l2 else l2
+    return l
+
+lcsstr = longest_common_substr
+lcsseq = longest_common_subseq
+lcsseql = longest_common_subseq_len
+lcsseqm = longest_common_subseq_len_matrix

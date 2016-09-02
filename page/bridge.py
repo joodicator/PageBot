@@ -100,6 +100,7 @@ def h_bridge_names_err(bot, target, target_, source_name, error):
 def h_bridge(bot, target_chan, msg):
     if not target_chan.startswith('#'): return
     bot.send_msg(target_chan, msg, no_bridge=True)
+    if isinstance(msg, unicode): msg = msg.encode('utf-8')
     yield sign('PROXY_MSG', bot, None, target_chan, msg)
 
 @link(('BRIDGE', 'NAMES_REQ'))

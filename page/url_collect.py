@@ -32,20 +32,21 @@ def reload(prev):
 @link('MESSAGE', 'UNOTICE')
 def h_message(bot, id, target, message, *args):
     if not message: return
-    yield examine_message(bot, message, target, id)
+    yield examine_message(bot, id, target or id.nick, message)
 
 @link('PROXY_MSG')
-def h_proxy_msg(bot, id, chan, msg, full_msg=None, **kwds):
-    yield examine_message(bot, msg, chan, id, full_msg=full_msg)
+def h_proxy_msg(bot, id, target, msg, full_msg=None, no_url=False, **kwds):
+    if no_url: return
+    yield examine_message(bot, id, target, msg, full_msg=full_msg)
 
 @link('COMMAND')
 def h_command(bot, id, target, cmd, args, full_msg):
     if cmd in ('!url', '!title'): return
-    yield examine_message(bot, args, target, id)
+    yield examine_message(bot, id, target or id.nick, args)
 
 @util.msub(link, 'url_collect.examine_message')
-def examine_message(bot, message, channel, id=None, full_msg=None):
-    source = (channel or ('%s!%s@%s' % id)).lower()
+def examine_message(bot, id, source, message, full_msg=None):
+    if isinstance(source, tuple): source = '%s!%s@%s' % source
     urls = extract_urls(message, full_msg=full_msg)
     if not urls: return
 

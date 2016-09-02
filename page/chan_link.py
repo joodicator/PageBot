@@ -238,7 +238,8 @@ def h_message(*args, **kwds):
 def h_proxy_msg(bot, id, chan, msg, no_link=False, **kwds):
     if no_link or chan.lower() not in links: return
     for lchan in links[chan.lower()]:
-        yield sign('PROXY_MSG', bot, id, lchan, msg, no_link=True)
+        yield sign('PROXY_MSG', bot, id, lchan, msg,
+            **dict(kwds, no_link=True))
 
 @link('TOPIC')
 def h_topic(bot, source, chan, topic):
