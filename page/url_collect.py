@@ -47,13 +47,14 @@ def h_command(bot, id, target, cmd, args, full_msg):
 @util.msub(link, 'url_collect.examine_message')
 def examine_message(bot, id, source, message, full_msg=None):
     if isinstance(source, tuple): source = '%s!%s@%s' % source
+    source = source.lower()
     urls = extract_urls(message, full_msg=full_msg)
     if not urls: return
 
     history[source].append(urls)
     del history[source][:-HISTORY_SIZE]
 
-    yield sign('URL_COLLECT_URLS', bot, urls, channel, id, message)
+    yield sign('URL_COLLECT_URLS', bot, urls, source, id, message)
 
 def extract_urls(message, full_msg=None):
     urls = []
