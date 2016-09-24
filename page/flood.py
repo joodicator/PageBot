@@ -34,7 +34,8 @@ chan_history = defaultdict(list)
 if os.path.exists(CONF_CHANS_FILE):
     conf_chans = {
         record.channel.lower(): record
-        for record in util.table(CONF_CHANS_FILE) }
+        for record in util.table(CONF_CHANS_FILE,
+        globals={'DEFAULT':None}) }
 else:
     conf_chans = {}
 
@@ -60,14 +61,17 @@ def h_message(bot, id, chan, text):
 def punish(bot, id, chan):
     hostmask = '*!%s@%s' % (
         '*' if id.user.startswith('~') else id.user, id.host)
-    bot.send_cmd(conf_chans[chan].punish_command % {
-        'nick':     id.nick,
-        'user':     id.user,
-        'host':     id.host,
-        'hostmask': hostmask,
-        'chan':     chan,
-        'reason':   'Flooding detected.',
-    })
+    commands = conf_chans[chan].punish_commands or [
+        'MODE %(chan)s +b %(hostmask)s',
+        'KICK %(chan)s %(nick)s :%(reason)s']
+    for command in commands:
+        bot.send_cmd(command % {
+            'nick':     id.nick,
+            'user':     id.user,
+            'host':     id.host,
+            'hostmask': hostmask,
+            'chan':     chan,
+            'reason':   'Flooding detected.'})
 
 def handle_msg(msg, chan):
     chan = chan.lower()
@@ -124,22 +128,6 @@ def same_user(id1, id2):
 WORD_RE = re.compile(r'(\w+)', re.U)
 def similarity(str1, str2, min_eff_len):
     str1w, str2w = WORD_RE.split(str1), WORD_RE.split(str2)
-    lcs_len = sum(len(w) for w in longest_common_substring(str1w, str2w))
+    lcs_len = sum(len(w) for w in util.longest_common_substr(str1w, str2w))
     ratio = float(lcs_len+1)/(max(len(str1), len(str2), min_eff_len) + 1)
     return ratio
-
-def longest_common_substring(str1, str2):
-    len1, len2 = len(str1), len(str2)
-    if len1 > len2:
-        str1, str2, len1, len2 = str2, str1, len2, len1
-    bend, blen = 0, 0
-    for d in xrange(len2-1):
-        cend, clen = 0, 0
-        for i in xrange(min(len1, len2-d)):
-            if str1[i] == str2[i+d]:
-                cend, clen = i+1, clen+1
-                if clen > blen:
-                    bend, blen = cend, clen
-            else:
-                clen = 0
-    return str1[bend-blen:bend]

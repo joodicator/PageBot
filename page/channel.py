@@ -400,11 +400,12 @@ def quiet_channels():
 def not_quiet(chan_arg='target'):
     def not_quiet_deco(func):
         def not_quiet_func(*args, **kwds):
-            chan = inspect.getcallargs(func, *args, **kwds)[chan_arg]
+            cargs = inspect.getcallargs(func, *args, **kwds)
+            chan = cargs[chan_arg]
             modes = cmode_channels.get(chan)
-            if modes and 'm' in modes:
-                return
-            if type(chan) is not str or chan.lower() not in quiet_channels():
-                return func(*args, **kwds)
+            if modes and 'm' in modes: return
+            if type(chan) is str and chan.lower() in quiet_channels(): return
+            if kwds.get('quiet', False): return
+            return func(*args, **kwds)
         return not_quiet_func
     return not_quiet_deco

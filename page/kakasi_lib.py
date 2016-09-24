@@ -1,7 +1,10 @@
 # coding=utf8
 
+import string
 import ctypes
 import re
+
+import util
 
 libkakasi = None
 KAKASI_CODEC = 'sjis'
@@ -40,16 +43,16 @@ def pre_kakasi_unicode(text):
 def post_kakasi_unicode(text):
     return text
 
-def is_ja(text, threshold=0.5):
+def is_ja(text, threshold=0.3):
     return ja_quotient(text) > threshold
 
 def ja_quotient(text):
-    if type(text) is not unicode: text = text.decode('utf8')
-    def char_is_ja(c):
-        k = kakasi_unicode(c)
-        return k and k != c
-    ja_len = len(filter(char_is_ja, text))
-    return float(5*ja_len)/(4*len(text)+ja_len)
+    if len(text) == 0: return 0
+    if type(text) is not unicode: text = text.decode('utf-8')
+    jtext = kakasi_unicode(text)
+    splen = len(re.sub(r'[^\s\x00-\x1f]', '', text))
+    njlen = util.longest_common_subseq_len(text, jtext)
+    return float(len(text) - njlen - splen)/(len(text) - splen)
 
 def backslash_escape(str):
     return re.sub(r'\\', r'\\\\', str)

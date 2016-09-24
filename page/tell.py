@@ -25,7 +25,7 @@ import datetime
 import time
 import re
 
-import untwisted.magic
+from untwisted.magic import sign
 
 from message import reply
 from util import multi, wc_to_re
@@ -269,7 +269,7 @@ def h_tell(bot, id, target, args, full_msg):
                 return
 
     put_state(state)
-    yield untwisted.magic.sign('TELL_SENT', bot, id, target, sent_msgs)
+    yield sign('TELL_SENT', bot, id, target, sent_msgs)
 
 @link('TELL_SENT')
 def h_tell_sent(bot, id, target, sent_msgs, reply_msg=None):
@@ -703,6 +703,10 @@ def deliver_msg(bot, id, chan, msg, tag=''):
 
     bot.drive('TELL_DELIVERY', bot, msg.from_id, id, chan, msg.message)
     return True
+
+@link('TELL_DELIVERY')
+def h_tell_delivery(bot, from_id, to_id, chan, msg):
+    yield sign('PROXY_MSG', bot, from_id, chan, msg)
 
 #==============================================================================#
 # Returns True if `msg' would be delivered at this time to `id' in `chan',

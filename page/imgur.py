@@ -1,4 +1,4 @@
-#===============================================================================
+7#===============================================================================
 # imgur.py - provides access to imgur's API.
 # Requires a client ID for for the API to be entered into CLIENT_ID_FILE.
 
@@ -37,7 +37,10 @@ def api_result(*args, **kwds):
     return res['data']
 
 def image_info(id):
-    return api_result('/image/'+id)
+    return api_result('/image/%s' % id)
+
+def album_info(id):
+    return api_result('/album/%s' % id)
 
 def upload_url(img_url):
     data = urllib.urlencode({'image':img_url})
