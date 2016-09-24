@@ -16,6 +16,7 @@ import util
 import auth
 
 STATE_FILE = 'state/dominions.json'
+BS4_PARSER = 'html5lib'
 UPDATE_PERIOD_S = 15
 TICK_PERIOD_S = 15
 
@@ -142,7 +143,7 @@ class Report(Core):
         try:
             stream = urllib2.urlopen(url)
             encoding = stream.info().getparam('charset')
-            soup = BeautifulSoup(stream, from_encoding=encoding)
+            soup = BeautifulSoup(stream, BS4_PARSER, from_encoding=encoding)
             self.load_soup(soup)
         except urllib2.URLError as e:
             e.exc_info = sys.exc_info()

@@ -16,6 +16,7 @@ import runtime
 import identity
 
 STATE_FILE = 'state/qdbs.json'
+BS4_PARSER = 'html5lib'
 MAX_REPORT = 4
 MAX_QUOTE_LEN = 300
 TICK_PERIOD_S = 60
@@ -164,7 +165,7 @@ class Private(Configuration):
             'Cookie': 'qdb_username=%s; qdb_password=%s' % (
                 self.qdb_username, self.qdb_password)}))
         encoding = stream.info().getparam('charset')
-        return BeautifulSoup(stream, from_encoding=encoding)
+        return BeautifulSoup(stream, BS4_PARSER, from_encoding=encoding)
 
 Private.class_init()
 
@@ -233,6 +234,6 @@ class Public(Configuration):
     def soup(self):
         stream = urllib2.urlopen(self.index_url)
         encoding = stream.info().getparam('charset')
-        return BeautifulSoup(stream, from_encoding=encoding)
+        return BeautifulSoup(stream, BS4_PARSER, from_encoding=encoding)
 
 Public.class_init()
