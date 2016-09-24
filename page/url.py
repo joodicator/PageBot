@@ -154,6 +154,8 @@ def get_title_proxy(url):
         url_info[:0] = [bytes_to_human_size(size)]
    
     url_info = '; '.join(url_info)
+
+    is_nsfw |= parts.get('nsfw', False)
     if is_nsfw: url_info = '%s \2NSFW\2' % url_info
 
     return {
@@ -252,12 +254,19 @@ def get_title_youtube(url, type):
         duration = result['contentDetails']['duration']
         duration = iso8601_period_human(duration)
 
-        return {
+        url_info = {
             'title':        'Title: %s' % format_title(title),
             'info':         'Duration: %s; Channel: %s; Description: "%s"'
                             % (duration, channel, desc),
             'proxy':        'Description: "%s"' % desc,
             'proxy_full':   'Description: "%s"' % desc_full}
+
+        rating = result['contentDetails'].get('contentRating')
+        if rating and rating.get('ytRating') == 'ytAgeRestricted':
+            url_info['nsfw'] = True
+
+        return url_info
+
     except Exception as e:
         traceback.print_exc(e)
 
