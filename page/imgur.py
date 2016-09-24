@@ -42,6 +42,15 @@ def image_info(id):
 def album_info(id):
     return api_result('/album/%s' % id)
 
+def gallery_info(id):
+    return api_result('/gallery/%s' % id)
+
+def gallery_image_info(id):
+    return api_result('/gallery/image/%s' % id)
+
+def gallery_album_info(id):
+    return api_result('/gallery/album/%s' % id)
+
 def upload_url(img_url):
     data = urllib.urlencode({'image':img_url})
     return api_result('/image', data=data)

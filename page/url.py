@@ -14,15 +14,14 @@ import ssl
 import re
 
 from bs4 import BeautifulSoup
-
 from untwisted.magic import sign
 
 from util import multi
-import util
-import runtime
-
 from url_collect import URL_PART_RE
 import url_collect
+import runtime
+import util
+import imgur
 
 #==============================================================================#
 link, install, uninstall = util.LinkSet().triple()
@@ -32,6 +31,8 @@ ACCEPT_ENCODING = 'gzip, deflate'
 TIMEOUT_SECONDS = 20
 READ_BYTES_MAX = 1024*1024
 CMDS_PER_LINE_MAX = 6
+GIBG_CACHE_SIZE = 128
+BS4_PARSER = 'html5lib'
 
 MAX_AURL = 35
 MAX_DESC_LEN = 100
@@ -145,10 +146,13 @@ def get_title_proxy(url):
             abbrev_url_middle(final_url))]
     else:
         url_info[:0] = [abbrev_url(url)]
+
+    if extra:
+        url_info[:0] = [extra]
+
     if size:
         url_info[:0] = [bytes_to_human_size(size)]
-    if extra: url_info[:0] = [extra]
-    
+   
     url_info = '; '.join(url_info)
     if is_nsfw: url_info = '%s \2NSFW\2' % url_info
 
@@ -177,7 +181,7 @@ def get_title_parts(url, type, stream=None):
         res = get_title_youtube(url, type)
         if res: return res
     # imgur
-    if re.search(r'(^|\.)imgur\.com$', match.group('host')):
+    if re.match(r'(www\.|i\.)?imgur\.com$', match.group('host')):
         res = get_title_imgur(url, type, stream)
         if res: return res
     # HTML
@@ -217,7 +221,7 @@ def get_title_html(url, type, stream=None):
             raise PageURLError(
                 'Unsupported content-encoding: "%s"' % content_enc)
 
-    soup = BeautifulSoup(data, from_encoding=charset)
+    soup = BeautifulSoup(data, BS4_PARSER, from_encoding=charset)
     title = soup.find('title')
     if title:
         title = 'Title: %s' % format_title(title.text.strip())
@@ -262,73 +266,78 @@ def get_title_imgur(url, type, stream=None):
     match = URL_PART_RE.match(url)
     path, query = decode_url_path(match.group('path'))
     path_match = re.match(
-        r'(/a|/gallery|/r/[^/]+)?/(?P<id>[a-zA-Z0-9]+)(\.[a-zA-Z]+)?$', path)
-    id = path_match.group('id')
-    return get_title_imgur_image(url, path, id, type, stream) \
-        or get_title_imgur_album(url, path, id, type, stream)
-
-def get_title_imgur_image(url, path, image_id, type, stream=None):
+        r'(?P<section>(/a|/gallery|/r/[^/]+)?)/'
+        r'(?P<id>[a-zA-Z0-9]+)(\.[a-zA-Z0-9]+)?$', path)
+    if not path_match: return
+    section, id = path_match.group('section', 'id')
+   
     try:
-        import imgur
-        info = imgur.image_info(image_id)
-        img_url, img_type = info['link'], info['type']
-    except:
-        traceback.print_exc()
+        if section == '/a':
+            imgur_info = imgur.album_info(id)
+        elif section == '/gallery' or section.startswith('/r/'):
+            imgur_info = imgur.gallery_info(id)
+        else:
+            imgur_info = imgur.image_info(id)
+    except (imgur.ImgurError, urllib2.HTTPError):
         return
 
-    if img_url.endswith('.gifv'):
-        img_url = re.sub(r'\.gifv$', '.gif', img_url)
-        img_type = 'image/gif'
-    
-    title = get_title_image(img_url, img_type)['title']
-    if info and info.get('title') and not URL_PART_RE.match(info['title']):
-        title = 'Title: %s -- %s' % (format_title(info['title']), title)
+    url_info = {}
+    if imgur_info.get('title') and not URL_PART_RE.match(imgur_info['title']):
+        url_info['title'] = 'Title: %s' % format_title(imgur_info.get('title'))
 
-    if info and info.get('size'):
-        size = info['size']
+    if 'images' not in imgur_info:
+        add_imgur_image_info(imgur_info, url_info, path, type)
+    elif len(imgur_info['images']) == 1:
+        imgur_image_info = imgur_info['images'][0]
+        url_info = add_imgur_image_info(imgur_image_info, url_info, path, type)
     else:
-        size = None
-    if info and info.get('gifv') and not path.endswith('.gif'):
-        img_url = info['gifv']
-        img_type = None
-        size = None
-    if decode_url_path(URL_PART_RE.match(img_url).group('path'))[0] == path:
-        img_url = url
+        url_info['info'] = '%d images' % len(imgur_info['images'])
+        url_info['size'] = None
 
-    return add_imgur_info(info, {
-        'title': title, 'info': img_type, 'url': img_url, 'size': size,})
+    url_info = add_imgur_general_info(imgur_info, url_info)
+    return url_info
 
-def get_title_imgur_album(url, path, album_id, type, stream=None):
-    try:
-        import imgur
-        info = imgur.album_info(album_id)
-    except:
-        traceback.print_exc()
-        return
+def add_imgur_image_info(imgur_info, url_info, path, orig_type):
+    img_url = imgur_info['link']
+    img_type = imgur_info['type']
+    type = img_type if orig_type == 'text/html' else orig_type
 
+    title = get_title_image(img_url, img_type)['title']
+    if url_info.get('title'):
+        title = url_info['title'] + ' -- ' + title
 
+    if type not in ('image/gif', 'video/mp4') and imgur_info.get('gifv'):
+        img_url = imgur_info['gifv']
+        type, url_info['size'] = None, None
 
-    return add_imgur_info(info, {
-        ''
-    })
+    if orig_type == 'text/html' and not path.endswith('.gifv') \
+    and decode_url_path(URL_PART_RE.match(img_url).group('path'))[0] != path:
+        url_info['url'] = img_url
 
-def add_imgur_info(imgur_info, url_info):
-    if info.get('account_url'):
-        url_info['info'] += '; Account: %s' % info['account_url']
+    url_info['info'] = type
+    url_info['title'] = title
+    return url_info
 
-    if info.get('description'):
-        desc_full = info['description']
+def add_imgur_general_info(imgur_info, url_info):
+    info_parts = [url_info['info']] if url_info.get('info') else []
+
+    if imgur_info.get('account_url'):
+        info_parts.append('Account: %s' % imgur_info['account_url'])
+
+    if imgur_info.get('description'):
+        desc_full = imgur_info['description']
         desc = format_description(desc_full)
         url_info['proxy'] = 'Description: "%s"' % desc
         url_info['proxy_full'] = 'Description: "%s"' % desc_full
-        url_info['info'] += '; ' + url_info['proxy']
+        info_parts.append(url_info['proxy'])
 
-    if info.get('section'):
-        url_info['info'] += '; Section: %s' % info['section']
+    if imgur_info.get('section'):
+        info_parts.append('Section: "%s"' % imgur_info['section'])
 
-    if info.get('nsfw') is not None:
-        url_info['nsfw'] = info['nsfw']
+    if imgur_info.get('nsfw') is not None:
+        url_info['nsfw'] = imgur_info['nsfw']
 
+    url_info['info'] = '; '.join(info_parts) if info_parts else None
     return url_info    
 
 #-------------------------------------------------------------------------------
@@ -371,11 +380,20 @@ def bytes_to_human_size(bytes):
 #===============================================================================
 # Returns the "best guess" phrase that Google's reverse image search offers to
 # describe the image at the given URL, or None if no such phrase is offered.
+gibg_cache = dict()
 def google_image_best_guess(url):
+    if url in gibg_cache:
+        return gibg_cache[url]
+
     PHRASE = 'Best guess for this image:'
     soup = google_image_title_soup(url)
     node = soup.find(text=re.compile(re.escape(PHRASE)))
-    return node and node.parent.text.replace(PHRASE, '').strip()
+
+    result = node and node.parent.text.replace(PHRASE, '').strip()
+    gibg_cache[url] = result
+    while len(gibg_cache) > GIBG_CACHE_SIZE:
+        gibg_cache.popitem()
+    return result
 
 def google_image_title_soup(url):
     request = urllib2.Request('https://www.google.com/searchbyimage?'
@@ -385,7 +403,7 @@ def google_image_title_soup(url):
     with closing(urllib2.urlopen(request,
     timeout=TIMEOUT_SECONDS, context=ssl_context)) as stream:
         text = stream.read(READ_BYTES_MAX)
-        return BeautifulSoup(text)
+        return BeautifulSoup(text, BS4_PARSER)
 
 #==============================================================================#
 # True if the given hostname or IPV4 or IPV6 address string is not in any
