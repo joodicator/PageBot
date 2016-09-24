@@ -34,7 +34,7 @@ READ_BYTES_MAX = 1024*1024
 CMDS_PER_LINE_MAX = 6
 
 MAX_AURL = 35
-MAX_YT_DESC = 100
+MAX_DESC_LEN = 100
 
 ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
 
@@ -168,6 +168,7 @@ def get_title_proxy(url):
 #   'size':       the size in bytes of the resource given by the 'url' key.
 #   'proxy':      the part of 'info' (if any) considered to be a proxy message.
 #   'proxy_full': the unabbreviated version (if any) of 'proxy'.
+#   'nsfw':       True to indicate that the content is "not safe for work".
 def get_title_parts(url, type, stream=None):
     match = URL_PART_RE.match(url)
     path, query = decode_url_path(match.group('path'))
@@ -240,22 +241,11 @@ def get_title_youtube(url, type):
             part='snippet,contentDetails').execute()['items'][0]
 
         title = result['snippet']['title']
-        desc = result['snippet']['description']
+        desc_full = result['snippet']['description']
+        desc = format_description(desc_full)
         channel = result['snippet']['channelId']
         channel = result['snippet'].get('channelTitle', channel)
         duration = result['contentDetails']['duration']
-
-        desc_full = desc
-        desc = re.sub(r'\r\n|\r|\n', ' ', desc)
-        desc = '%s' % desc[:MAX_YT_DESC]
-        full_urls = url_collect.extract_urls(desc_full)
-        for desc_url in url_collect.extract_urls(desc):
-            if (desc_url not in full_urls and desc.endswith(desc_url)
-            and not ABBREV_URL_RE.match(desc_url).group('path')):
-                desc = desc[:-len(desc_url)]
-                break
-        desc = desc + '...' if len(desc) < len(desc_full) else desc
-        
         duration = iso8601_period_human(duration)
 
         return {
@@ -270,19 +260,21 @@ def get_title_youtube(url, type):
 #-------------------------------------------------------------------------------
 def get_title_imgur(url, type, stream=None):
     match = URL_PART_RE.match(url)
-    if match.group('host') not in ('imgur.com', 'i.imgur.com'): return
     path, query = decode_url_path(match.group('path'))
     path_match = re.match(
-        r'(/gallery|/r/[^/]+)?/(?P<id>[a-zA-Z0-9]+)(\.[a-zA-Z]+)?$', path)
+        r'(/a|/gallery|/r/[^/]+)?/(?P<id>[a-zA-Z0-9]+)(\.[a-zA-Z]+)?$', path)
+    id = path_match.group('id')
+    return get_title_imgur_image(url, path, id, type, stream) \
+        or get_title_imgur_album(url, path, id, type, stream)
 
+def get_title_imgur_image(url, path, image_id, type, stream=None):
     try:
         import imgur
-        info = imgur.image_info(path_match.group('id'))
+        info = imgur.image_info(image_id)
         img_url, img_type = info['link'], info['type']
     except:
         traceback.print_exc()
-        info = None
-        img_url, img_type = url, type
+        return
 
     if img_url.endswith('.gifv'):
         img_url = re.sub(r'\.gifv$', '.gif', img_url)
@@ -291,28 +283,53 @@ def get_title_imgur(url, type, stream=None):
     title = get_title_image(img_url, img_type)['title']
     if info and info.get('title') and not URL_PART_RE.match(info['title']):
         title = 'Title: %s -- %s' % (format_title(info['title']), title)
-    elif 'html' in type:
-        html_title = getattr(get_title_html(url, type, stream), 'title', None)
-        if (html_title and not URL_PART_RE.match(html_title)
-        and html_title != 'Title: \2Imgur: The most awesome images on the Internet\2'
-        and html_title != 'Title: \2Imgur\2'):
-            html_title = re.sub(r'^\002(.*) - Imgur\002$', r'\1', html_title)
-            title = '%s -- %s' % (html_title, title)
 
     if info and info.get('size'):
         size = info['size']
     else:
         size = None
-
     if info and info.get('gifv') and not path.endswith('.gif'):
         img_url = info['gifv']
         img_type = None
         size = None
-
     if decode_url_path(URL_PART_RE.match(img_url).group('path'))[0] == path:
         img_url = url
 
-    return {'title':title, 'info':img_type, 'url':img_url, 'size':size}
+    return add_imgur_info(info, {
+        'title': title, 'info': img_type, 'url': img_url, 'size': size,})
+
+def get_title_imgur_album(url, path, album_id, type, stream=None):
+    try:
+        import imgur
+        info = imgur.album_info(album_id)
+    except:
+        traceback.print_exc()
+        return
+
+
+
+    return add_imgur_info(info, {
+        ''
+    })
+
+def add_imgur_info(imgur_info, url_info):
+    if info.get('account_url'):
+        url_info['info'] += '; Account: %s' % info['account_url']
+
+    if info.get('description'):
+        desc_full = info['description']
+        desc = format_description(desc_full)
+        url_info['proxy'] = 'Description: "%s"' % desc
+        url_info['proxy_full'] = 'Description: "%s"' % desc_full
+        url_info['info'] += '; ' + url_info['proxy']
+
+    if info.get('section'):
+        url_info['info'] += '; Section: %s' % info['section']
+
+    if info.get('nsfw') is not None:
+        url_info['nsfw'] = info['nsfw']
+
+    return url_info    
 
 #-------------------------------------------------------------------------------
 ABBREV_URL_RE = re.compile(
@@ -510,3 +527,15 @@ def iso8601_period_human(spec):
         '%d month%s, ' % (mon, 's' if mon>1 else '') if mon else '',
         '%d day%s, '   % (day, 's' if day>1 else '') if day else '',
         '%02d:' % hou if hou else '', '%02d:%02d' % (min, sec)))
+
+def format_description(desc_full):
+    desc = re.sub(r'\r\n|\r|\n', ' ', desc_full)
+    desc = '%s' % desc[:MAX_DESC_LEN]
+    full_urls = url_collect.extract_urls(desc_full)
+    for desc_url in url_collect.extract_urls(desc):
+        if (desc_url not in full_urls and desc.endswith(desc_url)
+        and not ABBREV_URL_RE.match(desc_url).group('path')):
+            desc = desc[:-len(desc_url)]
+            break
+    desc = desc + '...' if len(desc) < len(desc_full) else desc
+    return desc
