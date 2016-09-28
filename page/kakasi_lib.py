@@ -1,7 +1,7 @@
 # coding=utf8
 
+from ctypes import *
 import string
-import ctypes
 import re
 
 import util
@@ -12,9 +12,18 @@ KAKASI_CODEC = 'sjis'
 def init_kakasi(*args):
     global libkakasi
     args = ('kakasi',) + tuple(args) + ('-i'+KAKASI_CODEC, '-o'+KAKASI_CODEC)
-    libkakasi = ctypes.CDLL('libkakasi.so')
-    libkakasi.kakasi_do.restype = ctypes.c_void_p
-    libkakasi.kakasi_getopt_argv(len(args), (ctypes.c_char_p * len(args))(*args))
+    libkakasi = CDLL('libkakasi.so.2')
+
+    libkakasi.kakasi_getopt_argv.restype = c_int
+    libkakasi.kakasi_getopt_argv.argtypes = c_int, POINTER(c_char_p)
+
+    libkakasi.kakasi_do.restype = POINTER(c_char)
+    libkakasi.kakasi_do.argtypes = c_char_p,
+
+    libkakasi.kakasi_free.restype = c_int
+    libkakasi.kakasi_free.argtypes = c_char_p,
+
+    libkakasi.kakasi_getopt_argv(len(args), (c_char_p * len(args))(*args))
 
 init_kakasi('-Ka', '-Ha', '-Ja', '-s', '-p', '-rhepburn')
 
@@ -31,8 +40,8 @@ def kakasi_unicode(text):
     text = pre_kakasi_unicode(text)
     text = backslash_escape(text).encode(KAKASI_CODEC, 'backslashreplace')
     res_ptr = libkakasi.kakasi_do(text)
-    res = ctypes.string_at(res_ptr).decode(KAKASI_CODEC)
-    if res: libkakasi.kakasi_free(res_ptr)
+    res = string_at(res_ptr).decode(KAKASI_CODEC)
+    libkakasi.kakasi_free(res_ptr)
     res = backslash_unescape(res)
     res = post_kakasi_unicode(res)
     return res
