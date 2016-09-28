@@ -315,7 +315,8 @@ def add_imgur_image_info(imgur_info, url_info, path, orig_type):
     if url_info.get('title'):
         title = url_info['title'] + ' -- ' + title
 
-    if type not in ('image/gif', 'video/mp4') and imgur_info.get('gifv'):
+    if orig_type not in ('image/gif', 'video/mp4') \
+    and imgur_info.get('gifv'):
         img_url = imgur_info['gifv']
         type, url_info['size'] = None, None
 
@@ -390,8 +391,8 @@ def bytes_to_human_size(bytes):
 # Returns the "best guess" phrase that Google's reverse image search offers to
 # describe the image at the given URL, or None if no such phrase is offered.
 gibg_cache = dict()
-def google_image_best_guess(url):
-    if url in gibg_cache:
+def google_image_best_guess(url, use_cache=False):
+    if use_cache and url in gibg_cache:
         return gibg_cache[url]
 
     PHRASE = 'Best guess for this image:'
@@ -399,9 +400,10 @@ def google_image_best_guess(url):
     node = soup.find(text=re.compile(re.escape(PHRASE)))
 
     result = node and node.parent.text.replace(PHRASE, '').strip()
-    gibg_cache[url] = result
-    while len(gibg_cache) > GIBG_CACHE_SIZE:
-        gibg_cache.popitem()
+    if use_cache:
+        gibg_cache[url] = result
+        while len(gibg_cache) > GIBG_CACHE_SIZE:
+            gibg_cache.popitem()
     return result
 
 def google_image_title_soup(url):
