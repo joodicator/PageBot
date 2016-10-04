@@ -124,7 +124,7 @@ def h_roll(bot, name, target, args, reply, action):
             id = util.ID(name, '*', '*')
             yield sign('DICE_ROLLS', bot, id, target, rolls, msg)
         if action:
-            reply('* %s %s' % (name, msg), prefix=False)
+            reply(from_name=lambda name: '* %s %s' % (name, msg), prefix=False)
         else:
             reply(msg)
     except UserError as e:
