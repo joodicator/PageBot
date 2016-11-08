@@ -61,7 +61,7 @@ def ja_quotient(text):
     jtext = kakasi_unicode(text)
     splen = len(re.sub(r'[^\s\x00-\x1f]', '', text))
     njlen = util.longest_common_subseq_len(text, jtext)
-    return float(len(text) - njlen - splen)/(len(text) - splen)
+    return float(len(text) - njlen - splen)/max(15, len(text) - splen)
 
 def backslash_escape(str):
     return re.sub(r'\\', r'\\\\', str)
