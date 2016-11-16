@@ -217,7 +217,7 @@ def record_string(id_name, record, now=None, in_channel=False, plural=False):
         ) for (i, (et,er)) in izip(count(), events))
 
         if dup_id and 'id' in events[0][1]:
-            verbs = '(as %s!%s@%s) %s' % (events[0][1]['id'] + verbs)
+            verbs = '(as %s!%s@%s) %s' % (events[0][1]['id'] + (verbs,))
 
         if in_channel: return (
             '%s is in the channel, and %s last seen %s.'
