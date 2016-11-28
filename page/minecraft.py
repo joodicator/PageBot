@@ -2,11 +2,12 @@
 
 from __future__ import print_function
 
+from datetime import datetime
 import re
 import sys
 import socket
 import traceback
-from datetime import datetime
+import operator
 
 from untwisted.mode import Mode
 from untwisted.network import Work
@@ -25,7 +26,6 @@ from util import NotInstalled, AlreadyInstalled
 RECONNECT_DELAY_SECONDS = 1
 
 conf_servers = util.table('conf/minecraft.py', 'server', socket.__dict__)
-substitutions = util.read_list('conf/substitute.py')
 
 mc_work = []
 mc_mode = Mode()
@@ -128,11 +128,9 @@ def h_bridge_names_req(bot, target, source, name_query):
 
         (state, value) = yield query(work, 'players')
         if state == 'success':
-            for sub_name, find, repl in substitutions:
-                if sub_name.lower() != work.minecraft.name.lower(): continue
-                find = re.escape(find)
-                value = re.sub(r'\b%s\b' % find, repl, value)
-            bridge.notice(bot, target, 'NAMES_RES', source, name, value.split())
+            bridge.notice(
+                bot, target, 'NAMES_RES', source, name,
+                [sub_name(work, n) for n in value.split()])
         elif state == 'failure':
             bridge.notice(bot, target, 'NAMES_ERR', source, name, value)
 
@@ -161,40 +159,22 @@ def mc_found(work, line):
         msg = match.group('msg')
         name = match.group('sn') or match.group('mn') or match.group('an')
         event = 'ACTION' if match.group('an') else 'MESSAGE'
-        def reply(rmsg=None, from_name=None, prefix=True, no_bridge=False):
-            if from_name is None and rmsg is not None:
-                from_name = lambda name: rmsg
-            if prefix and from_name:
-                _from_name = from_name
-                from_name = lambda name: '%s: %s' % (name, _from_name(name))
-            if from_name:
-                work.dump('%s\n' % strip_codes(from_name(name)))
-            if agent and from_name and not no_bridge:
-                echo_lines.append('<%s> %s' % (
-                    agent, from_name(substitute(work, name))))
-            no_echo[0] = no_echo[0] or no_bridge
+        reply = bridge.substitute_reply(
+            context       = work.minecraft.name,
+            local_name    = name,
+            msg_local     = lambda m: work.dump(strip_codes(m) + '\n'),
+            msg_bridge    = lambda m: echo_lines.append('<%s> %s' % (agent, m)),
+            cancel_bridge = lambda: operator.setitem(no_echo, 0, True))
         ab_mode.drive(('BRIDGE', event), ab_mode,
             name, work.minecraft.name, msg, reply)
-    
     if not no_echo[0]:
-        for sub_name, find, repl in substitutions:
-            if sub_name.lower() != work.minecraft.name.lower(): continue
-            find = re.escape(find)
-            if re.match(r'[\[\*<]', line):
-                line = re.sub(r'<%s> ' % find, '<%s> ' % repl, line)
-                line = re.sub(r'\* %s ' % find, '* %s ' % repl, line)
-            else:
-                line = re.sub(r'\b%s\b' % find, repl, line)
-        echo(work, line)
-
+        echo_lines.insert(0, line)
     for line in echo_lines:
+        line = bridge.substitute_text(work.minecraft.name, line)
         echo(work, line)
 
-def substitute(work, name):
-    for sub_name, find, repl in substitutions:
-        if sub_name.lower() != work.minecraft.name.lower(): continue
-        if name == find: return repl
-    return name
+def sub_name(work, name):
+    return bridge.substitute_name(work.minecraft.name, name)
 
 def echo(work, line):
     ab_mode.drive('MINECRAFT', ab_mode,

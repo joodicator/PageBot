@@ -16,6 +16,7 @@ import socket
 import json
 import sys
 import re
+import operator
 
 #==============================================================================#
 RECONNECT_DELAY_SECONDS = 30
@@ -31,7 +32,6 @@ IGNORE_MESSAGES=(
     re.compile(r'\S+ the Travelling Merchant has (arrived|departed)!$'))
 
 servers = util.table('conf/terraria.py', 'server')
-substitutions = util.read_list('conf/substitute.py')
 
 te_mode = untwisted.mode.Mode()
 te_link = util.LinkSet()
@@ -168,9 +168,7 @@ def h_bridge_names_req(bot, target, source, query):
         return
 
     names = work.terraria_protocol.players.values()
-    for sub_name, find, repl in substitutions:
-        if sub_name.lower() != target.lower(): continue
-        names = [repl if n.lower() == find.lower() else n for n in names]
+    names = [bridge.substitute_name(target, n) for n in names]
     bridge.notice(bot, target, 'NAMES_RES', source, name, names)
 
 #==============================================================================#
@@ -179,6 +177,8 @@ def te_chat(work, slot, colour, text):
     no_echo = [False]
     echo_lines = []
     event_type = None
+    agent = work.terraria.user
+
     if slot == 255:
         match = re.match(r'((?P<sn>\[\S+\])|\*(?P<an>\S+))\s*(?P<m>.*)', text)
         if match:
@@ -191,43 +191,26 @@ def te_chat(work, slot, colour, text):
         event_text = text
 
     if event_type is not None:
-        def reply(rmsg=None, from_name=None, prefix=True, no_bridge=False):
-            if from_name is None and rmsg is not None:
-                from_name = lambda name: rmsg
-            if prefix and from_name:
-                _from_name = from_name
-                from_name = lambda name: '%s: %s' % (name, _from_name(name))
-            if from_name:
-                terraria_protocol.chat(work,
-                    '%s' % strip_codes(from_name(event_name)))
-            if from_name and not no_bridge:
-                echo_lines.append('<%s> %s' % (
-                    work.terraria.user, from_name(substitute(work, event_name))))
-            no_echo[0] = no_echo[0] or no_bridge
+        reply = bridge.substitute_reply(
+            context       = work.terraria.name,
+            local_name    = event_name,
+            msg_local     = lambda m: terraria_protocol.chat(work, strip_codes(m)),
+            msg_bridge    = lambda m: echo_lines.append('<%s> %s' % (agent, m)),
+            cancel_bridge = lambda: operator.setitem(no_echo, 0, True))
         yield util.msign(ab_mode, ('BRIDGE', event_type), ab_mode,
             event_name, work.terraria.name, event_text, reply)
-    
-    if not no_echo[0]:
-        if slot == 255:
-            if len(work.terraria_protocol.players) > 1 or not message_ignored(text):
-                if not text.startswith('[Server]'):
-                    for sub_name, find, repl in substitutions:
-                        if te_work.get(sub_name.lower()) != work: continue
-                        text = re.sub(r'\b%s\b' % re.escape(find), repl, text)
-                yield sign('TERRARIA', work, text)
-        elif slot != work.terraria_protocol.slot:
-            name = work.terraria_protocol.players.get(slot, slot)
-            name = substitute(work, name)
-            yield sign('TERRARIA', work, '<%s> %s' % (name, text))
+
+    if not no_echo[0] and slot != work.terraria_protocol.slot:
+        if slot != 255:
+            text = '<%s> %s' % (name, text)
+        echo_lines.insert(0, text)
 
     for line in echo_lines:
+        line = bridge.substitute_text(work.terraria.name, line)
         yield sign('TERRARIA', work, line)
 
-def substitute(work, name):
-    for sub_name, find, repl in substitutions:
-        if te_work.get(sub_name.lower()) != work: continue
-        if name.lower() == find.lower(): return repl
-    return name
+def sub_name(work, name):
+    return bridge.substitute_name(work.terraria.name, name)
 
 def strip_codes(msg):
     return re.sub(r'[\x00-\x1f]', '', msg)

@@ -1,4 +1,5 @@
 from datetime import datetime
+from itertools import *
 import re
 
 from untwisted.magic import sign
@@ -10,6 +11,7 @@ import message
 link, install, uninstall = util.LinkSet().triple()
 
 bridges = util.read_list('conf/bridge.py')
+substitutions = util.read_list('conf/substitute.py')
 
 
 @link('IRC')
@@ -186,3 +188,53 @@ def h_mode(bot, source, chan, *modes):
     if isinstance(source, tuple): source = source[0]
     cmsg = '%s set mode: %s' % (source, ' '.join(modes))
     yield sign('IRC', bot, chan, cmsg)
+
+
+#===============================================================================
+def substitute_reply(context, local_name, msg_local, msg_bridge, cancel_bridge):
+    def reply(rmsg=None, from_name=None, prefix=True, no_bridge=False):
+        if from_name is None and rmsg is not None:
+            from_name = lambda name: rmsg
+        if prefix:
+            _from_name = from_name
+            from_name = lambda name: '%s: %s' % (name, _from_name(name))
+        if from_name:
+            msg_local(from_name(local_name))
+        if from_name and not no_bridge:
+            msg_bridge(from_name(substitute_name(context, local_name)))
+        if no_bridge:
+            cancel_bridge()
+    return reply
+
+# Apply any appropriate substitutions to the r'\b'-separated words in `text'.
+def substitute_text(context, text):
+    context = context.lower()
+    for r_context, find, repl in substitutions:
+        if r_context.lower() == context:
+            text = re.sub(
+                r'\b(%s)\b' % re.escape(find),
+                lambda match: _substitute_name(match.group(), find, repl),
+                text, flags=re.I)
+    return text
+
+# Apply any appropriate substitutions that wholly match `name'.
+def substitute_name(context, name):
+    context = context.lower()
+    for r_context, find, repl in substitutions:
+        if r_context.lower() == context and find.lower() == name.lower():
+            text = _substitute_name(name, find, repl)
+    return text
+
+# Apply to `repl' any changes in capitalisation from `find' to `name'.
+def _substitute_name(name, find, repl):
+    def iter():
+        identity = lambda x: x
+        trans = identity
+        for name_chr, find_chr, repl_chr in izip(name, find, repl):
+            trans = str.lower if find_chr.isupper() and name_chr.islower() else \
+                    str.upper if find_chr.islower() and name_chr.isupper() else \
+                    identity
+            yield trans(repl_chr)
+        yield trans(repl[min(len(find), len(name)):])
+    return ''.join(iter())
+
