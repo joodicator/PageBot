@@ -69,16 +69,20 @@ def event_sub(mode, find, repl):
 # Reads a list of namedtuples from a file, where each line evalutes to a tuple,
 # and the first line is a tuple of strings giving the names. Lines containing
 # only whitespace or starting with '#' are ignored. The given global and local
-# dictionaries are passed to eval().
-def table(path, name='table_row', globals=None, locals=None):
+# dictionaries are passed to eval(). If default=True is given, an empty list is
+# returned when the file does not exist; otherwise an IOError is raised.
+def table(path, name='table_row', globals=None, locals=None, default=False):
+    if default and not os.path.exists(path): return []
     lines = read_list(path, globals, locals)
     head = namedtuple(name, lines[0])
     return map(lambda t: head(*t), lines[1:])
 
 # Read a list of values from the given file, which must contain one Python
-# expression on each non-empty line not starting with '#'.
-# The given dictionaries are passed to eval().
-def read_list(path, globals=None, locals=None):
+# expression on each non-empty line not starting with '#'. The given
+# dictionaries are passed to eval(). If default=True is given, an empty list is
+# returned when the file does not exist; otherwise an IOError is raised.
+def read_list(path, globals=None, locals=None, default=False):
+    if default and not os.path.exists(path): return []
     not_empty = re.compile('\S').search
     with open(path) as file:
         return [eval(line, globals, locals) for line in file

@@ -10,8 +10,8 @@ import message
 
 link, install, uninstall = util.LinkSet().triple()
 
-bridges = util.read_list('conf/bridge.py')
-substitutions = util.read_list('conf/substitute.py')
+bridges = util.read_list('conf/bridge.py', default=True)
+substitutions = util.read_list('conf/substitute.py', default=True)
 
 
 @link('IRC')
