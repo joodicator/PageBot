@@ -19,27 +19,31 @@ def h_xirclib_msg(event, bot, source, *args):
 @link('COMMAND',        action=False)
 @link('ACTION_COMMAND', action=True)
 def h_command(bot, id, target, event, body, full_msg, action):
-    no_echo = [False]
+    bot.activity = False
+
+    #=================================================================
+    # (This should be in bridge.py.)
     event = ('SIMPLE', 'ACTION', event) if action else \
             ('SIMPLE',           event)
+    no_echo = [False]
+    replies = []
     def cmd_reply(rmsg=None, from_name=None, no_bridge=False, **kwds):
         if rmsg is not None or from_name is not None:
             if rmsg is None: rmsg = from_name(id.nick)
-            reply(bot, id, target, rmsg, **kwds)
+            replies.append(((bot, id, target, rmsg), kwds))
         no_echo[0] = no_echo[0] or no_bridge
     yield sign(event, bot, id.nick, target, body, cmd_reply)
     if not no_echo[0]:
         cmsg = ('* %s %s' if action else '<%s> %s') % (id.nick, full_msg)
         yield sign('IRC', bot, target, cmsg)
+    for rargs, rkwds in replies:
+        reply(*rargs, **rkwds)       
+    #=================================================================
         
-@link('COMMAND',        action=False)
-@link('ACTION_COMMAND', action=True)
-def h_command(bot, id, target, event, body, full_msg, action):
     if limit.mark_activity(bot, id, notify=target):
         return
     if action:
         event = ('ACTION', event)
-    bot.activity = False
     yield sign(event, bot, id, target, body, full_msg)
     if bot.activity: return
     yield sign('CMD_IGNORED', event, bot, id, target, body, full_msg)
