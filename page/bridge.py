@@ -195,13 +195,13 @@ def substitute_reply(context, local_name, msg_local, msg_bridge, cancel_bridge):
     def reply(rmsg=None, from_name=None, prefix=True, no_bridge=False):
         if from_name is None and rmsg is not None:
             from_name = lambda name: rmsg
-        if prefix:
-            _from_name = from_name
-            from_name = lambda name: '%s: %s' % (name, _from_name(name))
         if from_name:
+            if prefix:
+                _from_name = from_name
+                from_name = lambda name: '%s: %s' % (name, _from_name(name))
             msg_local(from_name(local_name))
-        if from_name and not no_bridge:
-            msg_bridge(from_name(substitute_name(context, local_name)))
+            if not no_bridge:
+                msg_bridge(from_name(substitute_name(context, local_name)))
         if no_bridge:
             cancel_bridge()
     return reply
@@ -222,8 +222,8 @@ def substitute_name(context, name):
     context = context.lower()
     for r_context, find, repl in substitutions:
         if r_context.lower() == context and find.lower() == name.lower():
-            text = _substitute_name(name, find, repl)
-    return text
+            name = _substitute_name(name, find, repl)
+    return name
 
 # Apply to `repl' any changes in capitalisation from `find' to `name'.
 def _substitute_name(name, find, repl):
