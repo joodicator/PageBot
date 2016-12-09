@@ -23,8 +23,8 @@ def h_command(bot, id, target, event, body, full_msg, action):
 
     #=================================================================
     # (This should be in bridge.py.)
-    event = ('SIMPLE', 'ACTION', event) if action else \
-            ('SIMPLE',           event)
+    s_event = ('SIMPLE', 'ACTION', event) if action else \
+              ('SIMPLE',           event)
     no_echo = [False]
     replies = []
     def cmd_reply(rmsg=None, from_name=None, no_bridge=False, **kwds):
@@ -32,7 +32,7 @@ def h_command(bot, id, target, event, body, full_msg, action):
             if rmsg is None: rmsg = from_name(id.nick)
             replies.append(((bot, id, target, rmsg), kwds))
         no_echo[0] = no_echo[0] or no_bridge
-    yield sign(event, bot, id.nick, target, body, cmd_reply)
+    yield sign(s_event, bot, id.nick, target, body, cmd_reply)
     if not no_echo[0]:
         cmsg = ('* %s %s' if action else '<%s> %s') % (id.nick, full_msg)
         yield sign('IRC', bot, target, cmsg)
