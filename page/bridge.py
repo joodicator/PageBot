@@ -88,7 +88,7 @@ def h_bridge_names_res(bot, target, target_, source_name, names):
     if target.lower() != target_.lower() and target_ != '*':
         return
     msg = 'Online in %s: %s.' % (
-        source_name, ', '.join(names) if names else '(nobody)')
+        source_name, ', '.join(sorted(names)) if names else '(nobody)')
     yield sign('BRIDGE', bot, target, msg)
 
 @link(('BRIDGE', 'NAMES_ERR'))
