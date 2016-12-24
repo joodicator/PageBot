@@ -11,7 +11,7 @@ import imgur
 import message
 import url_collect
 
-MIRROR_HOSTS = 'i.4cdn.org',
+MIRROR_HOSTS = 'i.4cdn.org', 'is.4chan.org'
 CACHE_SIZE = 1024
 REPEAT_S = 60*60*3
 
