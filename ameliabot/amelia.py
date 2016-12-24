@@ -129,7 +129,7 @@ class AmeliaBot(Mac):
         self.send_line(cmd, **kwds)
         self.activity = True
 
-    def send_line(self, line, defer=False, **kwds):
+    def send_line(self, line, defer=True, **kwds):
         if type(line) is unicode:
             line = line.encode('utf-8')
 
@@ -148,6 +148,7 @@ class AmeliaBot(Mac):
 
         if defer or self.flood_active:
             self.flood_buffer.append((line, kwds))
+            self.flood_active = True
         else:
             self.send_times.append(now)
             line = line[:510]
@@ -162,7 +163,7 @@ class AmeliaBot(Mac):
         self.flood_buffer = []
         self.flood_active = False
         for line, kwds in lines:
-            self.send_line(line, **kwds)
+            self.send_line(line, defer=False, **kwds)
 
 if __name__ == '__main__':
     gear = AmeliaBot()
