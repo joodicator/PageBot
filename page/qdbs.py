@@ -57,8 +57,6 @@ def format_quote(quote):
     quote = re.sub(r'[\r\n]+', '  ', quote)
     if len(quote) > MAX_QUOTE_LEN:
         quote = quote[:MAX_QUOTE_LEN-5] + '(...)'
-    if isinstance(quote, unicode):
-        quote = quote.encode('utf-8')
     return quote
 
 #===============================================================================
@@ -111,29 +109,33 @@ class Private(Configuration):
     @util.msub(link, 'qdbs.Private.refresh')
     def refresh(self, bot):
         try:
+            quotes = self.quotes()
+            if not quotes: return
+
+            url_state = state.get(self.admin_url, {})
+            name_state = url_state.get(self.access_name.lower(), {})
+            last_quote = name_state.get('last_quote')
+    
             nicks = yield identity.enum_access(bot, self.access_name)
             if not nicks: return
-            quotes = self.quotes()
+
             for nick in nicks:
-                url_state = state.get(self.admin_url, {})
-                name_state = url_state.get(self.access_name.lower(), {})
-                last_quote = name_state.get('last_quote')
-    
                 for qid, quote in sorted(quotes):
                     if qid > last_quote:
                         fquote = format_quote(quote)
                         msg = '[QdbS] New quote #%d <%s>: "%s"' % (
                             qid, self.remote_admin_url, fquote)
+                        if type(msg) is unicode:
+                            msg = msg.encode('utf8')
                         bot.send_msg(nick, msg)
                         yield sign('PROXY_MSG', bot, None, nick, fquote, quiet=True)
     
-                if quotes:
-                    last_quote = max(
-                        last_quote, max(qid for (qid, quote) in quotes))
-                    name_state['last_quote'] = last_quote
-                    url_state[self.access_name.lower()] = name_state
-                    state[self.admin_url] = url_state
-                    write_state(state)
+            last_quote = max(
+                last_quote, max(qid for (qid, quote) in quotes))
+            name_state['last_quote'] = last_quote
+            url_state[self.access_name.lower()] = name_state
+            state[self.admin_url] = url_state
+            write_state(state)
         except:
             traceback.print_exc()
     
@@ -189,8 +191,7 @@ class Public(Configuration):
             for qid, quote in sample:
                 quote_url = '%s?%s' % (self.remote_index_url, qid)
                 fquote = format_quote(quote)
-                msg = '%s: new quote added: %s "%s"' % (
-                    title, quote_url, fquote)
+                msg = '%s: new quote added: %s "%s"' % (title, quote_url, fquote)
                 bot.send_msg(self.channel, msg)
                 yield sign('PROXY_MSG', bot, None, self.channel, fquote, quiet=True)
 
