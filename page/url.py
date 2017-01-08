@@ -26,7 +26,7 @@ import imgur
 #==============================================================================#
 link, install, uninstall = util.LinkSet().triple()
 
-AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:23.0) Gecko/20100101 Firefox/23.0'
+AGENT = 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:50.0) Gecko/20100101 Firefox/50.0'
 ACCEPT_ENCODING = 'gzip, deflate'
 TIMEOUT_SECONDS = 20
 READ_BYTES_MAX = 1024*1024
