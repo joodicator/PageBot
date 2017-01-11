@@ -29,7 +29,11 @@ IGNORE_MESSAGES=(
     'You feel vibrations from deep below...',
     'This is going to be a terrible night...',
     'A solar eclipse is happening!',
-    re.compile(r'\S+ the Travelling Merchant has (arrived|departed)!$'))
+    re.compile(r'.* the Travell?ing Merchant has (arrived|departed)!$'),
+    re.compile(r'Looks like .* (is|are) throwing a party$'),
+    "Party time's over!",
+    'Slime is falling from the sky!',
+    'Slime has stopped falling from the sky.')
 
 servers = util.table('conf/terraria.py', 'server')
 
@@ -200,8 +204,11 @@ def te_chat(work, slot, colour, text):
         yield util.msign(ab_mode, ('BRIDGE', event_type), ab_mode,
             event_name, work.terraria.name, event_text, reply)
 
-    if not no_echo[0] and slot != work.terraria_protocol.slot:
+    if not no_echo[0] and slot != work.terraria_protocol.slot \
+    and not (slot == 255 and message_ignored(text) \
+    and len(work.terraria_protocol.players) == 1):
         if slot != 255:
+            name = work.terraria_protocol.players.get(slot, slot)
             text = '<%s> %s' % (name, text)
         echo_lines.insert(0, text)
 
