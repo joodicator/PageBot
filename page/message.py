@@ -162,7 +162,7 @@ def h_help(bot, name, target, args, reply, bridge):
     callback = lambda *args: lines.append(args)
 
     def header(str):
-        return '\2%s%s\2' % ('!' if bot.conf['bang_cmd'] else '', str)
+        return '\2%s%s\2' % ('!' if not str.startswith('!') else '', str)
 
     if args:
         # Display help for a particular command.
@@ -174,7 +174,8 @@ def h_help(bot, name, target, args, reply, bridge):
             reply('Error: no help is available for "%s".' % cmd, no_bridge=True)
             return
         for line in lines:
-            if line[0]: reply(header(line[0]), prefix=False, no_bridge=True)
+            if line[0]:
+                reply(header(line[0]), prefix=False, no_bridge=True)
             for para in line[1:]:
                 if para: reply(para, prefix=False, no_bridge=True)
 

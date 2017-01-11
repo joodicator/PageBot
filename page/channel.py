@@ -27,7 +27,7 @@ names_channels = defaultdict(list)
 track_channels = defaultdict(list)
 
 # umode_channels[chan.lower()][nick.lower()]
-# list of modes that nick is known to have on chan.
+# string of modes that nick is known to have on chan.
 umode_channels = defaultdict(dict)
 
 # cmode_channels[chan.lower()][mode_char]

@@ -519,3 +519,12 @@ lcsstr = longest_common_substr
 lcsseq = longest_common_subseq
 lcsseql = longest_common_subseq_len
 lcsseqm = longest_common_subseq_len_matrix
+
+#===============================================================================
+# Returns True iff the two given IDs are considered to belong to the same user,
+# i.e. if they have the same host and the same username, or they have the same
+# host and either username starts with a tilde.
+def same_user(id1, id2):
+    return id1.host.lower() == id2.host.lower() and \
+           (id1.user.lower() == id2.user.lower() or \
+            id1.user.startswith('~') or id2.user.startswith('~'))

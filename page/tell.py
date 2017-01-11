@@ -16,6 +16,7 @@ import re
 from untwisted.magic import sign
 
 from message import reply
+from util import same_user as same_sender
 from util import multi, wc_to_re
 from auth import admin
 import runtime
@@ -701,12 +702,3 @@ def match_id(query, id):
         rexp = part if '$' in part else wc_to_re(part)
         if re.match(rexp, id_str, re.I) is not None: return True
     return False
-
-#===============================================================================
-# Returns True iff the two given IDs are considered to belong to the same user,
-# i.e. if they have the same host and the same username, or they have the same
-# host and either username starts with a tilde.
-def same_sender(id1, id2):
-    return id1.host.lower() == id2.host.lower() and \
-           (id1.user.lower() == id2.user.lower() or \
-            id1.user.startswith('~') or id2.user.startswith('~'))

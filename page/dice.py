@@ -1,14 +1,27 @@
+from itertools import *
 import re
 import random
 import math
+import os.path
+import time
+import json
+import datetime
 
 from untwisted.magic import sign
 
 import util
 import message
 import modal
+import channel
 
 link, install, uninstall = util.LinkSet().triple()
+
+DEF_FILE = 'state/roll_def.json'
+DEF_MAX_TOTAL = 100000
+DEF_MAX_PER_CHAN = 1000
+DEF_MAX_PER_USER = 100
+DEF_MAX_NAME_LEN = 32
+DEF_DECAY_S = 30 * 24 * 60 * 60
 
 MAX_ROLL = 99, 9999, 99999999
 
@@ -188,3 +201,241 @@ def roll_str_int(dice, sides, add, drop_low=0, drop_high=0):
 #===============================================================================
 def roll_list(dice, sides):
     return [random.randint(1, sides) for i in xrange(dice)]
+
+#===============================================================================
+def load_defs():
+    if not os.path.exists(DEF_FILE):
+        return {}
+    with open(DEF_FILE, 'r') as file:
+        jdict = util.recursive_encode(json.load(file), 'utf8')
+        return {c: GlobalDefs(jdict=d) for (c,d) in jdict.iteritems()}
+
+def save_defs():
+    prune_defs()
+    jstring = json.dumps({
+        c: d.save_jdict() for (c,d) in global_defs.iteritems()})
+    with open(DEF_FILE, 'w') as file:
+        file.write(jstring)
+
+def prune_defs():
+    now, to_remove = int(time.time()), []
+    for name, defs in global_defs.iteritems():
+        if name in channel.track_channels:
+            defs.decay_start = None
+        elif defs.decay_start is None:
+            defs.decay_start = now
+        elif defs.decay_start < now - DEF_DECAY_S:
+            to_remove.append(name)
+    for name in to_remove:
+        del global_defs[name]
+
+class GlobalDefs(dict):
+    __slots__ = 'decay_start'
+    def __init__(self, decay_start=None, jdict=None):
+        super(GlobalDefs, self).__init__()
+        if jdict is None:
+            self.decay_start = decay_start
+        else:
+            for n, d in jdict['names'].iteritems():
+                self[n] = GlobalDef(name=n, jdict=d)
+            self.decay_start = jdict.get('decay_start')
+    def save_jdict(self):
+        jdict = {
+            'names': {n: d.save_jdict() for (n, d) in self.iteritems()}}
+        if self.decay_start is not None:
+            jdict['decay_start'] = self.decay_start
+        return jdict
+
+class Def(object):
+    __slots__ = 'body'
+    def __init__(self, body=None, jdict=None):
+        if jdict is None:
+            self.body = body
+        else:
+            self.body = jdict['body']
+    def save_jdict(self):
+        return {'body': self.body}
+
+class GlobalDef(Def):
+    __slots__ = 'name', 'id', 'modes', 'time'
+    def __init__(
+        self, name='', id=None, modes=None, time=None, jdict=None, *a, **k
+    ):
+        super(GlobalDef, self).__init__(*a, jdict=jdict, **k)
+        self.name = name
+        if jdict is None:
+            self.id, self.modes, self.time = id, modes, time
+        else:
+            self.id = util.ID(*jdict['id']) if 'id' in jdict else None
+            self.modes = jdict.get('modes')
+            self.time = jdict.get('time')
+    def save_jdict(self):
+        jdict = super(GlobalDef, self).save_jdict()
+        if self.id is not None:
+            jdict['id'] = list(self.id)
+        if self.modes is not None:
+            jdict['modes'] = self.modes
+        if self.time is not None:
+            jdict['time'] = self.time
+        return jdict
+
+global_defs = load_defs()
+
+#-------------------------------------------------------------------------------
+@link(('HELP', 'roll-def+'), ('HELP', 'rd+'))
+def h_help_roll_def_p(bot, reply, args):
+    reply('!roll-def+\2 or \2!rd+ NAME [=] BODY...',
+    'Associate NAME with BODY so that any occurrences of \2{{NAME}}\2 in'
+    ' subsequent \2!roll\2 commands will be replaced with BODY, which may'
+    ' itself contain !roll syntax to be evaluated as normal. NAME is case'
+    '-sensitive, must consist only of letters, digits, \2-\2 and \2_\2, not'
+    ' start with a digit, and be no longer than %d characters. Example:'
+    ' "!rd+ bev {tea,coffee}", "!r I will drink {{bev}}.". See also:'
+    ' \2!help roll\2, \2!help rd-\2, \2!help rd?.\2' % DEF_MAX_NAME_LEN)
+
+@link('!roll-def+', '!rd+')
+def h_roll_def_p(bot, id, target, args, full_msg):
+    name, body = re.match(r'([^\s=]*)\s*=?\s*(.*)', args).groups()
+    body = body.strip()
+    if len(name) > DEF_MAX_NAME_LEN or not re.match(r'(?!\d)[\w-]+$', name):
+        return message.reply(bot, id, target, 'Error: you must specify a name'
+        ' consisting of letters, digits, \2-\2 and \2_\2, not starting with a'
+        ' digit and no longer than %d characters. See \2!help roll-def+\2 for'
+        ' correct usage.' % DEF_MAX_NAME_LEN)
+
+    if sum(len(d) for d in global_defs.itervalues()) >= DEF_MAX_TOTAL:
+        return message.reply(bot, id, target, 'Error: there are too many defin'
+        'itions stored. Please notify the bot administrator of this message.')
+
+    now = int(time.time())
+    chan = (target or ('%s!%s@%s' % id)).lower()
+    defs = global_defs.get(chan) or GlobalDefs()
+
+    if target is None:
+        u = re.compile('@%s$' % re.escape(id.host) if id.user.startswith('~')
+            else '!(~.*|%s)@%s$' % (re.escape(id.user), re.escape(id.host)))
+        udefs = sum(len(d) for (c,d) in global_defs.iteritems() if u.search(c))
+    else:
+        if len(defs) > DEF_MAX_PER_CHAN: return message.reply(bot, id, target,
+            'Error: this channel has too many definitions - no more than %d are'
+            ' permitted. See \2!help roll-def-\2 to delete existing definitions.'
+            % DEF_MAX_PER_CHAN)
+        is_op = channel.has_op_in(bot, id.nick, chan, 'h')
+        udefs = None if is_op else \
+                sum(1 for d in defs.itervalues() if util.same_user(d.id, id))
+
+    if udefs is not None and udefs >= DEF_MAX_PER_USER:
+        return message.reply(bot, id, target, 'Error: you have made too many'
+        ' definitions here - no more than %d are permitted. See \2!help'
+        ' roll-def-\2 to delete existing definitions.' % DEF_MAX_PER_USER)
+
+    if target is not None and not is_op and name in defs \
+    and defs[name].id and not util.same_user(defs[name].id, id):
+        return message.reply(bot, id, target, 'Error: this name is already'
+        ' defined by %s!%s@%s; only the same user or an operator may change it.'
+        % defs[name].id)
+
+    modes = channel.umode_channels[chan].get(id.nick.lower(), '')
+    defs[name] = GlobalDef(name=name, id=id, modes=modes, time=now, body=body)
+    global_defs[chan] = defs
+    save_defs()
+
+    message.reply(bot, id, target, 'Defined.')
+
+#-------------------------------------------------------------------------------
+@link(('HELP', 'roll-def-'), ('HELP', 'rd-'))
+def h_help_roll_def_m(bot, reply, args):
+    reply('!roll-def-\2 or \2!rd- NAME1 NAME2 ...',
+    'Delete the definitions made using \2!rd+\2 of each given NAME. If the user'
+    ' is not a channel operator, only definitions made by the same user will be'
+    ' deleted. Each NAME may contain wildcard characters \2?\2 and \2*\2, may'
+    ' consist of a hostmask, or may may be preceded by \2!\2 to prevent its'
+    ' deletion, as in \2!rd?\2. All names are case-sensitive. See also: \2!help'
+    ' rd+\2, \2!help rd?\2.')
+
+@link('!roll-def-', '!rd-')
+def h_roll_def_m(bot, id, target, args, full_msg):
+    raise NotImplementedError
+
+#-------------------------------------------------------------------------------
+@link(('HELP', 'roll-def?'), ('HELP', 'rd?'))
+def h_help_roll_def_q(bot, reply, args):
+    reply('!roll-def?\2 or \2!rd? [#CHANNEL] NAME1 NAME2 ...',
+    'Show the definitions made using \2!rd+\2 of each given NAME. Names may'
+    ' contain the wildcard characters \2?\2 and \2*\2, meaning exactly one and'
+    ' zero or more characters, respectively. Names of the form'
+    ' \2NICK!USER@HOST\2 match all definitions made by the given user. Names'
+    ' starting with \2!\2 are excluded from the result rather than included. If'
+    ' given, #CHANNEL is searched rather than the current channel. See also:'
+    ' \2!help rd+\2, \2!help rd-\2.')
+
+@link('!roll-def?', '!rd?')
+def h_roll_def_q(bot, id, target, args, full_msg):
+    args = args.split()
+    if args and args[0].startswith('#'):
+        chan = args[0].lower()
+        nick = id.nick.lower()
+        if not any(nick == n.lower() for n in channel.track_channels[chan]):
+            return message.reply(bot, id, target,
+                'Error: you must be present in %s to list its definitions at'
+                ' another location.' % args[0])
+        del args[0]
+    else:
+        chan = (target or ('%s!%s@%s' % id)).lower()       
+   
+    defs = sorted(def_search(chan, args), key=lambda d: d.time)
+    if len(defs) == 0:
+        message.reply(bot, id, target,
+            '0 matching definitions.', prefix=False)
+    elif len(defs) == 1:
+        defn = defs[0]
+        if defn.time is not None:
+            dt_set = datetime.datetime.utcfromtimestamp(defn.time)
+            delta = datetime.datetime.utcnow() - dt_set
+            d_mins, d_secs = divmod(delta.seconds, 60)
+            d_hours, d_mins = divmod(d_mins, 60)
+            time_str = ' on %s UTC (%sd, %02d:%02d:%02d ago)' % (
+                dt_set.strftime('%d %b %Y, %H:%M'),
+                delta.days, d_hours, d_mins, d_secs)
+        else:
+            time_str = ''
+        message.reply(bot, id, target,
+            '1 matching definition, set by %s%s:' % (
+            '%s!%s@%s' % defn.id, time_str), prefix=False)
+        message.reply(bot, id, target,
+            '    %s = %s' % (defn.name, defn.body), prefix=False)
+    elif len(defs) <= 4:
+        message.reply(bot, id, target,
+            '%d matching definitions:' % len(defs), prefix=False)
+        for row in util.join_rows(*((d.name, d.body) for d in defs), sep=' = '):
+            message.reply(bot, id, target, '    %s' % row, prefix=False)
+    else:
+        names = ', '.join(d.name for d in defs)
+        if len(names) > 400:
+            names = names[:400] + '(...)'
+        message.reply(bot, id, target,
+            '%d matching definitions: %s. Use \2!rd? NAME\2 to view the details'
+            ' of a definition.' % (len(defs), names), prefix=False)
+
+# An iterator (in no particular order) over the definitions matched by `queries'
+# as per !rd? and !rd-.
+def def_search(chan, queries):
+    pos, neg = [], []
+    for query in queries:
+        if query.startswith('!'):
+            neg.append(query[1:])
+        else:
+            pos.append(query)
+    if not pos:
+        pos.append('*')
+    return (d for d in global_defs.get(chan, {}).itervalues()
+            if any(def_match(q, d) for q in pos)
+            and not any(def_match(q, d) for q in neg))
+
+# True iff `query' positively matches `defn' as per !rd? and !rd-.
+def def_match(query, defn):
+    if '!' in query or '@' in query:
+        id_str = ('%s!%s@%s' % defn.id) if defn.id is not None else '*!*@*'
+        return re.match(util.wc_to_re(query), id_str, flags=re.I) is not None
+    else:
+        return re.match(util.wc_to_re(query), defn.name) is not None
