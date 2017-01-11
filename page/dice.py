@@ -245,6 +245,9 @@ class GlobalDefs(dict):
         if self.decay_start is not None:
             jdict['decay_start'] = self.decay_start
         return jdict
+    def touch(self):
+        if self.decay_start is not None:
+            self.decay_start = time.time()
 
 class Def(object):
     __slots__ = 'body'
@@ -337,6 +340,7 @@ def h_roll_def_p(bot, id, target, args, full_msg):
 
     modes = channel.umode_channels[chan].get(id.nick.lower(), '')
     defs[name] = GlobalDef(name=name, id=id, modes=modes, time=now, body=body)
+    defs.touch()
     global_defs[chan] = defs
     save_defs()
 
@@ -345,7 +349,7 @@ def h_roll_def_p(bot, id, target, args, full_msg):
 #-------------------------------------------------------------------------------
 @link(('HELP', 'roll-def-'), ('HELP', 'rd-'))
 def h_help_roll_def_m(bot, reply, args):
-    reply('!roll-def-\2 or \2!rd- NAME1 NAME2 ...',
+    reply('!roll-def-\2 or \2!rd- NAME1 [NAME2 ...]',
     'Delete the definitions made using \2!rd+\2 of each given NAME. If the user'
     ' is not a channel operator, only definitions made by the same user will be'
     ' deleted. Each NAME may contain wildcard characters \2?\2 and \2*\2, may'
@@ -355,12 +359,40 @@ def h_help_roll_def_m(bot, reply, args):
 
 @link('!roll-def-', '!rd-')
 def h_roll_def_m(bot, id, target, args, full_msg):
-    raise NotImplementedError
+    args = args.split()
+    if all(a.startswith('!') for a in args):
+        return message.reply(bot, id, target,
+        'Error: you must specify at least one name to delete. See \2!help'
+        ' rd-\2 for correct usage.')
+    chan = (target or ('%s!%s@%s' % id)).lower()
+
+    defs = list(def_search(chan, args))
+    if target is None or channel.has_op_in(bot, id.nick, chan, 'h'):
+        ddefs, udefs = defs, []
+    else:
+        ddefs, udefs = [], []
+        for defn in defs:
+            (ddefs if util.same_user(id, defn.id) else udefs).append(defn)
+
+    if chan in global_defs:
+        for defn in ddefs:
+            del global_defs[chan][defn.name]
+        global_defs[chan].touch()
+        if not global_defs[chan]:
+            del global_defs[chan]
+        save_defs()
+
+    udefs_str = ', '.join(d.name for d in udefs)
+    if len(udefs_str) > 300: udefs_str = udefs_str[:300] + '(...)'
+    message.reply(bot, id, target, '%s definition%s deleted.%s' % (
+        len(ddefs), '' if len(ddefs) == 1 else 's',
+        '' if not udefs else (' %d matching definition%s *not* deleted: %s.'
+        % (len(udefs), '' if len(udefs) == 1 else 's', udefs_str))))
 
 #-------------------------------------------------------------------------------
 @link(('HELP', 'roll-def?'), ('HELP', 'rd?'))
 def h_help_roll_def_q(bot, reply, args):
-    reply('!roll-def?\2 or \2!rd? [#CHANNEL] NAME1 NAME2 ...',
+    reply('!roll-def?\2 or \2!rd? [#CHANNEL] [NAME1 [NAME2 ...]]',
     'Show the definitions made using \2!rd+\2 of each given NAME. Names may'
     ' contain the wildcard characters \2?\2 and \2*\2, meaning exactly one and'
     ' zero or more characters, respectively. Names of the form'
@@ -373,20 +405,35 @@ def h_help_roll_def_q(bot, reply, args):
 def h_roll_def_q(bot, id, target, args, full_msg):
     args = args.split()
     if args and args[0].startswith('#'):
-        chan = args[0].lower()
+        chan = args.pop(0)
+        chan_case = channel.capitalisation.get(chan, chan)
+        chan = chan.lower()
         nick = id.nick.lower()
         if not any(nick == n.lower() for n in channel.track_channels[chan]):
             return message.reply(bot, id, target,
-                'Error: you must be present in %s to list its definitions at'
-                ' another location.' % args[0])
-        del args[0]
+                'Error: both you and this bot must be present in %s to search'
+                ' its definitions.' % chan_case)
+        chan_external = True
+    elif target is not None:
+        chan = target.lower()
+        chan_case = channel.capitalisation.get(chan, target)
+        chan_external = False
     else:
-        chan = (target or ('%s!%s@%s' % id)).lower()       
+        chan_case = '%s!%s@%s' % id
+        chan = chan_case.lower()
+        if chan in global_defs:
+            global_defs[chan].touch()
+        chan_external = False
    
     defs = sorted(def_search(chan, args), key=lambda d: d.time)
+    s = 's' if len(defs) != 1 else ''
+    noun = 'definition%s' % s if not chan_external else \
+           'definition%s in %s' % (s, chan_case) if chan.startswith('#') else \
+           'private definition%s' % s
+    defs_str = '%d matching %s' % (len(defs), noun)
+
     if len(defs) == 0:
-        message.reply(bot, id, target,
-            '0 matching definitions.', prefix=False)
+        message.reply(bot, id, target, '%s.' % defs_str, prefix=False)
     elif len(defs) == 1:
         defn = defs[0]
         if defn.time is not None:
@@ -400,22 +447,25 @@ def h_roll_def_q(bot, id, target, args, full_msg):
         else:
             time_str = ''
         message.reply(bot, id, target,
-            '1 matching definition, set by %s%s:' % (
-            '%s!%s@%s' % defn.id, time_str), prefix=False)
+            '%s, set%s%s:' % (
+                defs_str,
+                (' by %s!%s@%s' % defn.id) if chan.startswith('#') else '',
+                time_str),
+            prefix=False)
         message.reply(bot, id, target,
             '    %s = %s' % (defn.name, defn.body), prefix=False)
     elif len(defs) <= 4:
-        message.reply(bot, id, target,
-            '%d matching definitions:' % len(defs), prefix=False)
+        message.reply(bot, id, target, '%s:' % defs_str, prefix=False)
         for row in util.join_rows(*((d.name, d.body) for d in defs), sep=' = '):
             message.reply(bot, id, target, '    %s' % row, prefix=False)
     else:
         names = ', '.join(d.name for d in defs)
-        if len(names) > 400:
-            names = names[:400] + '(...)'
+        if len(names) > 300: names = names[:300] + '(...)'
         message.reply(bot, id, target,
-            '%d matching definitions: %s. Use \2!rd? NAME\2 to view the details'
-            ' of a definition.' % (len(defs), names), prefix=False)
+            '%s: %s. Use \2!rd?%s NAME\2 to view the details of a definition.'
+            % (defs_str, names, (' %s' % chan_case)
+            if chan_external and not (target and target.lower() == chan) else ''),
+            prefix=False)
 
 # An iterator (in no particular order) over the definitions matched by `queries'
 # as per !rd? and !rd-.
