@@ -2,18 +2,6 @@
 # tell.py - provides !tell, and related commands, to allow users to leave each
 # other messages in an IRC channel.
 
-#==============================================================================#
-# Possible extensions:
-#
-# - Allow multiple senders to be specified for !dismiss and !undismiss.
-#
-# - Allow "private" messages: if user A is in channel #C and tells the bot by,
-#   PM "!tell #C B MSG", user B will be delivered MSG by PM next time they are
-#   in channel C, provided that user A is also in channel #C.
-#
-# - Place some limit on the number of messages a single user can leave, possibly
-#   also per recipient (if it's possible to identify "recipients"...)
-
 from collections import namedtuple
 from collections import Counter
 from copy import deepcopy
@@ -407,11 +395,6 @@ def h_dismiss(bot, id, chan, query, full_msg, reply):
     reply(msg)
 
 #==============================================================================#
-@link('HELP')
-def h_help_undismiss_short(bot, reply, args):
-    reply('undismiss [NICK]',
-    'Restores the last message that you dismissed.')
-
 @link(('HELP', 'undismiss'))
 def h_help_undismiss(bot, reply, args):
     reply('undismiss\2 or \2!undismiss NICK',
