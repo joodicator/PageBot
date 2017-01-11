@@ -281,11 +281,6 @@ def h_tell_sent(bot, id, target, sent_msgs, reply_msg=None):
         '%s (1 message sent to "%s").' % (reply_msg, sent_msgs[0].to_nick))
 
 #==============================================================================#
-@link('HELP')
-def h_help_untell_short(bot, reply, args):
-    reply('untell [NICK ...]',
-    'Cancels your last "tell" message, or all messages to given NICKs.')
-
 @link(('HELP', 'untell'), ('HELP', 'unpage'))
 def h_help_untell(bot, reply, args):
     reply('untell [NICK[, NICK[, ...]]]',
@@ -362,11 +357,6 @@ def untell_nicks(bot, id, target, channel, args):
     reply(bot, id, target, msg)
 
 #==============================================================================#
-@link('HELP')
-def h_help_dismiss_short(bot, reply, args):
-    reply('dismiss [NICK]',
-    'Cancels delivery of the last message left for you.')
-
 @link(('HELP', 'dismiss'))
 def h_help_dismiss(bot, reply, args):
     if args and int(args) == 2:
