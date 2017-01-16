@@ -39,6 +39,11 @@ MAX_DESC_LEN = 100
 
 ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
 
+def get_opener():
+    return urllib2.build_opener(
+        urllib2.HTTPCookieProcessor,
+        urllib2.HTTPSHandler(context=ssl_context))
+
 #==============================================================================#
 @link('HELP*')
 def h_help(bot, reply, args):
@@ -127,8 +132,8 @@ def get_title_proxy(url):
     if not is_global_address(host): raise PageURLError(
         'Access to this host is denied: %s.' % host)
 
-    with closing(urllib2.urlopen(
-    request, timeout=TIMEOUT_SECONDS, context=ssl_context)) as stream:
+    with closing(get_opener().open(
+    request, timeout=TIMEOUT_SECONDS)) as stream:
         info = stream.info()
         ctype = info.gettype()
         size = info['Content-Length'] if 'Content-Length' in info else None
@@ -202,8 +207,8 @@ def get_title_html(url, type, stream=None):
         request = urllib2.Request(url)
         request.add_header('User-Agent', AGENT)
         request.add_header('Accept-Encoding', ACCEPT_ENCODING)
-        stream = urllib2.urlopen(
-            request, timeout=TIMEOUT_SECONDS, context=ssl_context)
+        stream = get_opener().open(
+            request, timeout=TIMEOUT_SECONDS)
 
     with closing(stream):
         charset = stream.info().getparam('charset')
@@ -411,8 +416,8 @@ def google_image_title_soup(url):
         + urllib.urlencode({'image_url':url, 'safe':'off'}))
     request.add_header('Referer', 'https://www.google.com/imghp?hl=en&tab=wi')
     request.add_header('User-Agent', AGENT)
-    with closing(urllib2.urlopen(request,
-    timeout=TIMEOUT_SECONDS, context=ssl_context)) as stream:
+    with closing(get_opener().open(request,
+    timeout=TIMEOUT_SECONDS)) as stream:
         text = stream.read(READ_BYTES_MAX)
         return BeautifulSoup(text, BS4_PARSER)
 
