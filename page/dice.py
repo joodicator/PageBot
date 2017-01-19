@@ -1,4 +1,6 @@
+from collections import namedtuple
 from itertools import *
+from functools import *
 import re
 import random
 import math
@@ -30,7 +32,6 @@ MAX_ROLL = 99, 9999, 99999999
 def h_help(bot, reply, args):
     reply('roll MdN[+K|-K]', 'Simulates the rolling of dice.')
 
-#===============================================================================
 @link(('HELP', 'roll'), ('HELP', 'r'), bridge=False)
 @link(('BRIDGE', 'HELP', 'roll'), ('BRIDGE', 'HELP', 'r'), bridge=True)
 def h_help_roll(bot, reply, args, bridge):
@@ -66,7 +67,7 @@ def h_help_roll(bot, reply, args, bridge):
         '\2!help missed-rolls\2.' if not bridge else
         ' For advanced features, send \2!help roll 2\2 by IRC.'))
 
-#===============================================================================
+#-------------------------------------------------------------------------------
 class UserError(Exception):
     pass
 
@@ -143,7 +144,7 @@ def h_roll(bot, name, target, args, reply, action):
     except UserError as e:
         reply('Error: %s' % e.message)
 
-#===============================================================================
+#-------------------------------------------------------------------------------
 def expand_choices(str):
     while True:
         match = re.search(r'\{(?P<items>[^{}]*)\}', str)
@@ -177,7 +178,7 @@ def expand_choices(str):
         str = str[:match.start()] + item + str[match.end():]
     return str
 
-#===============================================================================
+#-------------------------------------------------------------------------------
 ABBREV_MAX_LEN = 50
 def abbrev_middle(str):
     if len(str) <= ABBREV_MAX_LEN: return str
@@ -185,7 +186,7 @@ def abbrev_middle(str):
     right_len = (ABBREV_MAX_LEN - 3) - left_len
     return str[:left_len] + '...' + str[-right_len:]
 
-#===============================================================================
+#-------------------------------------------------------------------------------
 def roll_str_int(dice, sides, add, drop_low=0, drop_high=0):
     rolls = roll_list(dice, sides)
     drop = sorted(rolls)
@@ -198,11 +199,227 @@ def roll_str_int(dice, sides, add, drop_low=0, drop_high=0):
         '(%+d)' % add if add else ''))
     return (rstr, rint)
 
-#===============================================================================
+#-------------------------------------------------------------------------------
 def roll_list(dice, sides):
     return [random.randint(1, sides) for i in xrange(dice)]
 
 #===============================================================================
+# Evaluator of abstract syntax trees produced by the !roll argument parser.
+
+class OutputRecord(object):
+    __slots__ = 'written'
+    def __init__(self, written=0):
+        self.written = written
+
+def eval_string(*args, **kwds):
+    return ''.join(eval_string_parts(*args, **kwds))
+
+def eval_string_parts(string, max_len=None):
+    output = OutputRecord()
+    for s in e_string(string, output):
+        output.written += len(s)
+        if max_len is None or output.written < max_len:
+            yield s
+        else:
+            yield s if output.written == max_len else s[:max_len-output.written]
+            break
+
+def e_string(string, output):
+    for part in string.parts:
+        for s in e_part(part, output): yield s
+
+def e_part(part, output):
+    if   isinstance(part, (Text, Escape)): return e_text(part, output)
+    elif isinstance(part, Roll):           return e_roll(part, output)
+    elif isinstance(part, ExRoll):         return e_ex_roll(part, output)
+    elif isinstance(part, Name):           return e_name(part, output)
+    elif isinstance(part, Branch):         return e_branch(part, output)
+    else:                                  assert False
+
+def e_text(text, output):
+    yield text.text
+
+def e_roll(roll, output):
+    raise NotImplementedError
+
+def e_ex_roll(ex_roll, output):
+    raise NotImplementedError
+
+def e_branch(branch, output):
+    raise NotImplementedError
+
+def e_name(name, output):
+    raise NotImplementedError
+
+#===============================================================================
+# Parser for the argument of !roll, producing an abstract syntax tree.
+
+String = namedtuple('String', ('parts',                  'source'))
+Text   = namedtuple('Text',   ('text',                   'source'))
+Escape = namedtuple('Escape', ('text',                   'source'))
+Roll   = namedtuple('Roll',   ('dice', 'sides', 'add',   'source'))
+ExRoll = namedtuple('ExRoll', ('type', 'number', 'roll', 'source'))
+Name   = namedtuple('Name',   ('name',                   'source'))
+Branch = namedtuple('Branch', ('choices',                'source'))
+Choice = namedtuple('Choice', ('weight', 'string',       'source'))
+
+def parse_string(input):
+    string, remain = p_string(ParseInput(input))
+    assert not remain
+    return string
+
+def p_string(input, choice=False):
+    if choice:
+        text_re = re.compile(r'([^,}][^bBwWdD\d{,}\\]*)?')
+        part_ps = p_escape, p_ex_roll, p_roll, p_name, p_branch
+    else:
+        text_re = re.compile(r'.[^bBwWdD\d{]*')
+        part_ps = p_ex_roll, p_roll, p_name, p_branch
+
+    start = input
+    parts = []
+    while input:
+        for p_part in part_ps:
+            try:
+                part, input = p_part(input)
+                parts.append(part)
+                break
+            except ParseFail:
+                continue
+        else:
+            text_start, (match, input) = input, p_match(text_re, input)
+            if not match.group():
+                break
+            if parts and isinstance(parts[-1], Text):
+                parts[-1] = Text(
+                    text   = parts[-1].text + match.group(),
+                    source = parts[-1].source + (input-text_start))
+            else:
+                parts.append(Text(text=match.group(), source=input-text_start))
+
+    if parts and isinstance(parts[0], Text):
+        parts[0] = parts[0]._replace(text=parts[0].text.lstrip())
+        if not parts[0].text: parts.pop(0)
+    if parts and isinstance(parts[-1], Text):
+        parts[-1] = parts[-1]._replace(text=parts[-1].text.rstrip())
+        if not parts[-1].text: parts.pop(-1)
+
+    return String(parts=parts, source=input-start), input
+
+def p_choice_string(input):
+    return p_string(input, choice=True)
+
+def p_ex_roll(input):
+    match, roll, _, end_input = p_seq(
+        (p_match, r'(?P<t>[bBwW])(?P<n>\d*)\('), p_roll, (p_token, ')'), input)
+    return ExRoll(
+        type   = match.group('t').lower(),
+        number = int(match.group('n')) if match.group('n') else 1,
+        roll   = roll,
+        source = end_input - input), end_input
+
+def p_roll(input):
+    match, end_input = p_match(r'(?P<d>\d*)[dD](?P<s>\d+)(?P<a>[+-]\d+)?', input)
+    return Roll(
+        dice   = int(match.group('d')) if match.group('d') else 1,
+        sides  = int(match.group('s')),
+        add    = int(match.group('a')) if match.group('a') else 0,
+        source = end_input - input), end_input
+
+def p_name(input):
+    match, end_input = p_match(r'\{\{(?P<n>[a-zA-Z_-][a-zA-Z0-9_-]*)\}\}', input)
+    return Name(name=match.group('n'), source=end_input-input), end_input
+
+def p_branch(start_input):
+    choices = []
+    _, input = p_token('{', start_input)
+    while True:
+        choice, input = p_choice(input)
+        choices.append(choice)
+        try:
+            _, input = p_token(',', input)
+        except ParseFail:
+            break
+    _, input = p_token('}', input)
+    return Branch(choices=choices, source=input-start_input), input
+
+def p_choice(start_input):
+    match, string, input = p_seq(
+        (p_match, r'(\s*(?P<w>\d*\.\d+)\s*:)?'), p_choice_string, start_input)
+    return Choice(
+        weight = float(match.group('w')) if match.group('w') else 1.0,
+        string = string,
+        source = input - start_input), input
+
+def p_escape(input):
+    match, end_input = p_match(r'\\(?P<c>.)', input)
+    return Escape(text=match.group('c'), source=end_input-input), end_input
+
+#-------------------------------------------------------------------------------
+# General parsing utilities.
+
+class ParseFail(Exception):
+    pass
+
+class ParseInput(object):
+    __slots__ = 'string', 'position'
+    def __init__(self, string, position=0):
+        self.string, self.position = string, position
+    def move(self, new_position):
+        return ParseInput(self.string, new_position)
+    def __nonzero__(self):
+        return self.position < len(self.string)
+    def __sub__(self, other):
+        if isinstance(other, ParseInput):
+            assert self.string is other.string
+            return ParseSource(self.string, other.position, self.position)
+        else:
+            return NotImplemented
+    def __repr__(self):
+        return 'Input[%d:%d]' % (self.position, len(self.string))
+
+class ParseSource(object):
+    __slots__ = 'string', 'start', 'end'
+    def __init__(self, string, start, end):
+        self.string, self.start, self.end = string, start, end
+    def __str__(self):
+        return self.string[self.start:self.end]
+    def __add__(self, other):
+        if isinstance(other, ParseSource):
+            assert self.string is other.string and self.end == other.start
+            return ParseSource(self.string, self.start, other.end)
+        else:
+            return NotImplemented
+    def __repr__(self):
+        return 'Source[%d:%d]' % (self.start, self.end)
+
+def p_match(regex, input, flags=None):
+    if isinstance(regex, str):
+        regex = re.compile(regex) if flags is None else re.compile(regex, flags)
+    else:
+        assert flags is None
+    match = regex.match(input.string, input.position)
+    if match is not None:
+        return match, input.move(match.end())
+    else:
+        raise ParseFail
+
+def p_token(token, input):
+    return p_match(re.escape(token), input)
+
+def p_seq(*args):
+    def p_seq_iter(items, input):
+        for item in items:
+            if isinstance(item, tuple):
+                item = partial(item[0], *item[1:])
+            value, input = item(input)
+            yield value
+        yield input
+    return tuple(p_seq_iter(args[:-1], args[-1]))
+
+#===============================================================================
+# Maintenance of global definitions.
+
 def load_defs():
     if not os.path.exists(DEF_FILE):
         return {}
