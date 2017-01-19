@@ -25,7 +25,7 @@ DEF_MAX_PER_USER = 100
 DEF_MAX_NAME_LEN = 32
 DEF_DECAY_S = 30 * 24 * 60 * 60
 
-MAX_ROLL = 99, 9999, 99999999
+MAX_ROLL = 999, 999999999, 999999999
 
 #===============================================================================
 @link('HELP*', ('BRIDGE', 'HELP*'))
@@ -76,64 +76,8 @@ class UserError(Exception):
 @link(('SIMPLE','ACTION','!roll'), ('SIMPLE','ACTION','!r'), action=True)
 @link(('BRIDGE','ACTION','!roll'), ('BRIDGE','ACTION','!r'), action=True)
 def h_roll(bot, name, target, args, reply, action):
-    rolls = []
-
-    def check_roll(dice=None, sides=None, add=None):
-        if sides is not None and sides == 0: raise UserError(
-            '"d0" does not make sense - the number of sides must be positive.')
-        if (dice and dice > MAX_ROLL[0] or
-            sides and sides > MAX_ROLL[1] or
-            add and abs(add) > MAX_ROLL[2]
-        ): raise UserError(
-            'No more than %d dice, %d sides per die, or %s units added or'
-            ' subtracted are permitted per roll.' % MAX_ROLL)
-
-    def keep_sub(match):
-        bw = match.group('bw').lower()
-        keep = int(match.group('keep')) if match.group('keep') else 1
-        dice = int(match.group('dice')) if match.group('dice') else 1       
-        sides = int(match.group('sides'))
-        add = int(match.group('add')) if match.group('add') else 0
-
-        if keep > dice: raise UserError(
-            'It is not possible to keep %d out of %s dice rolls.'
-            % (keep, dice))
-
-        if bw == 'b':
-            return do_roll_str(dice, sides, add, drop_low=dice-keep)
-        elif bw == 'w':
-            return do_roll_str(dice, sides, add, drop_high=dice-keep)
-
-    def roll_sub(match):
-        dice = int(match.group('dice')) if match.group('dice') else 1
-        sides = int(match.group('sides'))
-        add = int(match.group('add')) if match.group('add') else 0
-        return do_roll_str(dice, sides, add)
-
-    def do_roll_str(dice, sides, add, drop_low=0, drop_high=0):
-        check_roll(dice, sides, add)
-        rstr, rint = roll_str_int(dice, sides, add, drop_low, drop_high)
-        if drop_low or drop_high:
-            dice_spec = (dice, drop_low, drop_high)
-        else:
-            dice_spec = dice
-        rolls.append(((dice_spec, sides, add), rint))
-        return rstr
-
     try:
-        msg = args
-        msg = re.sub(
-            r'\b(?P<bw>[bBwW])(?P<keep>\d*)'
-            '\((?P<dice>\d*)[dD](?P<sides>\d+)(?P<add>[+-]\d+)?\)',
-            keep_sub, msg)
-        msg = re.sub(
-            r'\b(?P<dice>\d*)[dD](?P<sides>\d+)(?P<add>[+-]\d+)?\b',
-            roll_sub, msg)
-        msg = expand_choices(msg)
-        if msg == args: raise UserError(
-            'No dice rolls or choices specified.'
-            ' See \2!help roll 2\2 for correct usage.')
-        if len(msg) > 400: msg = '%s(...)' % msg[:395]
+        msg, rolls = eval_string(parse_string(args), irc=True, max_len=512)
         if target and target.startswith('#'):
             id = util.ID(name, '*', '*')
             yield sign('DICE_ROLLS', bot, id, target, rolls, msg)
@@ -143,113 +87,167 @@ def h_roll(bot, name, target, args, reply, action):
             reply(msg)
     except UserError as e:
         reply('Error: %s' % e.message)
+    except Exception as e:
+        reply('Error: %r' % e)
+        raise
 
-#-------------------------------------------------------------------------------
-def expand_choices(str):
-    while True:
-        match = re.search(r'\{(?P<items>[^{}]*)\}', str)
-        if not match: break
-        weight_sum = 0
-        cum_weight_items = []
+#===============================================================================
+# Evaluation of abstract syntax trees produced by the !roll argument parser.
 
-        for item in match.group('items').split(','):
-            item = item.strip()
-            pmatch = re.match(r'(?P<weight>\d*\.?\d+)\s*:\s*(?P<item>.*)', item)
-            if pmatch:
-                weight = float(pmatch.group('weight'))
-                if weight <= 0: raise UserError('The weight "%s" is too small.'
-                    % abbrev_middle(pmatch.group('weight')))
-            if pmatch:
-                item = pmatch.group('item')
+class EvalOutput(object):
+    __slots__ = 'written'
+    def __init__(self, written=0):
+        self.written = written
+
+EvalContext = namedtuple('EvalContext', (
+    'output', # An instance of EvalOutput
+))
+
+# Returns (str, [roll_spec_1, roll_spec_2, ...])
+def eval_string(*args, **kwds):
+    parts, rolls = eval_string_parts(*args, **kwds)
+    return (''.join(parts), rolls)
+
+# Returns (str_iterator, [roll_spec_1, roll_spec_2, ...])
+def eval_string_parts(string, max_len=None, irc=False):
+    rolls = []
+    parts = list(string.parts)
+    for i, part in zip(count(), string.parts):
+        if isinstance(part, (Roll, ExRoll)):
+            text, spec = eval_roll_spec(part, irc=irc)
+            parts[i] = Text(text=text, source=parts[i].source)
+            rolls.append(spec)
+    if rolls:
+        string = string._replace(parts=parts)
+
+    def eval_string_parts_iter():
+        context = EvalContext(output=EvalOutput())
+        for s in e_string(string, context):
+            context.output.written += len(s)
+            if max_len is None or context.output.written < max_len:
+                yield s
             else:
-                weight = 1
-            weight_sum += weight
-            cum_weight_items.append((weight_sum, item))
+                yield s if context.output.written == max_len else \
+                      s[:max_len-context.output.written]
+                break
 
-        if math.isinf(weight_sum): raise UserError(
-            'The weights in "%s" are too large.' % abbrev_middle(match.group()))
-        if math.isnan(weight_sum): raise UserError(
-            'The weights in "%s" are invalid.' % abbrev_middle(match.group()))
-        
-        chosen_weight = random.uniform(0, weight_sum)
-        for cum_weight, item in cum_weight_items:
-            if chosen_weight <= cum_weight: break
-        
-        str = str[:match.start()] + item + str[match.end():]
-    return str
+    return (eval_string_parts_iter(), rolls)
 
 #-------------------------------------------------------------------------------
-ABBREV_MAX_LEN = 50
-def abbrev_middle(str):
-    if len(str) <= ABBREV_MAX_LEN: return str
-    left_len = (ABBREV_MAX_LEN - 3)/2
-    right_len = (ABBREV_MAX_LEN - 3) - left_len
-    return str[:left_len] + '...' + str[-right_len:]
+# Evaluation of AST nodes below the top level or after preprocessing.
+def e_string(string, context):
+    for part in string.parts:
+        for s in e_part(part, context): yield s
+
+def e_part(part, context):
+    if   isinstance(part, (Text, Escape)): return e_text(part, context)
+    elif isinstance(part, (Roll, ExRoll)): return e_roll(part, context)
+    elif isinstance(part, Name):           return e_name(part, context)
+    elif isinstance(part, Branch):         return e_branch(part, context)
+    else:                                  assert False
+
+def e_text(text, context):
+    yield text.text
+
+def e_roll(roll, context):
+    yield str(eval_roll(roll))
+
+def e_branch(branch, context):
+    weight_sum = 0.0
+    weight_sums = []
+    for choice in branch.choices:
+        if choice.weight <= 0: raise UserError(
+            'The weight in "%s" is too small.' % abbrev_right(str(branch.source)))
+        weight_sum += choice.weight
+        weight_sums.append(weight_sum)
+
+    if math.isinf(weight_sum): raise UserError(
+        'The weights in "%s" are too large.' % abbrev_middle(str(branch.source)))
+    if math.isnan(weight_sum): raise UserError(
+        'The weights in "%s" are invalid.' % abbrev_middle(str(branch.source)))
+
+    chosen_number = random.uniform(0, weight_sum)
+    for partial_weight_sum, choice in zip(weight_sums, branch.choices):
+        if chosen_number < partial_weight_sum:
+            chosen = choice
+            break
+    else:
+        chosen = branch.choices[-1]
+
+    for s in e_string(chosen.string, context): yield s
+
+def e_name(name, context):
+    yield str(name.source)
 
 #-------------------------------------------------------------------------------
-def roll_str_int(dice, sides, add, drop_low=0, drop_high=0):
-    rolls = roll_list(dice, sides)
-    drop = sorted(rolls)
-    del drop[drop_low:dice-drop_high]
+# Evaluation of dice rolls from abstract syntax tree nodes:
+
+# Returns an integer result.
+def eval_roll(roll):
+    return roll_int(*_eval_roll(roll))
+
+# Returns (r_str, r_spec), where:
+#   r_spec = ((d_spec, sides, add), value)
+#   d_spec = dice or (dice, drop_low, drop_high)
+def eval_roll_spec(roll, irc=False):
+    dice, sides, add, d_low, d_high = _eval_roll(roll)
+    r_str, value = roll_str_int(dice, sides, add, d_low, d_high, irc=irc)
+    d_spec = (dice, d_low, d_high) if d_low or d_high else dice
+    return r_str, ((d_spec, sides, add), value)
+
+# Returns (dice, sides, add, drop_low, drop_high), or raises UserError.
+def _eval_roll(roll):
+    if isinstance(roll, ExRoll):
+        if roll.number > roll.roll.dice: raise UserError(
+            '"%s" is invalid: it is not possible to keep %d out of %s dice rolls.'
+            % (roll.source, roll.number, roll.roll.dice))
+        if roll.type == 'w':
+            drop_low, drop_high = 0, roll.roll.dice - roll.number
+        elif roll.type == 'b':
+            drop_low, drop_high = roll.roll.dice - roll.number, 0
+        else:
+            assert False
+        roll = roll.roll
+    elif isinstance(roll, Roll):
+        drop_low, drop_high = 0, 0
+    else:
+        assert False
+
+    if roll.sides == 0: raise UserError(
+        'The number of sides in "%s" is invalid: it must be positive.'
+        % roll.source)
+    if (roll.dice > MAX_ROLL[0] or roll.sides > MAX_ROLL[1]
+    or abs(roll.add) > MAX_ROLL[2]): raise UserError(
+        'Some parameters of "%s" are too large: the largest dice roll allowed'
+        ' is %dd%d+%d.' % ((roll.source,) + MAX_ROLL))
+
+    return roll.dice, roll.sides, roll.add, drop_low, drop_high
+
+#-------------------------------------------------------------------------------
+# Evaluation of dice rolls (independently of the abstract syntax tree):
+
+# Returns roll_value.
+def roll_int(dice, sides, add, drop_low=0, drop_high=0):
+    rolls, drop = roll_list(dice, sides, drop_low, drop_high)
+    return sum(rolls) + add - sum(drop)
+
+# Returns (roll_str, roll_value)
+def roll_str_int(dice, sides, add, drop_low=0, drop_high=0, irc=False):
+    rolls, drop = roll_list(dice, sides, drop_low, drop_high)
     rint = sum(rolls) + add - sum(drop)
     rstr = ''.join((
-        '\2%s\2' % rint,
+        ('\2%d\2' if irc else '%d') % rint,
         '=%s' % '+'.join(map(str, rolls)) if add or dice>1 else '',
         ''.join('-%d' % r for r in drop),
         '(%+d)' % add if add else ''))
     return (rstr, rint)
 
-#-------------------------------------------------------------------------------
-def roll_list(dice, sides):
-    return [random.randint(1, sides) for i in xrange(dice)]
-
-#===============================================================================
-# Evaluator of abstract syntax trees produced by the !roll argument parser.
-
-class OutputRecord(object):
-    __slots__ = 'written'
-    def __init__(self, written=0):
-        self.written = written
-
-def eval_string(*args, **kwds):
-    return ''.join(eval_string_parts(*args, **kwds))
-
-def eval_string_parts(string, max_len=None):
-    output = OutputRecord()
-    for s in e_string(string, output):
-        output.written += len(s)
-        if max_len is None or output.written < max_len:
-            yield s
-        else:
-            yield s if output.written == max_len else s[:max_len-output.written]
-            break
-
-def e_string(string, output):
-    for part in string.parts:
-        for s in e_part(part, output): yield s
-
-def e_part(part, output):
-    if   isinstance(part, (Text, Escape)): return e_text(part, output)
-    elif isinstance(part, Roll):           return e_roll(part, output)
-    elif isinstance(part, ExRoll):         return e_ex_roll(part, output)
-    elif isinstance(part, Name):           return e_name(part, output)
-    elif isinstance(part, Branch):         return e_branch(part, output)
-    else:                                  assert False
-
-def e_text(text, output):
-    yield text.text
-
-def e_roll(roll, output):
-    raise NotImplementedError
-
-def e_ex_roll(ex_roll, output):
-    raise NotImplementedError
-
-def e_branch(branch, output):
-    raise NotImplementedError
-
-def e_name(name, output):
-    raise NotImplementedError
+# Returns ([roll1, roll2, ...], [drop1, drop2, ...])
+def roll_list(dice, sides, drop_low=0, drop_high=0):
+    rolls = [random.randint(1, sides) for i in xrange(dice)]
+    drop = sorted(rolls)
+    del drop[drop_low:dice-drop_high]
+    return rolls, drop
 
 #===============================================================================
 # Parser for the argument of !roll, producing an abstract syntax tree.
@@ -265,15 +263,16 @@ Choice = namedtuple('Choice', ('weight', 'string',       'source'))
 
 def parse_string(input):
     string, remain = p_string(ParseInput(input))
-    assert not remain
+    #assert re.match(r'\s*$', str(remain))
     return string
 
 def p_string(input, choice=False):
     if choice:
-        text_re = re.compile(r'([^,}][^bBwWdD\d{,}\\]*)?')
+        text_re = re.compile(
+            r'([^,}\s][^bBwWdD\d{,}\\\s]*|\s+(?![,}]))?')
         part_ps = p_escape, p_ex_roll, p_roll, p_name, p_branch
     else:
-        text_re = re.compile(r'.[^bBwWdD\d{]*')
+        text_re = re.compile(r'(.[^bBwWdD\d{]*?)?')
         part_ps = p_ex_roll, p_roll, p_name, p_branch
 
     start = input
@@ -296,13 +295,6 @@ def p_string(input, choice=False):
                     source = parts[-1].source + (input-text_start))
             else:
                 parts.append(Text(text=match.group(), source=input-text_start))
-
-    if parts and isinstance(parts[0], Text):
-        parts[0] = parts[0]._replace(text=parts[0].text.lstrip())
-        if not parts[0].text: parts.pop(0)
-    if parts and isinstance(parts[-1], Text):
-        parts[-1] = parts[-1]._replace(text=parts[-1].text.rstrip())
-        if not parts[-1].text: parts.pop(-1)
 
     return String(parts=parts, source=input-start), input
 
@@ -332,20 +324,20 @@ def p_name(input):
 
 def p_branch(start_input):
     choices = []
-    _, input = p_token('{', start_input)
+    _, input = p_match(r'\{\s*', start_input)
     while True:
         choice, input = p_choice(input)
         choices.append(choice)
         try:
-            _, input = p_token(',', input)
+            _, input = p_match(r'\s*,\s*', input)
         except ParseFail:
             break
-    _, input = p_token('}', input)
+    _, input = p_match(r'\s*\}', input)
     return Branch(choices=choices, source=input-start_input), input
 
 def p_choice(start_input):
     match, string, input = p_seq(
-        (p_match, r'(\s*(?P<w>\d*\.\d+)\s*:)?'), p_choice_string, start_input)
+        (p_match, r'((?P<w>\d*\.\d+)\s*:\s*)?'), p_choice_string, start_input)
     return Choice(
         weight = float(match.group('w')) if match.group('w') else 1.0,
         string = string,
@@ -706,3 +698,16 @@ def def_match(query, defn):
         return re.match(util.wc_to_re(query), id_str, flags=re.I) is not None
     else:
         return re.match(util.wc_to_re(query), defn.name) is not None
+
+#===============================================================================
+# Miscellaneous utilities:
+
+def abbrev_middle(str, max_len=50, mark='(...)'):
+    if len(str) <= max_len: return str
+    left_len = (max_len - len(mark))/2
+    right_len = (max_len - len(mark)) - left_len
+    return str[:left_len] + mark + str[-right_len:]
+
+def abbrev_right(str, max_len=50, mark='(...)'):
+    if len(str) <= max_len: return str
+    return str[:max_len-len(mark)] + mark
