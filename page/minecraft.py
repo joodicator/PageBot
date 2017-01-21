@@ -128,9 +128,11 @@ def h_bridge_names_req(bot, target, source, name_query):
 
         (state, value) = yield query(work, 'players')
         if state == 'success':
+            result = value.split()
+            if target != source:
+                result = [sub_name(work, n) for n in result]
             bridge.notice(
-                bot, target, 'NAMES_RES', source, name,
-                [sub_name(work, n) for n in value.split()])
+                bot, target, 'NAMES_RES', source, name, result)
         elif state == 'failure':
             bridge.notice(bot, target, 'NAMES_ERR', source, name, value)
 

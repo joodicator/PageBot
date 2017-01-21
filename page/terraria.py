@@ -172,7 +172,8 @@ def h_bridge_names_req(bot, target, source, query):
         return
 
     names = work.terraria_protocol.players.values()
-    names = [bridge.substitute_name(target, n) for n in names]
+    if target != source:
+        names = [bridge.substitute_name(target, n) for n in names]
     bridge.notice(bot, target, 'NAMES_RES', source, name, names)
 
 #==============================================================================#
