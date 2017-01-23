@@ -1,4 +1,5 @@
 from collections import namedtuple
+from UserDict import DictMixin
 from itertools import *
 from functools import *
 import re
@@ -26,6 +27,9 @@ DEF_MAX_NAME_LEN = 32
 DEF_DECAY_S = 30 * 24 * 60 * 60
 
 MAX_ROLL = 999, 999999999, 999999999
+MAX_NAMES_EXPANDED = 5000
+MAX_STACK_DEPTH    = 500
+MAX_MESSAGE_LENGTH = 400
 
 #===============================================================================
 @link('HELP*', ('BRIDGE', 'HELP*'))
@@ -49,23 +53,36 @@ def h_help_roll(bot, reply, args, bridge):
         ' wJ) individual dice out of the original M dice rolled. If J is'
         ' omitted, it it defaults to 1. Examples: "!roll w(2d8-1)" or'
         ' "!roll b2(3d6)".')
-        reply('roll {[WEIGHT1:]ITEM1, [WEIGHT2:]ITEM2, ...}',
+        reply('roll ... {[WEIGHT1:]ITEM1, [WEIGHT2:]ITEM2, ...} ...',
         'For each comma-separated list of items enclosed in curly braces,'
         ' chooses one item at random and replaces the list with that item.'
         ' Items are selected with probability proportional to their WEIGHT,'
         ' which can be specified as a positive number followed by a colon'
         ' before the item, or otherwise defaults to 1. Each item may contain'
-        ' dice rolls, or further brace-delimited lists to be recursively'
-        ' evaluated in the same way.')
+        ' dice rolls, further brace-delimited lists, or other !roll syntax.',
+        'Within a brace-delimited list, any backslash character (\2\\\2)'
+        ' followed by any other character will be replaced by the second character'
+        ' verbatim in the output, preventing it from having any special meaning.'
+        ' Any space characters not preceded by a backslash at the beginning or'
+        ' end of an ITEM will be removed. For further advanced features,'
+        ' see \2!help roll 3\2.')
+    elif args and int(args) == 3 and not bridge:
+        reply('roll ... {{NAME}} ...',
+        'Where NAME corresponds to a definition set using \2roll-def+\2,'
+        ' {{NAME}} is replaced with the body of the definition, which is itself'
+        ' further expanded if it contains any !roll syntax. In addition, by'
+        ' default, {{me}} expands to the user\'s nick, and {{nick}} expands'
+        ' to a random nick from the same channel. See also:'
+        ' \2!help roll-def+\2.')
     else:
         reply('roll MdN\2 or \2!roll MdN+K\2 or \2!roll MdN-K',
         'Simulates the rolling of M dice, each of which has N sides, giving'
         ' the sum of the individual results. Optionally, adds (for MdN+K) or'
         ' subtracts (for MdN-K) a value of K to or from the result. Example:'
         ' "!roll 2d6+1".' +
-        (' For advanced features, see \2!help roll 2\2. See also: '
-        '\2!help missed-rolls\2.' if not bridge else
-        ' For advanced features, send \2!help roll 2\2 by IRC.'))
+        (' For advanced features, see \2!help roll 2\2, and \2!help roll 3\2'
+        ' preferably in a private message. See also: \2!help missed-rolls\2.'
+        if not bridge else ''))
 
 #-------------------------------------------------------------------------------
 class UserError(Exception):
@@ -77,31 +94,56 @@ class UserError(Exception):
 @link(('BRIDGE','ACTION','!roll'), ('BRIDGE','ACTION','!r'), action=True)
 def h_roll(bot, name, target, args, reply, action):
     try:
-        msg, rolls = eval_string(parse_string(args), irc=True, max_len=512)
+        if target and target.startswith('#'):
+            chan = target.lower()
+            defs = auto_defs(bot, name, target)
+            if chan in global_defs:
+                defs = DictStack(global_defs[chan], defs)
+        else:
+            defs = None
+
+        msg, rolls = eval_string(
+            parse_string(args), defs=defs, irc=True,
+            max_len            = MAX_MESSAGE_LENGTH,
+            max_names_expanded = MAX_NAMES_EXPANDED,
+            max_stack_depth    = MAX_STACK_DEPTH)
+
         if target and target.startswith('#'):
             id = util.ID(name, '*', '*')
             yield sign('DICE_ROLLS', bot, id, target, rolls, msg)
+
         if action:
             reply(from_name=lambda name: '* %s %s' % (name, msg), prefix=False)
         else:
             reply(msg)
+
     except UserError as e:
         reply('Error: %s' % e.message)
     except Exception as e:
         reply('Error: %r' % e)
         raise
 
+def auto_defs(bot, nick, chan):
+    auto = ParseSource('<automatic definition>')
+    defs = {'me': Def(name='me', body_ast=String([Text(nick, auto)], auto))}
+    nicks = channel.track_channels[chan.lower()]
+    if nicks:
+        defs['nick'] = Def(name='nick', body_ast=String([Branch(
+            [Choice(1.0, String([Text(n, auto)], auto), auto)
+             for n in nicks], auto)], auto))
+    return defs
+
 #===============================================================================
 # Evaluation of abstract syntax trees produced by the !roll argument parser.
 
-class EvalOutput(object):
-    __slots__ = 'written'
-    def __init__(self, written=0):
-        self.written = written
+class EvalRecord():
+    __slots__ = 'names_expanded', 'stack_depth'
+    def __init__(self):
+        self.names_expanded = 0
+        self.stack_depth = 0
 
 EvalContext = namedtuple('EvalContext', (
-    'output', # An instance of EvalOutput
-))
+    'defs', 'record', 'max_names_expanded', 'max_stack_depth'))
 
 # Returns (str, [roll_spec_1, roll_spec_2, ...])
 def eval_string(*args, **kwds):
@@ -109,7 +151,10 @@ def eval_string(*args, **kwds):
     return (''.join(parts), rolls)
 
 # Returns (str_iterator, [roll_spec_1, roll_spec_2, ...])
-def eval_string_parts(string, max_len=None, irc=False):
+def eval_string_parts(
+    string, max_len=None, irc=False, defs=None,
+    max_names_expanded=None, max_stack_depth=None
+):
     rolls = []
     parts = list(string.parts)
     for i, part in zip(count(), string.parts):
@@ -121,14 +166,18 @@ def eval_string_parts(string, max_len=None, irc=False):
         string = string._replace(parts=parts)
 
     def eval_string_parts_iter():
-        context = EvalContext(output=EvalOutput())
+        context = EvalContext(
+            defs=defs,
+            record=EvalRecord(),
+            max_names_expanded=max_names_expanded,
+            max_stack_depth=max_stack_depth)
+        written = 0
         for s in e_string(string, context):
-            context.output.written += len(s)
-            if max_len is None or context.output.written < max_len:
+            written += len(s)
+            if max_len is None or written <= max_len:
                 yield s
             else:
-                yield s if context.output.written == max_len else \
-                      s[:max_len-context.output.written]
+                yield s[:max_len-written] + '(...)'
                 break
 
     return (eval_string_parts_iter(), rolls)
@@ -136,8 +185,7 @@ def eval_string_parts(string, max_len=None, irc=False):
 #-------------------------------------------------------------------------------
 # Evaluation of AST nodes below the top level or after preprocessing.
 def e_string(string, context):
-    for part in string.parts:
-        for s in e_part(part, context): yield s
+    return chain(*(e_part(part, context) for part in string.parts))
 
 def e_part(part, context):
     if   isinstance(part, (Text, Escape)): return e_text(part, context)
@@ -167,17 +215,38 @@ def e_branch(branch, context):
         'The weights in "%s" are invalid.' % abbrev_middle(str(branch.source)))
 
     chosen_number = random.uniform(0, weight_sum)
-    for partial_weight_sum, choice in zip(weight_sums, branch.choices):
+    for partial_weight_sum, choice in izip(weight_sums, branch.choices):
         if chosen_number < partial_weight_sum:
             chosen = choice
             break
     else:
         chosen = branch.choices[-1]
 
-    for s in e_string(chosen.string, context): yield s
+    return e_string(chosen.string, context)
 
 def e_name(name, context):
-    yield str(name.source)
+    if context.defs is None or name.name not in context.defs:
+        yield str(name.source)
+        return
+
+    if context.max_stack_depth is not None:
+        context.record.stack_depth += 1
+        if context.record.stack_depth >= context.max_stack_depth:
+            raise UserError('In evaluating this result, the maximum recursion'
+            ' depth of %d would be exceeded.' % context.max_stack_depth)
+
+    if context.max_names_expanded is not None:
+        context.record.names_expanded += 1
+        if context.record.names_expanded >= context.max_names_expanded:
+            raise UserError('In evaluating this result, more than the maximum'
+            ' of %d definitions would be expanded.' % context.max_names_expanded)
+
+    defn = context.defs[name.name]
+    for s in e_string(defn.body_ast, context):
+        yield s
+
+    if context.max_stack_depth is not None:
+        context.record.stack_depth -= 1
 
 #-------------------------------------------------------------------------------
 # Evaluation of dice rolls from abstract syntax tree nodes:
@@ -337,7 +406,7 @@ def p_branch(start_input):
 
 def p_choice(start_input):
     match, string, input = p_seq(
-        (p_match, r'((?P<w>\d*\.\d+)\s*:\s*)?'), p_choice_string, start_input)
+        (p_match, r'((?P<w>\d*\.?\d+)\s*:\s*)?'), p_choice_string, start_input)
     return Choice(
         weight = float(match.group('w')) if match.group('w') else 1.0,
         string = string,
@@ -372,8 +441,10 @@ class ParseInput(object):
 
 class ParseSource(object):
     __slots__ = 'string', 'start', 'end'
-    def __init__(self, string, start, end):
-        self.string, self.start, self.end = string, start, end
+    def __init__(self, string=None, start=None, end=None):
+        self.string = '<unknown>' if string is None else string
+        self.start = 0 if start is None else start
+        self.end = len(self.string) if end is None else end
     def __str__(self):
         return self.string[self.start:self.end]
     def __add__(self, other):
@@ -459,30 +530,37 @@ class GlobalDefs(dict):
             self.decay_start = time.time()
 
 class Def(object):
-    __slots__ = 'body'
-    def __init__(self, body=None, jdict=None):
-        if jdict is None:
-            self.body = body
-        else:
-            self.body = jdict['body']
-    def save_jdict(self):
-        return {'body': self.body}
+    __slots__ = 'name', '_body_str', '_body_ast'
+    def __init__(self, name='', body_str=None, body_ast=None):
+        self.name = name
+        self._body_str = body_str
+        self._body_ast = body_ast
+
+    @property
+    def body_str(self):
+        return self._body_str if self._body_str is not None else \
+               str(self._body_ast.source) if self._body_ast is not None else \
+               None
+
+    @property
+    def body_ast(self):
+        return self._body_ast if self._body_ast is not None else \
+               parse_string(self._body_str) if self._body_str is not None else \
+               None
 
 class GlobalDef(Def):
-    __slots__ = 'name', 'id', 'modes', 'time'
-    def __init__(
-        self, name='', id=None, modes=None, time=None, jdict=None, *a, **k
-    ):
-        super(GlobalDef, self).__init__(*a, jdict=jdict, **k)
-        self.name = name
+    __slots__ = 'id', 'modes', 'time'
+    def __init__(self, id=None, modes=None, time=None, jdict=None, *a, **k):
         if jdict is None:
+            super(GlobalDef, self).__init__(*a, **k)
             self.id, self.modes, self.time = id, modes, time
         else:
+            super(GlobalDef, self).__init__(*a, body_str=jdict.get('body'), **k)
             self.id = util.ID(*jdict['id']) if 'id' in jdict else None
             self.modes = jdict.get('modes')
             self.time = jdict.get('time')
     def save_jdict(self):
-        jdict = super(GlobalDef, self).save_jdict()
+        jdict = {'body': self.body_str}
         if self.id is not None:
             jdict['id'] = list(self.id)
         if self.modes is not None:
@@ -508,7 +586,7 @@ def h_help_roll_def_p(bot, reply, args):
 @link('!roll-def+', '!rd+')
 def h_roll_def_p(bot, id, target, args, full_msg):
     name, body = re.match(r'([^\s=]*)\s*=?\s*(.*)', args).groups()
-    body = body.strip()
+    body = str(parse_string(body).source)
     if len(name) > DEF_MAX_NAME_LEN or not re.match(r'(?!\d)[\w-]+$', name):
         return message.reply(bot, id, target, 'Error: you must specify a name'
         ' consisting of letters, digits, \2-\2 and \2_\2, not starting with a'
@@ -548,7 +626,7 @@ def h_roll_def_p(bot, id, target, args, full_msg):
         % defs[name].id)
 
     modes = channel.umode_channels[chan].get(id.nick.lower(), '')
-    defs[name] = GlobalDef(name=name, id=id, modes=modes, time=now, body=body)
+    defs[name] = GlobalDef(name=name, id=id, modes=modes, time=now, body_str=body)
     defs.touch()
     global_defs[chan] = defs
     save_defs()
@@ -662,10 +740,11 @@ def h_roll_def_q(bot, id, target, args, full_msg):
                 time_str),
             prefix=False)
         message.reply(bot, id, target,
-            '    %s = %s' % (defn.name, defn.body), prefix=False)
+            '    %s = %s' % (defn.name, defn.body_str), prefix=False)
     elif len(defs) <= 4:
         message.reply(bot, id, target, '%s:' % defs_str, prefix=False)
-        for row in util.join_rows(*((d.name, d.body) for d in defs), sep=' = '):
+        rows = util.join_rows(*((d.name, d.body_str) for d in defs), sep=' = ')
+        for row in rows:
             message.reply(bot, id, target, '    %s' % row, prefix=False)
     else:
         names = ', '.join(d.name for d in defs)
@@ -711,3 +790,17 @@ def abbrev_middle(str, max_len=50, mark='(...)'):
 def abbrev_right(str, max_len=50, mark='(...)'):
     if len(str) <= max_len: return str
     return str[:max_len-len(mark)] + mark
+
+class DictStack(DictMixin):
+    __slots__ = 'stack'
+    def __init__(self, *stack):
+        self.stack = stack
+    def __getitem__(self, key):
+        for dict in self.stack:
+            if key in dict:
+                return dict[key]
+        raise KeyError
+    def __setitem__(self, key):
+        raise TypeError('%r does not support item assignment.' % type(self))
+    def __delitem__(self, key):
+        raise TypeError('%r does not support item deletion.' % type(self))
