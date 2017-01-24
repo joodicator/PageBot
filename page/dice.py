@@ -35,7 +35,8 @@ MAX_MESSAGE_LENGTH = 400
 #===============================================================================
 @link('HELP*', ('BRIDGE', 'HELP*'))
 def h_help(bot, reply, args):
-    reply('roll MdN[+K|-K]', 'Simulates the rolling of dice.')
+    reply('roll MdN[+K|-K]',
+    'Simulates the rolling of dice, and other random processes.')
 
 @link(('HELP', 'roll'), ('HELP', 'r'), bridge=False)
 @link(('BRIDGE', 'HELP', 'roll'), ('BRIDGE', 'HELP', 'r'), bridge=True)
