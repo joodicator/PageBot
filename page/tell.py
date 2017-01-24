@@ -346,6 +346,11 @@ def untell_nicks(bot, id, target, channel, args):
     reply(bot, id, target, msg)
 
 #==============================================================================#
+@link('HELP')
+def h_help_dismiss_short(bot, reply, args):
+    reply('dismiss [NICK]',
+    'Cancels delivery of the last message left for you.')
+
 @link(('HELP', 'dismiss'))
 def h_help_dismiss(bot, reply, args):
     if args and int(args) == 2:
