@@ -25,6 +25,7 @@ DEF_MAX_PER_CHAN = 1000
 DEF_MAX_PER_USER = 100
 DEF_MAX_NAME_LEN = 32
 DEF_DECAY_S = 30 * 24 * 60 * 60
+RESERVED_NAMES = 'me', 'nick'
 
 MAX_ROLL = 999, 999999999, 999999999
 MAX_NAMES_EXPANDED = 5000
@@ -70,10 +71,9 @@ def h_help_roll(bot, reply, args, bridge):
         reply('roll ... {{NAME}} ...',
         'Where NAME corresponds to a definition set using \2roll-def+\2,'
         ' {{NAME}} is replaced with the body of the definition, which is itself'
-        ' further expanded if it contains any !roll syntax. In addition, by'
-        ' default, {{me}} expands to the user\'s nick, and {{nick}} expands'
-        ' to a random nick from the same channel. See also:'
-        ' \2!help roll-def+\2.')
+        ' further expanded if it contains any !roll syntax. In any case,'
+        ' {{me}} expands to the user\'s nick, and {{nick}} expands to a'
+        ' random nick from the same channel. See also: \2!help roll-def+\2.')
     else:
         reply('roll MdN\2 or \2!roll MdN+K\2 or \2!roll MdN-K',
         'Simulates the rolling of M dice, each of which has N sides, giving'
@@ -98,7 +98,7 @@ def h_roll(bot, name, target, args, reply, action):
             chan = target.lower()
             defs = auto_defs(bot, name, target)
             if chan in global_defs:
-                defs = DictStack(global_defs[chan], defs)
+                defs = DictStack(defs, global_defs[chan])
         else:
             defs = None
 
@@ -586,17 +586,21 @@ def h_help_roll_def_p(bot, reply, args):
 @link('!roll-def+', '!rd+')
 def h_roll_def_p(bot, id, target, args, full_msg):
     name, body = re.match(r'([^\s=]*)\s*=?\s*(.*)', args).groups()
-    body = str(parse_string(body).source)
     if len(name) > DEF_MAX_NAME_LEN or not re.match(r'(?!\d)[\w-]+$', name):
         return message.reply(bot, id, target, 'Error: you must specify a name'
         ' consisting of letters, digits, \2-\2 and \2_\2, not starting with a'
         ' digit and no longer than %d characters. See \2!help roll-def+\2 for'
         ' correct usage.' % DEF_MAX_NAME_LEN)
 
+    if name in RESERVED_NAMES: return message.reply(bot, id, target,
+        'Error: the name "%s" is reserved for special use and may not be'
+        ' defined.' % name)
+
     if sum(len(d) for d in global_defs.itervalues()) >= DEF_MAX_TOTAL:
         return message.reply(bot, id, target, 'Error: there are too many defin'
         'itions stored. Please notify the bot administrator of this message.')
 
+    body = str(parse_string(body).source)
     now = int(time.time())
     chan = (target or ('%s!%s@%s' % id)).lower()
     defs = global_defs.get(chan) or GlobalDefs()
@@ -741,7 +745,7 @@ def h_roll_def_q(bot, id, target, args, full_msg):
             prefix=False)
         message.reply(bot, id, target,
             '    %s = %s' % (defn.name, defn.body_str), prefix=False)
-    elif len(defs) <= 4:
+    elif len(defs) <= 3:
         message.reply(bot, id, target, '%s:' % defs_str, prefix=False)
         rows = util.join_rows(*((d.name, d.body_str) for d in defs), sep=' = ')
         for row in rows:
