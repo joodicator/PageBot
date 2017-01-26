@@ -393,8 +393,8 @@ def h_dismiss(bot, id, chan, query, full_msg, reply):
     state.dismissed_msgs.append(msg)
 
     count = len([m for m in state.msgs if would_deliver(id, chan, m)])
-    msg = ('1 message from %s deleted; you now have %s message%s'
-       ' (you may reverse this using "undismiss").'
+    msg = ('1 message from %s deleted; you now have %s message%s.'
+       ' (You may reverse this using "undismiss").'
        % (msg.from_id.nick, count, 's' if count != 1 else ''))
 
     put_state(state)
