@@ -72,16 +72,15 @@ def h_help_roll(bot, reply, args, bridge):
         reply('roll ... {{NAME}} ...',
         'Where NAME corresponds to a definition set using \2roll-def+\2,'
         ' {{NAME}} is replaced with the body of the definition, which is itself'
-        ' further expanded if it contains any !roll syntax. In any case,'
-        ' {{me}} expands to the user\'s nick, and {{nick}} expands to a'
-        ' random nick from the same channel. See also: \2!help roll-def+\2.')
+        ' further expanded if it contains any !roll syntax. See also:'
+        ' \2!help roll-def+\2.')
     else:
         reply('roll MdN\2 or \2!roll MdN+K\2 or \2!roll MdN-K',
         'Simulates the rolling of M dice, each of which has N sides, giving'
         ' the sum of the individual results. Optionally, adds (for MdN+K) or'
         ' subtracts (for MdN-K) a value of K to or from the result. Example:'
         ' "!roll 2d6+1".' +
-        (' For advanced features, see \2!help roll 2\2, and \2!help roll 3\2'
+        (' For advanced features, see \2!help roll 2\2 and \2!help roll 3\2,'
         ' preferably in a private message. See also: \2!help missed-rolls\2.'
         if not bridge else ''))
 
@@ -125,14 +124,7 @@ def h_roll(bot, name, target, args, reply, action):
         raise
 
 def auto_defs(bot, nick, chan):
-    auto = ParseSource('<automatic definition>')
-    defs = {'me': Def(name='me', body_ast=String([Text(nick, auto)], auto))}
-    nicks = channel.track_channels[chan.lower()]
-    if nicks:
-        defs['nick'] = Def(name='nick', body_ast=String([Branch(
-            [Choice(1.0, String([Text(n, auto)], auto), auto)
-             for n in nicks], auto)], auto))
-    return defs
+    return {}
 
 #===============================================================================
 # Evaluation of abstract syntax trees produced by the !roll argument parser.
