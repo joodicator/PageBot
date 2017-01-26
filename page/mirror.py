@@ -11,11 +11,20 @@ import imgur
 import message
 import url_collect
 
-MIRROR_HOSTS = 'i.4cdn.org', 'is.4chan.org'
+MIRROR_HOSTS = (
+    'i*.4cdn.org',
+    'i*.photobucket.com',
+    '*.fjcdn.com',
+    '*i*.tinypic.com',
+)
+
 CACHE_SIZE = 1024
 REPEAT_S = 60*60*3
 
 link, install, uninstall = util.LinkSet().triple()
+
+mirror_hosts_re = re.compile(
+    '^(%s)$' % '|'.join(util.wc_to_re(h, anchor=False) for h in MIRROR_HOSTS))
 
 ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
 
@@ -48,7 +57,7 @@ def get_mirror_url(url, chan):
     if not match: return
     pref,host,suff,path,frag = match.group('pref','host','suff','path','frag')
     pref,host = pref.lower(),host.lower()
-    if host not in MIRROR_HOSTS: return
+    if not mirror_hosts_re.match(host): return
     if not re.search(r'\.(png|jpe?g|gif)$', path): return
 
     normal_url = ''.join((pref, host, suff, path, frag))

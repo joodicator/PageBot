@@ -400,13 +400,15 @@ def gen_chain(*gens):
 
 #==============================================================================#
 # Returns a Python regular expression pattern string equivalent to the given
-# wildcard pattern (which accepts only the entire input, not part of it).
-def wc_to_re(wc):
+# wildcard pattern. If `anchor' is True, the pattern will only match the full
+# input string (i.e. it is anchored with ^ and $).
+def wc_to_re(wc, anchor=True):
     def sub(match):
         if match.group(1): return '.*'
         elif match.group(2): return '.'
         else: return re.escape(match.group(3))
-    return '^' + re.sub(r'(\*)|(\?)|([^*?]+)', sub, wc) + '$'
+    pattern = re.sub(r'(\*)|(\?)|([^*?]+)', sub, wc)
+    return ('^%s$' % pattern) if anchor else pattern
 
 
 #===============================================================================
