@@ -12,6 +12,7 @@ import socket
 import zlib
 import ssl
 import re
+import locale
 
 from bs4 import BeautifulSoup
 from untwisted.magic import sign
@@ -26,8 +27,9 @@ import imgur
 #==============================================================================#
 link, install, uninstall = util.LinkSet().triple()
 
-AGENT = 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:50.0) Gecko/20100101 Firefox/50.0'
+USER_AGENT = 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:50.0) Gecko/20100101 Firefox/50.0'
 ACCEPT_ENCODING = 'gzip, deflate'
+
 TIMEOUT_SECONDS = 20
 READ_BYTES_MAX = 1024*1024
 CMDS_PER_LINE_MAX = 6
@@ -37,12 +39,19 @@ BS4_PARSER = 'html5lib'
 MAX_AURL = 35
 MAX_DESC_LEN = 100
 
-ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+def get_default_headers():
+    yield 'User-Agent', USER_AGENT
+    yield 'Accept-Encoding', ACCEPT_ENCODING
+    language, encoding = locale.getdefaultlocale()
+    if language != 'C':
+        yield 'Accept-Language', language
+
+default_headers = tuple(get_default_headers())
 
 def get_opener():
     return urllib2.build_opener(
         urllib2.HTTPCookieProcessor,
-        urllib2.HTTPSHandler(context=ssl_context))
+        urllib2.HTTPSHandler(context=ssl.SSLContext(ssl.PROTOCOL_SSLv23)))
 
 #==============================================================================#
 @link('HELP*')
@@ -125,8 +134,8 @@ def get_title_proxy(url):
     url = utf8_url_to_ascii(url)
 
     request = urllib2.Request(url)
-    request.add_header('User-Agent', AGENT)
-    request.add_header('Accept-Encoding', ACCEPT_ENCODING)
+    for header in default_headers:
+        request.add_header(*header)
 
     host = request.get_host()
     if not is_global_address(host): raise PageURLError(
@@ -205,8 +214,8 @@ def get_title_parts(url, type, stream=None):
 def get_title_html(url, type, stream=None):
     if stream is None:
         request = urllib2.Request(url)
-        request.add_header('User-Agent', AGENT)
-        request.add_header('Accept-Encoding', ACCEPT_ENCODING)
+        for header in default_headers:
+            request.add_header(*header)
         stream = get_opener().open(
             request, timeout=TIMEOUT_SECONDS)
 
@@ -415,9 +424,8 @@ def google_image_title_soup(url):
     request = urllib2.Request('https://www.google.com/searchbyimage?'
         + urllib.urlencode({'image_url':url, 'safe':'off'}))
     request.add_header('Referer', 'https://www.google.com/imghp?hl=en&tab=wi')
-    request.add_header('User-Agent', AGENT)
-    with closing(get_opener().open(request,
-    timeout=TIMEOUT_SECONDS)) as stream:
+    request.add_header('User-Agent', USER_AGENT)
+    with closing(get_opener().open(request, timeout=TIMEOUT_SECONDS)) as stream:
         text = stream.read(READ_BYTES_MAX)
         return BeautifulSoup(text, BS4_PARSER)
 
