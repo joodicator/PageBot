@@ -610,20 +610,27 @@ def h_roll_def_p(bot, id, target, args, full_msg):
         is_op = channel.has_op_in(bot, id.nick, chan, 'h')
         udefs = None if is_op else \
                 sum(1 for d in defs.itervalues() if util.same_user(d.id, id))
+        modes = channel.umode_channels[chan].get(id.nick.lower(), '')
 
-    if udefs is not None and udefs >= DEF_MAX_PER_USER:
+    if name not in defs and udefs is not None and udefs >= DEF_MAX_PER_USER:
         return message.reply(bot, id, target, 'Error: you have made too many'
         ' definitions here - no more than %d are permitted. See \2!help'
         ' roll-def-\2 to delete existing definitions.' % DEF_MAX_PER_USER)
 
-    if target is not None and not is_op and name in defs \
-    and defs[name].id and not util.same_user(defs[name].id, id):
-        return message.reply(bot, id, target, 'Error: this name is already'
-        ' defined by %s!%s@%s; only the same user or an operator may change it.'
-        % defs[name].id)
+    def_id = defs[name].id if name in defs else id
+    def_modes = defs[name].modes if name in defs else \
+                modes if target is not None else None
 
-    modes = channel.umode_channels[chan].get(id.nick.lower(), '')
-    defs[name] = GlobalDef(name=name, id=id, modes=modes, time=now, body_str=body)
+    if target is not None and not is_op and name in defs \
+    and channel.modes_has_op_in(bot, defs[name].modes, 'h') \
+    and not util.same_user(id, def_id):
+        def_nick = channel.modes_prefix_nick(bot, def_id.nick, def_modes)
+        return message.reply(bot, id, target, 'Error: this name was defined by'
+            ' a channel operator, namely %s!%s@%s; only the same user or another'
+            ' operator may change it.' % (def_nick, def_id.user, def_id.host))
+
+    defs[name] = GlobalDef(
+        name=name, id=def_id, modes=def_modes, time=now, body_str=body)
     defs.touch()
     global_defs[chan] = defs
     save_defs()
@@ -635,11 +642,11 @@ def h_roll_def_p(bot, id, target, args, full_msg):
 def h_help_roll_def_m(bot, reply, args):
     reply('!roll-def-\2 or \2!rd- NAME1 [NAME2 ...]',
     'Delete the definitions made using \2!rd+\2 of each given NAME. If the user'
-    ' is not a channel operator, only definitions made by the same user will be'
-    ' deleted. Each NAME may contain wildcard characters \2?\2 and \2*\2, may'
-    ' consist of a hostmask, or may may be preceded by \2!\2 to prevent its'
-    ' deletion, as in \2!rd?\2. All names are case-sensitive. See also: \2!help'
-    ' rd+\2, \2!help rd?\2.')
+    ' is not a channel operator, only definitions originally made by the same'
+    ' user will be deleted. Each NAME may contain wildcard characters \2?\2 and'
+    ' \2*\2, may consist of a hostmask, or may may be preceded by \2!\2 to'
+    ' prevent its deletion, as in \2!rd?\2. All names are case-sensitive. See'
+    ' also: \2!help rd+\2, \2!help rd?\2.')
 
 @link('!roll-def-', '!rd-')
 def h_roll_def_m(bot, id, target, args, full_msg):
@@ -656,7 +663,10 @@ def h_roll_def_m(bot, id, target, args, full_msg):
     else:
         ddefs, udefs = [], []
         for defn in defs:
-            (ddefs if util.same_user(id, defn.id) else udefs).append(defn)
+            if util.same_user(id, defn.id):
+                ddefs.append(defn)
+            else:
+                udefs.append(defn)
 
     if chan in global_defs:
         for defn in ddefs:
@@ -725,15 +735,17 @@ def h_roll_def_q(bot, id, target, args, full_msg):
             delta = datetime.datetime.utcnow() - dt_set
             d_mins, d_secs = divmod(delta.seconds, 60)
             d_hours, d_mins = divmod(d_mins, 60)
-            time_str = ' on %s UTC (%sd, %02d:%02d:%02d ago)' % (
+            time_str = ', last changed %s UTC (%sd, %02d:%02d:%02d ago)' % (
                 dt_set.strftime('%d %b %Y, %H:%M'),
                 delta.days, d_hours, d_mins, d_secs)
         else:
             time_str = ''
+        def_mnick = channel.modes_prefix_nick(bot, defn.id.nick, defn.modes)
+        def_id = def_mnick, defn.id.user, defn.id.host
         message.reply(bot, id, target,
             '%s, set%s%s:' % (
                 defs_str,
-                (' by %s!%s@%s' % defn.id) if chan.startswith('#') else '',
+                (' by %s!%s@%s' % def_id) if chan.startswith('#') else '',
                 time_str),
             prefix=False)
         message.reply(bot, id, target,
@@ -744,7 +756,7 @@ def h_roll_def_q(bot, id, target, args, full_msg):
         for row in rows:
             message.reply(bot, id, target, '    %s' % row, prefix=False)
     else:
-        names = ', '.join(d.name for d in defs)
+        names = ', '.join(sorted(d.name for d in defs))
         if len(names) > 300: names = names[:300] + '(...)'
         message.reply(bot, id, target,
             '%s: %s. Use \2!rd?%s NAME\2 to view the details of a definition.'

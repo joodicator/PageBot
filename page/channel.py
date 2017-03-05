@@ -211,23 +211,30 @@ def split_name(bot, name):
 # Adds a suitable prefix to "nick" based on the modes it possesses in "chan".
 # e.g. 'n1', '#n1' -> '@n1'
 def prefix_nick(bot, nick, chan):
+    modes = umode_channels[chan.lower()].get(nick.lower(), '')
+    return modes_prefix_nick(bot, nick, modes)
+
+# As `prefix_nick', but takes a sequence of channel user modes instead of
+# a channel.
+def modes_prefix_nick(bot, nick, modes):
     pre_ms, pre_cs = bot.isupport['PREFIX']
-    umodes = umode_channels[chan.lower()].get(nick.lower(), '')
     for pre_m, pre_c in izip(pre_ms, pre_cs):
-        if pre_m in umodes: return pre_c + nick
+        if pre_m in modes: return pre_c + nick
     return nick
 
 # Returns True if (according to current records) "nick" has a channel mode
 # matching "op", or greater in power than "op", according to the ISUPPORT PREFIX
 # record of the server (and some additional heuristics); or otherwise False.
 def has_op_in(bot, nick, chan, op='o'):
+    modes = umode_channels[chan.lower()].get(nick.lower(), '')
+    return modes_has_op_in(bot, modes, op=op)
+
+# As `has_op_in', but takes a sequence of channel user modes rather than a nick.
+def modes_has_op_in(bot, modes, op='o'):
     pre_ms, pre_cs = bot.isupport['PREFIX']
-    umodes = umode_channels[chan.lower()].get(nick.lower(), '')
 
     if op in pre_ms:
-        return any(
-            pre_ms.index(um) <= pre_ms.index(op)
-            for um in umodes)
+        return any(pre_ms.index(um) <= pre_ms.index(op) for um in modes)
 
     alt_pre_ms = 'qohv'
     if op in alt_pre_ms:
@@ -235,7 +242,7 @@ def has_op_in(bot, nick, chan, op='o'):
         return any(
             pre_ms.index(um) <= pre_ms.index(om)
             for om in alt_pre_ms[:op_ix] if om in pre_ms
-            for um in umodes)
+            for um in modes)
 
     return False
 
