@@ -13,7 +13,7 @@ PREFIX_REG = re.compile(PREFIX_STR)
 #ARGUMENT_STR = "[^: ]+|:.+"
 
 #this regex was suggested by joo
-ARGUMENT_STR = "(?<=:).*|[^: ]+"
+ARGUMENT_STR = ":(.*)|(\S+)"
 ARGUMENT_REG = re.compile(ARGUMENT_STR)
 
 CTCP_STR = "[^ ]+"
@@ -49,7 +49,9 @@ def extract_prefix(prefix):
     return field.group(1, 2, 3)
 
 def extract_argument(argument):
-    return tuple(re.findall(ARGUMENT_REG, empty(argument)))
+    return tuple(
+        m.group(1) or m.group(2)
+        for m in re.finditer(ARGUMENT_REG, empty(argument)))
 
 '''
 def extract_ctcp(*args):
