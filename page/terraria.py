@@ -33,7 +33,8 @@ IGNORE_MESSAGES=(
     re.compile(r'Looks like .* (is|are) throwing a party$'),
     "Party time's over!",
     'Slime is falling from the sky!',
-    'Slime has stopped falling from the sky.')
+    'Slime has stopped falling from the sky.',
+    re.compile(r'.* was slain\.\.\.'))
 
 servers = util.table('conf/terraria.py', 'server')
 
