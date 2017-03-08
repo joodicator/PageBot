@@ -142,11 +142,10 @@ def h_seen(bot, id, target, args, full_msg):
             and matching_nicks[rid.nick.lower()][0] < max_time):
                 matching_nicks[rid.nick.lower()] = (max_time, rid)
 
-    def cmp_nicks(nick1, nick2):
-        time1, time2 = matching_nicks[nick1][0], matching_nicks[nick2][0]
-        return cmp(time2, time1) if time1 is None or time2 is None else \
-               cmp(time1, time2)
-    nicks = sorted(matching_nicks.iterkeys(), cmp=cmp_nicks, reverse=True)
+    def nick_sort_key(nick):
+        max_time = matching_nicks[nick.lower()][0]
+        return -max_time if max_time is not None else None
+    nicks = sorted(matching_nicks.iterkeys(), key=nick_sort_key)
 
     if nicks:
         if len(matching_nicks) > 4:
