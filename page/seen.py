@@ -66,7 +66,7 @@ def put_state(new_state):
 
 #-------------------------------------------------------------------------------
 def prune_state(state):
-    if sum(imap(len, state)) <= MAX_RECORDS + PRUNE_THRESHOLD:
+    if sum(imap(len, state.itervalues())) <= MAX_RECORDS + PRUNE_THRESHOLD:
         return state
     new_state = dict()
     records = sorted(
