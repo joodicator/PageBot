@@ -5,12 +5,17 @@ import random
 import json
 import os.path
 
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.support.wait import WebDriverWait
+import selenium.webdriver.support.expected_conditions as EC
+
 from untwisted.magic import sign
 
 from url_collect import URL_PART_RE
 from url import BS4_PARSER, USER_AGENT
 import runtime
 import util
+import phantomjs
 
 #===============================================================================
 STATE_FILE   = 'state/quora.json'
@@ -105,23 +110,49 @@ def h_message(bot, id, chan, *args, **kwds):
 
 #===============================================================================
 class Question(object):
-    __slots__ = 'id', 'url', 'text', 'topics'
+    __slots__ = 'id', 'url', '_text', '_topics'
     def __init__(self, url, text=None):
         url_parts = URL_PART_RE.match(url)
         assert url_parts.group('host') == 'www.quora.com'
         assert re.match(r'/[^/?]*$', url_parts.group('path'))
         self.id = url_parts.group('path')[1:].lower()
         self.url = url
-        self.text = None if text is None else self.process_text(text)
-        self.topics = None
+        self._text = None if text is None else self.process_text(text)
+        self._topics = None
+
+    @property
+    def text(self):
+        if self._text is None: self.load()
+        return self._text
+
+    @property
+    def topics(self):
+        if self._topics is None: self.load()
+        return self._topics
 
     def load(self):
-        soup = url_soup(self.url)
-        if self.text is None:
-            self.text = self.process_text(
-                soup.find(class_='question_text_edit').text.strip())
-        self.topics = tuple(
-            t.text.strip() for t in soup.find_all(class_='QuestionTopicListItem'))
+        with phantomjs.pool.get_driver() as driver:
+            driver.get(self.url)
+            # Extract the question text, if it is not already known.
+            if self._text is None:
+                self._text = self.process_text(
+                    driver.find_element_by_class_name('question_text_edit').text)
+            # If there is a "view more topics" button, click it and wait until
+            # the additional topics are loaded.
+            try:
+                more = driver.find_element_by_class_name('view_more_topics_link')
+            except NoSuchElementException:
+                pass
+            else:
+                more.click()
+                prefix = re.sub(r'_more$', r'',
+                    more.find_element_by_tag_name('a').get_attribute('id'))
+                fetch_into = driver.find_element_by_id(prefix + '_fetch_into')
+                WebDriverWait(driver, 5).until(EC.visibility_of(fetch_into))
+            # Extract the question topics.
+            self._topics = tuple(
+                e.text.strip() for e in
+                driver.find_elements_by_class_name('QuestionTopicListItem'))
 
     @staticmethod
     def process_text(text):
@@ -144,7 +175,6 @@ def random_question(exclude_ids=(), exclude_topics=()):
         q = qs.pop(index)
         q = Question(url=q['href'], text=q.text.strip())
         if q.id in exclude_ids: continue
-        q.load()
         if any(et.lower() == qt.lower()
                for et in exclude_topics for qt in q.topics): continue
         return q
