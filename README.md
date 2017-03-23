@@ -48,6 +48,8 @@ A general-purpose, modular, extensible IRC robot written in Python 2. Includes n
 * [joodicator/pipeserve](//github.com/joodicator/pipeserve), for [`minecraft`](#minecraft) and [`chess`](#chess).
 * [joodicator/mcchat2](//github.com/joodicator/mcchat2), for [`minecraft`](#minecraft).
 * [joodicator/chess](//github.com/joodicator/chess), for [`chess`](#chess).
+* [selenium](https://pypi.python.org/pypi/selenium), for [`quora`](#quora).
+* [PhantomJS](https://phantomjs.org), for [`quora`](#quora).
 
 ## Contributing
 Bug reports and feature requests may be submitted to this repository using the issue tracker, and are more than welcome. Pull requests fixing bugs are welcome, and pull requests adding or changing features will be duly considered.
@@ -185,7 +187,7 @@ Provides programmatic access to [Pastebin](http://pastebin.com)'s API.
 
 #### `youtube`
 Provides programmatic access to [YouTube](http://youtube.com)'s API. Requires [google-api-python-client](//github.com/google/google-api-python-client) to be separately installed in the same Python distribution used to run the bot.
-* **`conf/youtube_api_key`** - the developer key used to access YouTube's Data API version 3. See https://developers.google.com/youtube/v3/getting-started for more information. 
+* **`conf/youtube_api_key`** - the developer key used to access YouTube's Data API version 3. See https://developers.google.com/youtube/v3/getting-started for more information.
 
 ### Other Modules
 
@@ -398,6 +400,7 @@ Allows two-player games of chess to be played on IRC using a textual interface. 
 #### `hue`
 Whenever onamatapoeic laughter is detected in the channel, the bot joins in. Suppressed in [quiet](#channel) channels.
 
+
 #### `quora`
 Posts questions from [Quora](https://www.quora.com) at random intervals in configured channels.
 
@@ -407,7 +410,7 @@ Posts questions from [Quora](https://www.quora.com) at random intervals in confi
     ------------------|------------------|-------------
     `channel`         | `str`            | The channel name. Should start with `#`.
     `daily_frequency` | `Number`         | The average number of times per day that a question will be posted. For values much less than 86400 (the number of minutes in a day), the distribution of questions in time resembles a [Poisson point process](https://en.wikipedia.org/wiki/Poisson_point_process). For values greater than or equal to 86400, exactly one question will be posted each minute. A sensible value for this parameter is `0.3`.
-    `exclude_topics`  | `tuple` of `str` | A tuple `()` or `('TOPIC',)` or `('TOPIC1', 'TOPIC2', ...)` listing respectively 0, 1 or more than 1 case-insensitive Quora *topic* which shall not occur in any question posted by this module. Each Quora question is associated with several *topics* describing its subject matter, some examples of which can be seen [here](https://www.quora.com/sitemap/).
+    `exclude_topics`  | `tuple` of `str` | A tuple `()`, `('TOPIC1',)` `('TOPIC1','TOPIC2',...)` listing respectively 0, 1 or several case-insensitive Quora *topics* which shall not occur in any question posted by this module.
 
 * **`state/quora.json`** - persistent internal state recorded by the module.
 
