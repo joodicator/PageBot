@@ -13,6 +13,7 @@ from untwisted.magic import sign
 
 from url_collect import URL_PART_RE
 from url import BS4_PARSER, USER_AGENT
+import channel
 import runtime
 import util
 import phantomjs
@@ -86,6 +87,7 @@ def h_quora_start(bot):
             counts.insert(0, 0)
 
 @link('QUORA_POST')
+@channel.not_quiet(chan_arg='chan')
 def h_quora_post(bot, chan):
     yield runtime.sleep(random.uniform(0, PERIOD_S))
     if not link.installed_modes: return
