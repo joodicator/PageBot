@@ -409,7 +409,7 @@ Posts questions from [Quora](https://www.quora.com) at random intervals in confi
     Field             | Type             | Description
     ------------------|------------------|-------------
     `channel`         | `str`            | The channel name. Should start with `#`.
-    `daily_frequency` | `Number`         | The average number of questions posted per day while conditions on recent channel activity are met - see comments in [`quora.py`](page/quora.py) for details of the latter. For values much smaller than 172800, the distribution of posts over time resembles a [Poisson point process](https://en.wikipedia.org/wiki/Poisson_point_process). A sensible value for this parameter is `0.3`.
+    `daily_frequency` | `Number`         | The average number of questions posted per day while conditions on recent channel activity are met - see comments in [`quora.py`](page/quora.py) for details of the latter. For values much smaller than 2880, the distribution of posts over time resembles a [Poisson point process](https://en.wikipedia.org/wiki/Poisson_point_process). A sensible value for this parameter is `0.4`.
     `exclude_topics`  | `tuple` of `str` | A tuple `()`, `('TOPIC1',)` `('TOPIC1','TOPIC2',...)` listing respectively 0, 1 or several case-insensitive Quora *topics* which shall not occur in any question posted by this module.
 
 * **`state/quora.json`** - persistent internal state recorded by the module.

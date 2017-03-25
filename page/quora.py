@@ -137,8 +137,8 @@ class Question(object):
             driver.get(self.url)
             # Extract the question text, if it is not already known.
             if self._text is None:
-                self._text = self.process_text(
-                    driver.find_element_by_class_name('question_text_edit').text)
+                text_element = driver.find_element_by_class_name('question_text_edit')
+                self._text = self.process_text(text_element.text.strip())
             # If there is a "view more topics" button, click it and wait until
             # the additional topics are loaded.
             try:
