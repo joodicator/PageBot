@@ -18,6 +18,9 @@ MIRROR_HOSTS = (
     '*i*.tinypic.com',
 )
 
+PATH_RE = re.compile(
+    r'\.(png|jpe?g|gif)(~[^/]*)?$')
+
 CACHE_SIZE = 1024
 REPEAT_S = 60*60*3
 
@@ -58,7 +61,7 @@ def get_mirror_url(url, chan):
     pref,host,suff,path,frag = match.group('pref','host','suff','path','frag')
     pref,host = pref.lower(),host.lower()
     if not mirror_hosts_re.match(host): return
-    if not re.search(r'\.(png|jpe?g|gif)$', path): return
+    if not PATH_RE.search(path): return
 
     normal_url = ''.join((pref, host, suff, path, frag))
 
