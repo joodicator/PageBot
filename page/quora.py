@@ -27,7 +27,7 @@ PAGE_MAX  = 200
 
 PERIOD_S = 30       # Update every 30 seconds.
 MSG_MIN  = (1, 120) # At least 1 message in the last 120*30s (1 hour).
-MSG_MAX  = (50, 5)  # At most 50 messages in the last 5*30s (2.5 min).
+MSG_MAX  = (30, 5)  # At most 30 messages in the last 5*30s (2.5 min).
 
 #===============================================================================
 link = util.LinkSet()
