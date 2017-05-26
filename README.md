@@ -124,7 +124,7 @@ Communicates with the network service known as NickServ on most IRC networks.
 #### `auth`
 Provides authentication of bot administrators. Requires [`identity`](#identity) to be separately installed for certain features.
 * **`!id PASS`**, **`!identify PASS`** - cause the bot to recognise the user issuing this command as an administrator. 
-* **`conf/admins.txt`** - one `nick!user@host` wildcard expression, or, if `identity` is installed, one access name from `conf/identity.py`, which is allowed to use admin commands.
+* **`conf/admins.txt`** - a list of `nick!user@host` wildcard expressions, or, if `identity` is installed, one access name from `conf/identity.py`, one per line, representing users who are are automatically allowed to use admin commands.
 * **`conf/auth_password.txt`** - the password, if any, accepted by `!identify`.
 
 #### `control`
