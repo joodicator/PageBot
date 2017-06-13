@@ -4,6 +4,7 @@ import re
 import random
 import json
 import os.path
+import traceback
 
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support.wait import WebDriverWait
@@ -25,9 +26,9 @@ USED_IDS_MAX = 1000
 PAGE_MEAN = 10
 PAGE_MAX  = 200
 
-PERIOD_S = 30       # Update every 30 seconds.
-MSG_MIN  = (1, 120) # At least 1 message in the last 120*30s (1 hour).
-MSG_MAX  = (30, 5)  # At most 30 messages in the last 5*30s (2.5 min).
+PERIOD_S = 30        # Update every 30 seconds.
+MSG_MIN  = (1, 1440) # At least 1 message in the last 1440*30s (12 hours).
+MSG_MAX  = (30, 5)   # At most 30 messages in the last 5*30s (2.5 min).
 
 #===============================================================================
 link = util.LinkSet()
@@ -81,7 +82,10 @@ def h_quora_start(bot):
         if not link.installed_modes: return
         for chan, chan_conf in conf.iteritems():
             if random.random() < chan_conf.daily_frequency * PERIOD_S / 86400.0:
-                yield sign('QUORA_POST', bot, chan)
+                try:
+                    yield sign('QUORA_POST', bot, chan)
+                except:
+                    traceback.print_exc()
         for counts in msg_count.itervalues():
             counts.pop(-1)
             counts.insert(0, 0)
