@@ -62,18 +62,22 @@ def h_tick(mode):
 
 @b_link(CLOSE)
 def h_close(bot):
+    if bot.closing: return
+    bot.closing = True
     print '! disconnected'
     yield sign('CLOSING', bot)
-    bot.destroy()
     yield sleep(EXIT_DELAY_SECONDS)
+    bot.destroy()
     sys.exit(0)
 
 @b_link('EXCEPTION')
 def h_exception(bot, e):
+    if bot.closing: return
+    bot.closing = True
     print '! uncaught exception'
     yield sign('CLOSING', bot)
-    bot.destroy()
     yield sleep(EXIT_DELAY_SECONDS)
+    bot.destroy()
     raise e
 
 @b_link('AUTONICK')

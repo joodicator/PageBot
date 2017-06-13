@@ -52,6 +52,7 @@ class AmeliaBot(Mac):
         self.isupport = {
             'PREFIX':    ('ohv','@%+'),
             'CHANMODES': ('be','k','l','') }
+        self.closing = False
 
         # Initialise flood-protection system
         self.send_times = []
