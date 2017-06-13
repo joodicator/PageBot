@@ -48,14 +48,14 @@ def hard_reload(prev):
 def reload(prev, hard=False):
     if hasattr(prev,'track_channels') and isinstance(prev.track_channels,dict):
         track_channels.update(prev.track_channels)
-    if hard: return
-
-    if hasattr(prev,'names_channels') and isinstance(prev.names_channels,dict):
-        names_channels.update(prev.names_channels)
     if hasattr(prev,'umode_channels') and isinstance(prev.umode_channels,dict):
         umode_channels.update(prev.umode_channels)
     if hasattr(prev,'cmode_channels') and isinstance(prev.cmode_channels,dict):
         cmode_channels.update(prev.cmode_channels)
+    if hard: return
+
+    if hasattr(prev,'names_channels') and isinstance(prev.names_channels,dict):
+        names_channels.update(prev.names_channels)
     if hasattr(prev,'topic_channels') and isinstance(prev.topic_channels,dict):
         topic_channels.update(prev.topic_channels)
     if hasattr(prev,'capitalisation') and isinstance(prev.capitalisation,dict):
