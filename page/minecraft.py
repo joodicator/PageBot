@@ -111,7 +111,7 @@ def uninstall(bot, reload=False):
 
 
 @ab_link('BRIDGE')
-def ab_bridge(bot, target_chan, msg, source):
+def ab_bridge(bot, target_chan, msg, source, **kwds):
     msg = strip_codes(msg)
     for work in mc_work:
         if work.minecraft.name.lower() != target_chan.lower(): continue

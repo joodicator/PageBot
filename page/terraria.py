@@ -148,7 +148,7 @@ def kill_work(work, remove=True):
 
 #==============================================================================#
 @ab_link('BRIDGE')
-def ab_bridge(ab_mode, target, msg, source):
+def ab_bridge(ab_mode, target, msg, source, **kwds):
     work = te_work.get(target.lower())
     if work is None or not hasattr(work, 'terraria_protocol'): return
     msg = strip_codes(msg)
