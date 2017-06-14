@@ -19,8 +19,10 @@ def h_message(bot, id, target, msg):
 
 @link('PROXY_MSG')
 @not_quiet()
-def h_proxy_message(bot, id, target, msg, no_kakasi=False, **kwds):
-    if no_kakasi or not kakasi_lib.is_ja(msg): return
+def h_proxy_message(
+    bot, id, target, msg, no_kakasi=False, no_auto=False, **kwds
+):
+    if no_kakasi or no_auto or not kakasi_lib.is_ja(msg): return
     kakasi(bot, id, target, msg, target.startswith('#'), **kwds)
 
 #===============================================================================

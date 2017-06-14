@@ -111,7 +111,7 @@ def uninstall(bot, reload=False):
 
 
 @ab_link('BRIDGE')
-def ab_bridge(bot, target_chan, msg):
+def ab_bridge(bot, target_chan, msg, source):
     msg = strip_codes(msg)
     for work in mc_work:
         if work.minecraft.name.lower() != target_chan.lower(): continue
@@ -165,23 +165,25 @@ def mc_found(work, line):
             context       = work.minecraft.name,
             local_name    = name,
             msg_local     = lambda m: work.dump(strip_codes(m) + '\n'),
-            msg_bridge    = lambda m: echo_lines.append('<%s> %s' % (agent, m)),
+            msg_bridge    = lambda m: echo_lines.append(('<%s> %s' % (agent, m),
+                                                         {'no_proxy': True})),
             cancel_bridge = lambda: operator.setitem(no_echo, 0, True))
         ab_mode.drive(('BRIDGE', event), ab_mode,
             name, work.minecraft.name, msg, reply)
     if not no_echo[0]:
-        echo_lines.insert(0, line)
-    for line in echo_lines:
+        echo_lines.insert(0, (line, {}))
+    for line, kwds in echo_lines:
         line = bridge.substitute_text(work.minecraft.name, line)
-        echo(work, line)
+        echo(work, line, **kwds)
 
 def sub_name(work, name):
     return bridge.substitute_name(work.minecraft.name, name)
 
-def echo(work, line):
+def echo(work, line, **kwds):
     ab_mode.drive('MINECRAFT', ab_mode,
         work.minecraft.name, line,
-        work.minecraft_state.map_name or work.minecraft.display)
+        work.minecraft_state.map_name or work.minecraft.display,
+        **kwds)
 
 def strip_codes(msg):
     return re.sub(r'[\x00-\x1f]', '', msg).replace('§', 'S')

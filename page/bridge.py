@@ -17,14 +17,15 @@ substitutions = util.read_list('conf/substitute.py', default=True)
 @link('IRC')
 @link('MINECRAFT')
 @link('TERRARIA')
-def h_msg(bot, source, msg, source_name=None):
+def h_msg(bot, source, msg, source_name=None, **kwds):
     if source is None:
         return
     if type(msg) is unicode:
         msg = msg.encode('utf8')
     for source, target in targets(source):
         name = source_name or source
-        yield sign('BRIDGE', bot, target, '%s: %s' % (name, msg))
+        pmsg = '%s: %s' % (name, msg)
+        yield sign('BRIDGE', bot, target, pmsg, source, **kwds)
 
 def notice(bot, source, head, *args, **kwds):
     include_self = kwds.get('include_self', True)
@@ -99,11 +100,13 @@ def h_bridge_names_err(bot, target, target_, source_name, error):
 
 
 @link('BRIDGE')
-def h_bridge(bot, target_chan, msg):
+def h_bridge(bot, target_chan, msg, source, no_proxy=False, **kwds):
     if not target_chan.startswith('#'): return
     bot.send_msg(target_chan, msg, no_bridge=True)
     if isinstance(msg, unicode): msg = msg.encode('utf-8')
-    yield sign('PROXY_MSG', bot, None, target_chan, msg)
+    if not no_proxy:
+        yield sign('PROXY_MSG', bot, None, target_chan, msg,
+                   no_auto = source.startswith('#'))
 
 @link(('BRIDGE', 'NAMES_REQ'))
 def h_bridge_names_req(bot, target, source, query):
@@ -125,69 +128,70 @@ def h_message(*args, **kwds):
         cmsg = '* %s %s' % (nick, match.group('msg'))
     else:
         cmsg = '<%s> %s' % (nick, msg)
-    yield sign('IRC', bot, chan, cmsg)
+    yield sign('IRC', bot, chan, cmsg,
+               no_proxy = nick.lower() == bot.nick.lower())
 
 @link('OTHER_JOIN')
 def h_other_join(bot, id, chan):
     cmsg = '%s joined the channel.' % id.nick
-    yield sign('IRC', bot, chan, cmsg)
+    yield sign('IRC', bot, chan, cmsg, no_proxy=True)
 
 @link('OTHER_PART')
 def h_other_part(bot, id, chan, msg):
     cmsg = '%s left the channel%s.' % \
         (id.nick, (' (%s)' % msg) if msg else '')
-    yield sign('IRC', bot, chan, cmsg)
+    yield sign('IRC', bot, chan, cmsg, no_proxy=True)
 
 @link('OTHER_KICKED')
 def h_other_kick(bot, other_nick, op_id, chan, msg):
     cmsg = '%s was kicked by %s%s.' % \
         (other_nick, op_id.nick, (' (%s)' % msg) if msg else '')
-    yield sign('IRC', bot, chan, cmsg)
+    yield sign('IRC', bot, chan, cmsg, no_proxy=True)
 
 @link('OTHER_QUIT_CHAN')
 def h_other_quit(bot, id, msg, chan):
     cmsg = '%s quit the network%s.' % \
         (id.nick, (' (%s)' % msg) if msg else '')
-    yield sign('IRC', bot, chan, cmsg)
+    yield sign('IRC', bot, chan, cmsg, no_proxy=True)
 
 @link('OTHER_NICK_CHAN')
 def h_other_nick(bot, id, new_nick, chan):
     cmsg = '%s is now known as %s.' % (id.nick, new_nick)
-    yield sign('IRC', bot, chan, cmsg)
+    yield sign('IRC', bot, chan, cmsg, no_proxy=True)
 
 @link('SELF_JOIN')
 def h_self_join(bot, chan):
     cmsg = 'Joined the channel.'
-    yield sign('IRC', bot, chan, cmsg)
+    yield sign('IRC', bot, chan, cmsg, no_proxy=True)
 
 @link('SELF_PART')
 def h_self_part(bot, chan, msg):
     cmsg = 'Left the channel%s.' % ((' (%s)' % msg) if msg else '')
-    yield sign('IRC', bot, chan, cmsg)
+    yield sign('IRC', bot, chan, cmsg, no_proxy=True)
 
 @link('SELF_KICKED')
 def h_self_kicked(bot, chan, op_id, msg):
     cmsg = 'Kicked from the channel by %s%s.' % \
         (op_id.nick, (' (%s)' % msg) if msg else '')
-    yield sign('IRC', bot, chan, cmsg)
+    yield sign('IRC', bot, chan, cmsg, no_proxy=True)
 
 @link('CLOSING_CHAN')
 def h_self_quit(bot, chan):
     cmsg = 'Disconnected from the network.'
-    yield sign('IRC', bot, chan, cmsg)
+    yield sign('IRC', bot, chan, cmsg, no_proxy=True)
 
 @link('TOPIC')
 def h_topic(bot, source, chan, topic):
     if isinstance(source, tuple): source = source[0]
     cmsg = '%s set topic to: %s' % (source, topic) if topic else \
            '%s unset the topic.' % source
-    yield sign('IRC', bot, chan, cmsg)
+    yield sign('IRC', bot, chan, cmsg, no_proxy=True)
 
 @link('MODE')
 def h_mode(bot, source, chan, *modes):
     if isinstance(source, tuple): source = source[0]
     cmsg = '%s set mode: %s' % (source, ' '.join(modes))
-    yield sign('IRC', bot, chan, cmsg)
+    yield sign('IRC', bot, chan, cmsg, no_proxy=True)
 
 
 #===============================================================================

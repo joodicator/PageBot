@@ -148,7 +148,7 @@ def kill_work(work, remove=True):
 
 #==============================================================================#
 @ab_link('BRIDGE')
-def ab_bridge(ab_mode, target, msg):
+def ab_bridge(ab_mode, target, msg, source):
     work = te_work.get(target.lower())
     if work is None or not hasattr(work, 'terraria_protocol'): return
     msg = strip_codes(msg)
@@ -201,7 +201,8 @@ def te_chat(work, slot, colour, text):
             context       = work.terraria.name,
             local_name    = event_name,
             msg_local     = lambda m: terraria_protocol.chat(work, strip_codes(m)),
-            msg_bridge    = lambda m: echo_lines.append('<%s> %s' % (agent, m)),
+            msg_bridge    = lambda m: echo_lines.append(('<%s> %s' % (agent, m),
+                                                         {'no_proxy': True})),
             cancel_bridge = lambda: operator.setitem(no_echo, 0, True))
         yield util.msign(ab_mode, ('BRIDGE', event_type), ab_mode,
             event_name, work.terraria.name, event_text, reply)
@@ -212,11 +213,11 @@ def te_chat(work, slot, colour, text):
         if slot != 255:
             name = work.terraria_protocol.players.get(slot, slot)
             text = '<%s> %s' % (name, text)
-        echo_lines.insert(0, text)
+        echo_lines.insert(0, (text, {}))
 
-    for line in echo_lines:
+    for line, kwds in echo_lines:
         line = bridge.substitute_text(work.terraria.name, line)
-        yield sign('TERRARIA', work, line)
+        yield sign('TERRARIA', work, line, **kwds)
 
 def sub_name(work, name):
     return bridge.substitute_name(work.terraria.name, name)
@@ -279,10 +280,10 @@ def te_disconnect_recv_err_close(work, *args):
 
 #-------------------------------------------------------------------------------
 @te_link('TERRARIA')
-def te_terraria(work, msg):
+def te_terraria(work, msg, **kwds):
     wname = world_name(work)
     yield util.msign(ab_mode, 'TERRARIA', ab_mode,
-        work.terraria.name, msg, wname)
+        work.terraria.name, msg, wname, **kwds)
 
 #==============================================================================#
 def reconnect_work(work, version=None, delay=None):
