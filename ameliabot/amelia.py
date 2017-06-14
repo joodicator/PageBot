@@ -57,6 +57,7 @@ class AmeliaBot(Mac):
         # Initialise flood-protection system
         self.send_times = []
         self.flood_buffer = []
+        self.deferred_buffer = []
         self.flood_active = False
 
         # Initialise events
@@ -147,9 +148,11 @@ class AmeliaBot(Mac):
                 self.flood_active = True
                 break
 
-        if defer or self.flood_active:
-            self.flood_buffer.append((line, kwds))
+        if defer:
+            self.deferred_buffer.append((line, kwds))
             self.flood_active = True
+        elif self.flood_active:
+            self.flood_buffer.append((line, kwds))
         else:
             self.send_times.append(now)
             line = line[:510]
@@ -160,10 +163,14 @@ class AmeliaBot(Mac):
 
     def h_tick(self, bot):
         if not self.flood_active: return
-        lines = self.flood_buffer
+        flood_lines = self.flood_buffer
+        deferred_lines = self.deferred_buffer
         self.flood_buffer = []
+        self.deferred_buffer = []
         self.flood_active = False
-        for line, kwds in lines:
+        for line, kwds in flood_lines:
+            self.send_line(line, defer=False, **kwds)
+        for line, kwds in deferred_lines:
             self.send_line(line, defer=False, **kwds)
 
 if __name__ == '__main__':
