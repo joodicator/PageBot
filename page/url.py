@@ -102,7 +102,7 @@ def h_url(bot, id, target, args, full_msg, reply):
                 if isinstance(pmsg, unicode): pmsg = pmsg.encode('utf-8')
                 if isinstance(fmsg, unicode): fmsg = fmsg.encode('utf-8')
                 yield sign('PROXY_MSG', bot, None, target or id.nick, pmsg,
-                           full_msg=fmsg, quiet=True)
+                           full_msg=fmsg, quiet=True, no_url=True)
 
             yield runtime.sleep(0.01)
         except Exception as e:
