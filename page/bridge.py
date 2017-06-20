@@ -30,7 +30,7 @@ def h_msg(bot, source, msg, source_name=None, **kwds):
 def notice(bot, source, head, *args, **kwds):
     include_self = kwds.get('include_self', True)
     for source, target in targets(source, include_self=include_self):
-        bot.drive(('BRIDGE', head), bot, target, *args)
+        bot.drive(('BRIDGE', head), bot, target, source, *args)
 
 def targets(source_chan, include_self=False):
     for bridge in bridges:
@@ -80,23 +80,23 @@ def h_help_online(bot, reply, args):
 def h_online(bot, name, target, args, reply):
     if target is None: return
     include_self = not target.startswith('#')
-    notice(bot, target, 'NAMES_REQ', target, args, include_self=include_self)
+    notice(bot, target, 'NAMES_REQ', args, include_self=include_self)
     reply(no_bridge=True)
 
 
 @link(('BRIDGE', 'NAMES_RES'))
-def h_bridge_names_res(bot, target, target_, source_name, names):
+def h_bridge_names_res(bot, target, source, target_, source_name, names):
     if target.lower() != target_.lower() and target_ != '*':
         return
     msg = 'Online in %s: %s.' % (
         source_name, ', '.join(sorted(names)) if names else '(nobody)')
-    yield sign('BRIDGE', bot, target, msg)
+    yield sign('BRIDGE', bot, target, msg, source)
 
 @link(('BRIDGE', 'NAMES_ERR'))
-def h_bridge_names_err(bot, target, target_, source_name, error):
+def h_bridge_names_err(bot, target, source, target_, source_name, error):
     if target.lower() != target_.lower(): return
     msg = 'Failed to enumerate users in %s: %s' % (source_name, error)
-    yield sign('BRIDGE', bot, target, msg)
+    yield sign('BRIDGE', bot, target, msg, source)
 
 
 @link('BRIDGE')
