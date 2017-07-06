@@ -41,7 +41,7 @@ class Gear(object):
             ind.poll.drive(TICK, ind)
 
         import time
-        time.sleep(0.01)
+        time.sleep(0.1)
 
     def process_rsock(self):
         for ind in self.rsock:
