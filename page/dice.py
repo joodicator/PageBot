@@ -565,6 +565,29 @@ class GlobalDef(Def):
 global_defs = load_defs()
 
 #-------------------------------------------------------------------------------
+@link(('HELP', 'roll-def'), ('HELP', 'rd'))
+@link(('HELP', 'roll+'), ('HELP', 'roll-'), ('HELP', 'roll?'))
+@link(('HELP', 'r+'), ('HELP', 'r-'), ('HELP', 'r?'))
+def h_help_roll_def(bot, reply, args):
+    reply(None, 'See: \2!help rd+\2, \2!help rd-\2, and \2!help rd?\2.')
+
+@link('!roll-def', cmd='!roll-def')
+@link('!rd',       cmd='!rd')
+def h_roll_def(bot, id, target, args, full_msg, cmd):
+    message.reply(bot, id, target, 'This is not a valid command. Perhaps you'
+    ' meant: \2%(cmd)s+\2, \2%(cmd)s-\2, or \2%(cmd)s?\2.' % {'cmd': cmd})
+
+@link('!r+', cor='!rd+')
+@link('!r-', cor='!rd-')
+@link('!r?', cor='!rd?')
+@link('!roll+', cor='!roll-def+')
+@link('!roll-', cor='!roll-def-')
+@link('!roll?', cor='!roll-def?')
+def h_roll_suf(bot, id, target, args, full_msg, cor):
+    message.reply(bot, id, target, 'This is not a valid command. Perhaps you'
+    ' meant: \2%s\2.' % cor)
+
+#-------------------------------------------------------------------------------
 @link(('HELP', 'roll-def+'), ('HELP', 'rd+'))
 def h_help_roll_def_p(bot, reply, args):
     reply('!roll-def+\2 or \2!rd+ NAME [=] BODY...',
