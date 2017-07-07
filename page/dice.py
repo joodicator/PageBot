@@ -151,7 +151,7 @@ def eval_string_parts(
     rolls = []
     parts = list(string.parts)
     for i, part in zip(count(), string.parts):
-        if isinstance(part, (Roll, ExRoll)):
+        if isinstance(part, (Roll, FtRoll, ExRoll)):
             text, spec = eval_roll_spec(part, irc=irc)
             parts[i] = Text(text=text, source=parts[i].source)
             rolls.append(spec)
@@ -181,11 +181,11 @@ def e_string(string, context):
     return chain(*(e_part(part, context) for part in string.parts))
 
 def e_part(part, context):
-    if   isinstance(part, (Text, Escape)): return e_text(part, context)
-    elif isinstance(part, (Roll, ExRoll)): return e_roll(part, context)
-    elif isinstance(part, Name):           return e_name(part, context)
-    elif isinstance(part, Branch):         return e_branch(part, context)
-    else:                                  assert False
+    if   isinstance(part, (Text, Escape)):         return e_text(part, context)
+    elif isinstance(part, (Roll, FtRoll, ExRoll)): return e_roll(part, context)
+    elif isinstance(part, Name):                   return e_name(part, context)
+    elif isinstance(part, Branch):                 return e_branch(part, context)
+    else:                                          assert False
 
 def e_text(text, context):
     yield text.text
@@ -270,23 +270,26 @@ def _eval_roll(roll):
         else:
             assert False
         roll = roll.roll
-    elif isinstance(roll, Roll):
+    elif isinstance(roll, (Roll, FtRoll)):
         drop_low, drop_high = 0, 0
     else:
         assert False
 
-    if roll.sides == 0: raise UserError(
+    if hasattr(roll, 'sides') and roll.sides == 0: raise UserError(
         'The number of sides in "%s" is invalid: it must be positive.'
         % roll.source)
-    if (roll.dice > MAX_ROLL[0] or roll.sides > MAX_ROLL[1]
+    if (roll.dice > MAX_ROLL[0]
+    or hasattr(roll, 'sides') and roll.sides > MAX_ROLL[1]
     or abs(roll.add) > MAX_ROLL[2]): raise UserError(
         'Some parameters of "%s" are too large: the largest dice roll allowed'
         ' is %dd%d+%d.' % ((roll.source,) + MAX_ROLL))
 
-    return roll.dice, roll.sides, roll.add, drop_low, drop_high
+    sides = 'F' if isinstance(roll, FtRoll) else roll.sides
+    return roll.dice, sides, roll.add, drop_low, drop_high
 
 #-------------------------------------------------------------------------------
 # Evaluation of dice rolls (independently of the abstract syntax tree):
+# FATE dice are represented by "sides" being 'F' rather than an integer.
 
 # Returns roll_value.
 def roll_int(dice, sides, add, drop_low=0, drop_high=0):
@@ -299,14 +302,20 @@ def roll_str_int(dice, sides, add, drop_low=0, drop_high=0, irc=False):
     rint = sum(rolls) + add - sum(drop)
     rstr = ''.join((
         ('\2%d\2' if irc else '%d') % rint,
-        '=%s' % '+'.join(map(str, rolls)) if add or dice>1 else '',
-        ''.join('-%d' % r for r in drop),
-        '(%+d)' % add if add else ''))
+        '=%d%s' % (rolls[0], ''.join('%+d'%r for r in rolls[1:]))
+                  if dice and (add or drop) or dice>1 else '',
+        ''.join('-%d'%d for d in drop) if type(sides) is int else
+            '-(%d%s)' % (drop[0], ''.join('%+d'%d for d in drop[1:]))
+            if drop else '',
+        '(%+d)' % add if dice and add else ''))
     return (rstr, rint)
 
 # Returns ([roll1, roll2, ...], [drop1, drop2, ...])
 def roll_list(dice, sides, drop_low=0, drop_high=0):
-    rolls = [random.randint(1, sides) for i in xrange(dice)]
+    if sides == 'F':
+        rolls = [random.randint(-1, 1) for i in xrange(dice)]
+    else:
+        rolls = [random.randint(1, sides) for i in xrange(dice)]
     drop = sorted(rolls)
     del drop[drop_low:dice-drop_high]
     return rolls, drop
@@ -318,6 +327,7 @@ String = namedtuple('String', ('parts',                  'source'))
 Text   = namedtuple('Text',   ('text',                   'source'))
 Escape = namedtuple('Escape', ('text',                   'source'))
 Roll   = namedtuple('Roll',   ('dice', 'sides', 'add',   'source'))
+FtRoll = namedtuple('FtRoll', ('dice', 'add',            'source')) # FATE dice.
 ExRoll = namedtuple('ExRoll', ('type', 'number', 'roll', 'source'))
 Name   = namedtuple('Name',   ('name',                   'source'))
 Branch = namedtuple('Branch', ('choices',                'source'))
@@ -325,7 +335,6 @@ Choice = namedtuple('Choice', ('weight', 'string',       'source'))
 
 def parse_string(input):
     string, remain = p_string(ParseInput(input))
-    #assert re.match(r'\s*$', str(remain))
     return string
 
 def p_string(input, choice=False):
@@ -365,20 +374,29 @@ def p_choice_string(input):
 
 def p_ex_roll(input):
     match, roll, _, end_input = p_seq(
-        (p_match, r'(?P<t>[bBwW])(?P<n>\d*)\('), p_roll, (p_token, ')'), input)
+        (p_match, r'(?P<t>[bBwW])(?P<n>\d*)\('), partial(p_roll, ex=True),
+         (p_token, ')'), input)
     return ExRoll(
         type   = match.group('t').lower(),
         number = int(match.group('n')) if match.group('n') else 1,
         roll   = roll,
         source = end_input - input), end_input
 
-def p_roll(input):
-    match, end_input = p_match(r'(?P<d>\d*)[dD](?P<s>\d+)(?P<a>[+-]\d+)?', input)
-    return Roll(
-        dice   = int(match.group('d')) if match.group('d') else 1,
-        sides  = int(match.group('s')),
-        add    = int(match.group('a')) if match.group('a') else 0,
-        source = end_input - input), end_input
+def p_roll(input, ex=False):
+    match, end_input = p_match(r'(?P<d>\d*)[dD](?P<s>\d+|F)(?P<a>[+-]\d+)?', input)
+    if match.group('s') == 'F':
+        if not match.group('d') and not ex:
+            raise ParseFail
+        return FtRoll(
+            dice   = int(match.group('d')) if match.group('d') else 1,
+            add    = int(match.group('a')) if match.group('a') else 0,
+            source = end_input - input), end_input
+    else:
+        return Roll(
+            dice   = int(match.group('d')) if match.group('d') else 1,
+            sides  = int(match.group('s')),
+            add    = int(match.group('a')) if match.group('a') else 0,
+            source = end_input - input), end_input
 
 def p_name(input):
     match, end_input = p_match(r'\{\{(?P<n>[a-zA-Z_-][a-zA-Z0-9_-]*)\}\}', input)
