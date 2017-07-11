@@ -330,7 +330,15 @@ If the user issuing `!tell` or `!untell` is a bot administrator, the arguments o
 #### `url`
 Shows information about URLs mentioned in the channel. The title, file size and MIME type are shown, if available. For links to images, the "best guess" provided by [Google](http://google.com)'s reverse image search is also shown. If the [`imgur`](#imgur) module is configured with a valid client ID, additional information is shown for Imgur URLs. If the [`youtube`](#youtube) module is configured with a valid API key, additional information is shown for YouTube videos. Requires [BeautifulSoup 4](https://pypi.python.org/pypi/beautifulsoup4) and [html5lib](https://pypi.python.org/pypi/html5lib).
 * **`!title`**, **`!url`** - show information about each URL in the most recent channel message containing URLs. The message in question is then removed from the record, such that `!url` issued again will show information about the second most recent such message, and so forth.
+
 * **`!title`** **`!url TEXT`** - show information about each URL occurring in the given `TEXT`.
+
+* **`conf/url.py`** - a Python 2.7 source file which may bind the following names at the top level:
+
+    Name        | Type  | Description
+    ------------|-------|------------
+    `bind_host` | `str` | A hostname or IP address which connections made from the `url` module will originate from. `'0.0.0.0'` means any IPv4 address, `'::'` means any IPv6 address, and `''` or omitting this option means any available address.
+
 * **`page/url_collect.py`** - a support module implementing the component of `url` responsible for maintaining a public list of recently-mentioned URLs in each channel, accessible to other modules and independent of the main functionality of `!url`.
 
 Up to 5 additional `!url` invocations, introduced by `!` as usual, may be included on the same line as the first `!url` command. This can be useful to view the titles of several recently mentioned URLs at once.
