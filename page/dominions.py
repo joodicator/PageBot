@@ -5,6 +5,7 @@ import json
 import time
 import sys
 import re
+import os.path
 
 from bs4 import BeautifulSoup
 
@@ -51,12 +52,13 @@ class State(object):
         if jdict is not None: self.load_jdict(jdict)
 
     def load_path(self, path):
-        try:
-            with open(path) as file:
-                jdict = json.load(file)
-        except:
-            jdict = dict()
-            traceback.print_exc()
+        jdict = {}
+        if os.path.exists(path):
+            try:
+                with open(path) as file:
+                    jdict = json.load(file)
+            except:
+                traceback.print_exc()
         jdict = util.recursive_encode(jdict, 'utf-8')
         self.load_jdict(jdict)
 
