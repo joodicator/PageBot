@@ -210,14 +210,18 @@ def te_chat(work, slot, colour, text):
     if not no_echo[0] and slot != work.terraria_protocol.slot \
     and not (slot == 255 and message_ignored(text) \
     and len(work.terraria_protocol.players) == 1):
-        if slot != 255:
+        if slot == 255:
+            text = sub_text(work, text)
+        else:
             name = work.terraria_protocol.players.get(slot, slot)
-            text = '<%s> %s' % (name, text)
-        echo_lines.insert(0, (text, {}))
+            text = '<%s> %s' % (sub_name(work, name), text)
+        yield sign('TERRARIA', work, text)
 
     for line, kwds in echo_lines:
-        line = bridge.substitute_text(work.terraria.name, line)
-        yield sign('TERRARIA', work, line, **kwds)
+        yield sign('TERRARIA', work, sub_text(line), **kwds)
+
+def sub_text(work, text):
+    return bridge.substitute_text(work.terraria.name, text)
 
 def sub_name(work, name):
     return bridge.substitute_name(work.terraria.name, name)

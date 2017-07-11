@@ -165,16 +165,25 @@ def mc_found(work, line):
             context       = work.minecraft.name,
             local_name    = name,
             msg_local     = lambda m: work.dump(strip_codes(m) + '\n'),
-            msg_bridge    = lambda m: echo_lines.append(('<%s> %s' % (agent, m),
-                                                         {'no_proxy': True})),
+            msg_bridge    = lambda m: echo_lines.append((
+                '<%s> %s' % (sub_name(work, agent), m), {'no_proxy': True})),
             cancel_bridge = lambda: operator.setitem(no_echo, 0, True))
         ab_mode.drive(('BRIDGE', event), ab_mode,
             name, work.minecraft.name, msg, reply)
+
     if not no_echo[0]:
-        echo_lines.insert(0, (line, {}))
+        if match:
+            name_group = next(g for g in ('sn','mn','an') if match.group(g))
+            name_s, name_e = match.span(name_group)
+            echo(work, line[:name_s] + sub_name(work, name) + line[name_e:])
+        else:
+            echo(work, sub_text(work, line))
+
     for line, kwds in echo_lines:
-        line = bridge.substitute_text(work.minecraft.name, line)
         echo(work, line, **kwds)
+
+def sub_text(work, text):
+    return bridge.substitute_text(work.minecraft.name, text)
 
 def sub_name(work, name):
     return bridge.substitute_name(work.minecraft.name, name)
