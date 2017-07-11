@@ -13,6 +13,7 @@ import zlib
 import ssl
 import re
 import locale
+import os.path
 
 from bs4 import BeautifulSoup
 from untwisted.magic import sign
@@ -39,6 +40,9 @@ BS4_PARSER = 'html5lib'
 MAX_AURL = 35
 MAX_DESC_LEN = 100
 
+CONF_FILE = 'conf/url.py'
+conf = util.fdict(CONF_FILE) if os.path.exists(CONF_FILE) else {}
+
 def get_default_headers():
     yield 'User-Agent', USER_AGENT
     yield 'Accept-Encoding', ACCEPT_ENCODING
@@ -48,10 +52,33 @@ def get_default_headers():
 
 default_headers = tuple(get_default_headers())
 
+class AbstractCustomHTTPHandler:
+    def __init__(self, *args, **kwds):
+        self.source_address = kwds.pop('source_address', None)
+        self.http_handler_class.__init__(self, *args, **kwds)
+
+    def do_open(self, http_class, req, **http_conn_args):
+        return self.http_handler_class.do_open(
+            self, http_class, req, source_address=self.source_address,
+            **http_conn_args)
+
+class CustomHTTPHandler(AbstractCustomHTTPHandler, urllib2.HTTPHandler):
+    http_handler_class = urllib2.HTTPHandler
+
+class CustomHTTPSHandler(AbstractCustomHTTPHandler, urllib2.HTTPSHandler):
+    http_handler_class = urllib2.HTTPSHandler
+
 def get_opener():
+    sslcxt = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+    if 'bind_host' in conf:
+        saddr = (conf['bind_host'], 0)
+        http_handler = CustomHTTPHandler(source_address=saddr)
+        https_handler = CustomHTTPSHandler(source_address=saddr, context=sslcxt)
+    else:
+        http_handler = urllib2.HTTPHandler()
+        https_handler = urllib2.HTTPSHandler(context=sslcxt)
     return urllib2.build_opener(
-        urllib2.HTTPCookieProcessor,
-        urllib2.HTTPSHandler(context=ssl.SSLContext(ssl.PROTOCOL_SSLv23)))
+        http_handler, https_handler, urllib2.HTTPCookieProcessor)
 
 #==============================================================================#
 @link('HELP*')
