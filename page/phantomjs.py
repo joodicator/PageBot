@@ -10,6 +10,7 @@
 from __future__ import print_function
 
 import threading
+import traceback
 import weakref
 import time
 import sys
@@ -33,7 +34,10 @@ class Driver(selenium.webdriver.PhantomJS):
         self.pool.release_driver(self)
     def destroy(self):
         if self.pool is not None:
-            self.quit()
+            try:
+                self.quit()
+            except:
+                traceback.print_exc()
             if self.pool.debug: self.log('destroyed')
             self.pool = None
     def log(self, action):
