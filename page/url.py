@@ -31,7 +31,7 @@ link, install, uninstall = util.LinkSet().triple()
 USER_AGENT = 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:50.0) Gecko/20100101 Firefox/50.0'
 ACCEPT_ENCODING = 'gzip, deflate'
 
-TIMEOUT_SECONDS = 20
+TIMEOUT_S = 20
 READ_BYTES_MAX = 1024*1024
 CMDS_PER_LINE_MAX = 6
 GIBG_CACHE_SIZE = 128
@@ -68,10 +68,14 @@ class CustomHTTPHandler(AbstractCustomHTTPHandler, urllib2.HTTPHandler):
 class CustomHTTPSHandler(AbstractCustomHTTPHandler, urllib2.HTTPSHandler):
     http_handler_class = urllib2.HTTPSHandler
 
-def get_opener():
+def get_opener(bind_host=None):
     sslcxt = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
-    if 'bind_host' in conf:
-        saddr = (conf['bind_host'], 0)
+    if bind_host is None and 'bind_host' in conf:
+        bind_host = conf['bind_host']
+    elif bind_host is None and 'bind_hosts' in conf:
+        bind_host = conf['bind_hosts'][0]
+    if bind_host is not None:
+        saddr = (bind_host, 0)
         http_handler = CustomHTTPHandler(source_address=saddr)
         https_handler = CustomHTTPSHandler(source_address=saddr, context=sslcxt)
     else:
@@ -169,7 +173,7 @@ def get_title_proxy(url):
         'Access to this host is denied: %s.' % host)
 
     with closing(get_opener().open(
-    request, timeout=TIMEOUT_SECONDS)) as stream:
+    request, timeout=TIMEOUT_S)) as stream:
         info = stream.info()
         ctype = info.gettype()
         size = info['Content-Length'] if 'Content-Length' in info else None
@@ -244,7 +248,7 @@ def get_title_html(url, type, stream=None):
         for header in default_headers:
             request.add_header(*header)
         stream = get_opener().open(
-            request, timeout=TIMEOUT_SECONDS)
+            request, timeout=TIMEOUT_S)
 
     with closing(stream):
         charset = stream.info().getparam('charset')
@@ -452,9 +456,15 @@ def google_image_title_soup(url):
         + urllib.urlencode({'image_url':url, 'safe':'off'}))
     request.add_header('Referer', 'https://www.google.com/imghp?hl=en&tab=wi')
     request.add_header('User-Agent', USER_AGENT)
-    with closing(get_opener().open(request, timeout=TIMEOUT_SECONDS)) as stream:
-        text = stream.read(READ_BYTES_MAX)
-        return BeautifulSoup(text, BS4_PARSER)
+    bind_hosts = conf.get('bind_hosts', [None])
+    for index, bind_host in izip(count(), bind_hosts):
+        try:
+            opener = get_opener(bind_host=bind_host)
+            with closing(opener.open(request, timeout=TIMEOUT_S)) as stream:
+                text = stream.read(READ_BYTES_MAX)
+                return BeautifulSoup(text, BS4_PARSER)
+        except urllib2.HTTPError as e:
+            if e.code != 503 or index == len(bind_hosts) - 1: raise
 
 #==============================================================================#
 # True if the given hostname or IPV4 or IPV6 address string is not in any

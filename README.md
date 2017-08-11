@@ -335,9 +335,10 @@ Shows information about URLs mentioned in the channel. The title, file size and 
 
 * **`conf/url.py`** - a Python 2.7 source file which may bind the following names at the top level:
 
-    Name        | Type  | Description
-    ------------|-------|------------
-    `bind_host` | `str` | A hostname or IP address which connections made from the `url` module will originate from. `'0.0.0.0'` means any IPv4 address, `'::'` means any IPv6 address, and `''` or omitting this option means any available address.
+    Name         | Type            | Description
+    -------------|-----------------|------------
+    `bind_host`  | `str`           | A hostname or IP address which connections made from the `url` module will originate from. `'0.0.0.0'` means any IPv4 address, `'::'` means any IPv6 address, and `''` or omitting this option means any available address.
+    `bind_hosts` | `list` of `str` | A list of hostnames or IP addresses with the same meaning as `bind_host`, to be used in certain special cases when multiple source addresses may be required to increase throughput or circumvent blocking.
 
 * **`page/url_collect.py`** - a support module implementing the component of `url` responsible for maintaining a public list of recently-mentioned URLs in each channel, accessible to other modules and independent of the main functionality of `!url`.
 
