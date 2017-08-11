@@ -83,14 +83,14 @@ def h_quora_start(bot):
         for chan, chan_conf in conf.iteritems():
             if random.random() < chan_conf.daily_frequency * PERIOD_S / 86400.0:
                 try:
-                    yield sign('QUORA_POST', bot, chan)
+                    yield sign('PRE_QUORA_POST', bot, chan)
                 except:
                     traceback.print_exc()
         for counts in msg_count.itervalues():
             counts.pop(-1)
             counts.insert(0, 0)
 
-@link('QUORA_POST')
+@link('PRE_QUORA_POST')
 @channel.not_quiet(chan_arg='chan')
 def h_quora_post(bot, chan):
     yield runtime.sleep(random.uniform(0, PERIOD_S))
@@ -107,6 +107,8 @@ def h_quora_post(bot, chan):
     del state['used_ids'][:-USED_IDS_MAX]
     save_state(state)
 
+    yield sign('QUORA_POST', bot, chan, question)
+
 @link('MESSAGE', 'COMMAND', 'UNOTICE')
 def h_message(bot, id, chan, *args, **kwds):
     if chan is None: return
@@ -119,8 +121,8 @@ class Question(object):
     __slots__ = 'id', 'url', '_text', '_topics'
     def __init__(self, url, text=None):
         url_parts = URL_PART_RE.match(url)
-        assert url_parts.group('host') == 'www.quora.com'
-        assert re.match(r'/[^/?]*$', url_parts.group('path'))
+        assert url_parts.group('host') == 'www.quora.com', url
+        assert re.match(r'/[^/?]*$', url_parts.group('path')), url
         self.id = url_parts.group('path')[1:].lower()
         self.url = url
         self._text = None if text is None else self.process_text(text)
