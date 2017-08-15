@@ -88,20 +88,27 @@ def h_help_roll(bot, reply, args, bridge):
 class UserError(Exception):
     pass
 
-@link(('SIMPLE','!roll'), ('SIMPLE','!r'), action=False)
-@link(('BRIDGE','!roll'), ('BRIDGE','!r'), action=False)
-@link(('SIMPLE','ACTION','!roll'), ('SIMPLE','ACTION','!r'), action=True)
-@link(('BRIDGE','ACTION','!roll'), ('BRIDGE','ACTION','!r'), action=True)
-def h_roll(bot, name, target, args, reply, action):
-    try:
-        if target and target.startswith('#'):
-            chan = target.lower()
-            defs = auto_defs(bot, name, target)
-            if chan in global_defs:
-                defs = DictStack(defs, global_defs[chan])
-        else:
-            defs = None
+@link('!roll', '!r', action=False)
+@link(('ACTION', '!roll'), ('ACTION', '!r'), action=True)
+def h_roll(bot, id, target, args, full_msg, action):
+    if target is not None:
+        defs = global_defs.get(target.lower())
+    else:
+        defs = PrivateDefs(id)
+    def reply(rmsg=None, from_name=None, **kwds):
+        if rmsg is None: rmsg = from_name(id.nick)
+        message.reply(bot, id, target, rmsg, **kwds)
+    return h_roll_defs(bot, id, target, args, defs, action, reply)
 
+@link(('BRIDGE','!roll'), ('BRIDGE','!r'), action=False)
+@link(('BRIDGE','ACTION','!roll'), ('BRIDGE','ACTION','!r'), action=True)
+def h_simple_roll(bot, name, target, args, reply, action):
+    id = util.ID(name, '*', '*')
+    defs = None
+    return h_roll_defs(bot, id, target, args, defs, action, reply)
+
+def h_roll_defs(bot, id, target, args, defs, action, reply):
+    try:
         msg, rolls = eval_string(
             parse_string(args), defs=defs, irc=True,
             max_len            = MAX_MESSAGE_LENGTH,
@@ -109,22 +116,17 @@ def h_roll(bot, name, target, args, reply, action):
             max_stack_depth    = MAX_STACK_DEPTH)
 
         if target and target.startswith('#'):
-            id = util.ID(name, '*', '*')
             yield sign('DICE_ROLLS', bot, id, target, rolls, msg)
 
         if action:
             reply(from_name=lambda name: '* %s %s' % (name, msg), prefix=False)
         else:
             reply(msg)
-
     except UserError as e:
         reply('Error: %s' % e.message)
     except Exception as e:
         reply('Error: %r' % e)
         raise
-
-def auto_defs(bot, nick, chan):
-    return {}
 
 #===============================================================================
 # Evaluation of abstract syntax trees produced by the !roll argument parser.
@@ -520,6 +522,20 @@ def prune_defs():
     for name in to_remove:
         del global_defs[name]
 
+class DictStack(object, DictMixin):
+    __slots__ = 'stack'
+    def __init__(self, *stack):
+        self.stack = stack
+    def __getitem__(self, key):
+        for dict in self.stack:
+            if key in dict:
+                return dict[key]
+        raise KeyError
+    def __setitem__(self, key):
+        raise TypeError('%r does not support item assignment.' % type(self))
+    def __delitem__(self, key):
+        raise TypeError('%r does not support item deletion.' % type(self))
+
 class GlobalDefs(dict):
     __slots__ = 'decay_start'
     def __init__(self, decay_start=None, jdict=None):
@@ -579,6 +595,41 @@ class GlobalDef(Def):
         if self.time is not None:
             jdict['time'] = self.time
         return jdict
+
+# Definitions usable by a user by private message.
+class PrivateDefs(DictStack):
+    def __init__(self, id):
+        key = ('%s!%s@%s' % id).lower()
+        stack = [UserChannelDefs(id)]
+        if key in global_defs:
+            stack.insert(0, global_defs[key])
+        super(PrivateDefs, self).__init__(*stack)
+
+# Definitions from channels a user is in, where the most recently changed
+# definition takes priority in case of a name collision.
+class UserChannelDefs(DictMixin):
+    __slots__ = 'id'
+
+    def __init__(self, id):
+        self.id = id
+
+    def __getitem__(self, key):
+        defn = None
+        for chan, nicks in channel.track_channels.iteritems():
+            if chan.lower() in global_defs and key in global_defs[chan.lower()] \
+            and any(self.id.nick.lower() == n.lower() for n in nicks):
+                chan_defn = global_defs[chan.lower()][key]
+                if defn is None or chan_defn.time > defn.time:
+                    defn = chan_defn
+        if defn is None:
+            raise KeyError
+        return defn
+
+    def __setitem__(self, key):
+        raise TypeError('%r does not support item assignment.' % type(self))
+
+    def __delitem__(self, key):
+        raise TypeError('%r does not support item deletion.' % type(self))
 
 global_defs = load_defs()
 
@@ -748,27 +799,56 @@ def h_roll_def_q(bot, id, target, args, full_msg):
             return message.reply(bot, id, target,
                 'Error: both you and this bot must be present in %s to search'
                 ' its definitions.' % chan_case)
-        chan_external = True
+        return roll_def_query(bot, id, target, args, chan, chan_case, external=True)
+
     elif target is not None:
         chan = target.lower()
         chan_case = channel.capitalisation.get(chan, target)
-        chan_external = False
+        return roll_def_query(bot, id, target, args, chan, chan_case)
+
+    chan_case = '%s!%s@%s' % id
+    chan = chan_case.lower()
+    if chan in global_defs:
+        global_defs[chan].touch()
+    if args:
+        count = roll_def_query(
+            bot, id, target, args, chan, chan_case,
+            multiple=True, skip_empty=True)
+        for ex_chan, nicks in channel.track_channels.iteritems():
+            if all(n.lower() != id.nick.lower() for n in nicks): continue
+            ex_chan_case = channel.capitalisation.get(ex_chan, ex_chan)
+            count += roll_def_query(
+                bot, id, target, args, ex_chan, ex_chan_case,
+                external=True, skip_empty=True, multiple=True)
+        if count == 0:
+            roll_def_query(bot, id, target, args, chan, chan_case, multiple=True)
     else:
-        chan_case = '%s!%s@%s' % id
-        chan = chan_case.lower()
-        if chan in global_defs:
-            global_defs[chan].touch()
-        chan_external = False
-   
+        roll_def_query(bot, id, target, args, chan, chan_case)
+
+def roll_def_query(
+    bot, id, target, args, chan, chan_case, external=False, skip_empty=False,
+    multiple=False
+):
     defs = sorted(def_search(chan, args), key=lambda d: d.time)
+    if skip_empty and not defs: return 0
+
+    private = not chan.startswith('#')
     s = 's' if len(defs) != 1 else ''
-    noun = 'definition%s' % s if not chan_external else \
-           'definition%s in %s' % (s, chan_case) if chan.startswith('#') else \
+    noun = 'definition%s' % s if multiple or not private and not external else \
+           'definition%s in %s' % (s, chan_case) if not private else \
            'private definition%s' % s
-    defs_str = '%d matching %s' % (len(defs), noun)
+    defs_str = '%d matching %s' % (len(defs), noun) if not multiple else \
+               '\2Private:\2 %d matching %s' % (len(defs), noun) if private else \
+               '\2%s:\2 %d matching %s' % (chan_case, len(defs), noun)
 
     if len(defs) == 0:
-        message.reply(bot, id, target, '%s.' % defs_str, prefix=False)
+        chan_defs = sum(
+            len(defs) for chan, defs in global_defs.iteritems() if defs
+            and id.nick.lower() in map(str.lower, channel.track_channels[chan]))
+        suffix = ' Use \2!rd? *\2 to view definitions in all of your channels' \
+                 ' or \2!rd? #CHANNEL\2 for those in a particular channel.' \
+                 if private and chan_defs and not args else ''
+        message.reply(bot, id, target, '%s.%s' % (defs_str, suffix), prefix=False)
     elif len(defs) == 1:
         defn = defs[0]
         if defn.time is not None:
@@ -781,17 +861,20 @@ def h_roll_def_q(bot, id, target, args, full_msg):
                 delta.days, d_hours, d_mins, d_secs)
         else:
             time_str = ''
-        def_mnick = channel.modes_prefix_nick(bot, defn.id.nick, defn.modes)
-        def_id = def_mnick, defn.id.user, defn.id.host
+        if defn.modes:
+            def_mnick = channel.modes_prefix_nick(bot, defn.id.nick, defn.modes)
+            def_id = def_mnick, defn.id.user, defn.id.host
+        else:
+            def_id = defn.id
         message.reply(bot, id, target,
-            '%s, set%s%s:' % (
+            '%s%s%s:' % (
                 defs_str,
-                (' by %s!%s@%s' % def_id) if chan.startswith('#') else '',
+                (', set by %s!%s@%s' % def_id) if chan.startswith('#') else '',
                 time_str),
             prefix=False)
         message.reply(bot, id, target,
             '    %s = %s' % (defn.name, defn.body_str), prefix=False)
-    elif len(defs) <= 3:
+    elif len(defs) <= 3 and not multiple:
         message.reply(bot, id, target, '%s:' % defs_str, prefix=False)
         rows = util.join_rows(*((d.name, d.body_str) for d in defs), sep=' = ')
         for row in rows:
@@ -799,11 +882,14 @@ def h_roll_def_q(bot, id, target, args, full_msg):
     else:
         names = ', '.join(sorted(d.name for d in defs))
         if len(names) > 300: names = names[:300] + '(...)'
+        suffix = '' if multiple else \
+                 ' Use \2!rd?%s NAME\2 to view the details of a definition.' % (
+                     (' %s' % chan_case) if external and not (target and
+                     target.lower() == chan) else '')
         message.reply(bot, id, target,
-            '%s: %s. Use \2!rd?%s NAME\2 to view the details of a definition.'
-            % (defs_str, names, (' %s' % chan_case)
-            if chan_external and not (target and target.lower() == chan) else ''),
-            prefix=False)
+            '%s: %s.%s' % (defs_str, names, suffix), prefix=False)
+
+    return len(defs)
 
 # An iterator (in no particular order) over the definitions matched by `queries'
 # as per !rd? and !rd-.
@@ -841,16 +927,3 @@ def abbrev_right(str, max_len=50, mark='(...)'):
     if len(str) <= max_len: return str
     return str[:max_len-len(mark)] + mark
 
-class DictStack(DictMixin):
-    __slots__ = 'stack'
-    def __init__(self, *stack):
-        self.stack = stack
-    def __getitem__(self, key):
-        for dict in self.stack:
-            if key in dict:
-                return dict[key]
-        raise KeyError
-    def __setitem__(self, key):
-        raise TypeError('%r does not support item assignment.' % type(self))
-    def __delitem__(self, key):
-        raise TypeError('%r does not support item deletion.' % type(self))
