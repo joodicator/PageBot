@@ -24,6 +24,7 @@ import url_collect
 import runtime
 import util
 import imgur
+import identity
 
 #==============================================================================#
 link, install, uninstall = util.LinkSet().triple()
@@ -123,16 +124,17 @@ def h_url(bot, id, target, args, full_msg, reply):
 
             # Generate a URL-suppressed proxy message for the basic component.
             btitle = result['title_bare']
-            if isinstance(btitle, unicode): btitle = btitle.encode('utf-8')
-            yield sign('PROXY_MSG', bot, None, target or id.nick, btitle,
-                       no_url=True)
+            p_target = '%s!%s@%s' % id if target is None else target
+            if isinstance(btitle, unicode):
+                btitle = btitle.encode('utf-8')
+            yield sign('PROXY_MSG', bot, None, p_target, btitle, no_url=True)
 
             if result.get('proxy'):
                 # Generate a quiet proxy message for the parenthetical component.
                 pmsg, fmsg = result['proxy'], result['proxy_full']
                 if isinstance(pmsg, unicode): pmsg = pmsg.encode('utf-8')
                 if isinstance(fmsg, unicode): fmsg = fmsg.encode('utf-8')
-                yield sign('PROXY_MSG', bot, None, target or id.nick, pmsg,
+                yield sign('PROXY_MSG', bot, None, p_target, pmsg,
                            full_msg=fmsg, quiet=True, no_url=True)
 
             yield runtime.sleep(0.01)

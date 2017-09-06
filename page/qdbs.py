@@ -128,7 +128,8 @@ class Private(Configuration):
                         if type(msg) is unicode:
                             msg = msg.encode('utf8')
                         bot.send_msg(nick, msg)
-                        yield sign('PROXY_MSG', bot, None, nick, fquote, quiet=True)
+                        hm = yield identity.get_hostmask(bot, nick)
+                        yield sign('PROXY_MSG', bot, None, hm, fquote, quiet=True)
     
             last_quote = max(
                 last_quote, max(qid for (qid, quote) in quotes))

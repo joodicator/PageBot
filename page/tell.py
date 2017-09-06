@@ -685,7 +685,8 @@ def deliver_msg(bot, id, chan, msg, tag=''):
 
 @link('TELL_DELIVERY')
 def h_tell_delivery(bot, from_id, to_id, chan, msg):
-    yield sign('PROXY_MSG', bot, from_id, chan, msg)
+    target = ('%s!%s@%s' % to_id) if chan is None else chan
+    yield sign('PROXY_MSG', bot, from_id, target, msg)
 
 #==============================================================================#
 # Returns True if `msg' would be delivered at this time to `id' in `chan',
