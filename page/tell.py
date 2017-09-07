@@ -459,8 +459,8 @@ def h_read(bot, id, chan, args, full_msg):
 
     msgs = all_msgs[:MAX_DELIVER_PM]
     remain_msgs = all_msgs[MAX_DELIVER_PM:]
-    while any(n <= MAX_DELIVER_CHAN
-    for n in Counter(m.channel for m in remain_msgs).itervalues()):
+    while 1 <= sum(1 for m in remain_msgs if m.channel == msgs[-1].channel) \
+            <= MAX_DELIVER_CHAN:
         msgs.append(remain_msgs.pop(0))
 
     for msg, index in izip(msgs, count(1)):
