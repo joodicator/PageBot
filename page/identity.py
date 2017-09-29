@@ -179,24 +179,22 @@ def get_id(bot, nick, ret):
 
 RPL_USERHOST = '302'
 UH_BATCH = 5
-UH_CONST_S = 5
-UH_LINEAR_S = 1
 UH_RE = re.compile('(?P<nick>[^*]*)\*?=\+?(?P<user>[^@]*)@(?P<host>.*)$')
 
 # get_id_cache[nick.lower()] = (ID(nick,user,host) or None, time.time())
-GET_ID_CACHE_S = 5
 get_id_cache = {}
 
 # yield get_ids(bot, [nick1, ...]) -> [ID(nick1,user1,host1) or None, ...]
 # This is more efficient than multiple separate invocations of get_id.
 @util.mfun(link, 'identity.get_ids')
-def get_ids(bot, nicks, ret):
-    cut = time.time() - GET_ID_CACHE_S
+def get_ids(bot, nicks, ret, timeout_const_s=15, timeout_linear_s=2):
     for nick, (id, ctime) in get_id_cache.items():
-        if ctime < cut: del get_id_cache[nick]
+        now = time.time()
+        if id is not None and ctime < now-10 or ctime < now-300:
+            del get_id_cache[nick]
 
     userhost_nicks = []
-    wait_nicks = []
+    wait_nicks = set()
     nick_ids = {}
     for nick in nicks:
         nick = nick.lower()
@@ -206,10 +204,10 @@ def get_ids(bot, nicks, ret):
             if get_id_cache[nick][0] is not None:
                 nick_ids[nick] = get_id_cache[nick][0]
             else:
-                wait_nicks.append(nick)
+                wait_nicks.add(nick)
         else:
             userhost_nicks.append(nick)
-            wait_nicks.append(nick)
+            wait_nicks.add(nick)
 
     for i in xrange(0, len(userhost_nicks), UH_BATCH):
         bot.send_cmd('USERHOST %s' % ' '.join(userhost_nicks[i:i+UH_BATCH]))
@@ -218,7 +216,7 @@ def get_ids(bot, nicks, ret):
 
     if wait_nicks:
         lines = -(-len(wait_nicks) // UH_BATCH)
-        timeout = yield runtime.timeout(UH_CONST_S + lines*UH_LINEAR_S)
+        timeout = yield runtime.timeout(timeout_const_s + lines*timeout_linear_s)
     while wait_nicks:
         event, args = yield hold(bot, RPL_USERHOST, timeout)
         if event == timeout: break
@@ -228,11 +226,16 @@ def get_ids(bot, nicks, ret):
             if not match: continue
             id = util.ID(*match.group('nick', 'user', 'host'))
             nick = id.nick.lower()
+            if nick not in wait_nicks: continue
             wait_nicks.remove(nick)
             if nick in track_id:
                 track_id[nick].id = id
             get_id_cache[nick] = (id, time.time())
             nick_ids[nick] = id
+
+    for nick in userhost_nicks:
+        if get_id_cache[nick][0] is None:
+            del get_id_cache[nick]
 
     yield ret([nick_ids.get(n.lower()) for n in nicks])
 
@@ -264,9 +267,9 @@ def id_to_hostmask(id):
 def refresh(bot, nicks):
     nicks = map(str.lower, nicks)
 
-    ids = yield get_ids(bot, nicks)
+    ids = yield get_ids(bot, nicks, timeout_const_s=240)
     for nick, id in izip(nicks, ids):
-        if nick not in track_id: continue
+        if id is None or nick not in track_id: continue
         track_id[nick].id = id
 
     ns_nick_access = dict()
@@ -275,7 +278,7 @@ def refresh(bot, nicks):
         for cred in creds:
             if cred[0] == 'hostmask' and len(cred) > 1:
                 for id in ids:
-                    if id.nick.lower() in granted_nicks: continue
+                    if id is None or id.nick.lower() in granted_nicks: continue
                     hostmask = id_to_hostmask(id)
                     if re.match(util.wc_to_re(cred[1]), hostmask, re.I):
                         yield grant_access(bot, id, access_name)
@@ -283,7 +286,7 @@ def refresh(bot, nicks):
 
             elif cred[0] == 'prev_hosts' and len(cred) > 1:
                 for id in ids:
-                    if id.nick.lower() in granted_nicks: continue
+                    if id is None or id.nick.lower() in granted_nicks: continue
                     if access_name.lower() not in prev_hosts: continue
                     userhost = '%s@%s' % (id.user, id.host)
                     if userhost in prev_hosts[access_name][-cred[1]]:
@@ -376,13 +379,11 @@ def known_as(access_name):
 def h_names_sync(bot, chan, chan_nicks, chan_umodes):
     # Upon receiving the nick list for a channel, create identity-tracking
     # records for any previously unknown nicks in the channel.
-    refresh_nicks = []
     for nick in chan_nicks:
         if nick.lower() not in track_id:
             track_id[nick.lower()] = Record()
-        refresh_nicks.append(nick)
-    if not refresh_nicks: return
-    yield refresh(bot, refresh_nicks)
+    if chan_nicks:
+        yield refresh(bot, chan_nicks)
 
 @link('OTHER_JOIN')
 def h_other_join(bot, id, chan):

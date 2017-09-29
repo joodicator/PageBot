@@ -93,7 +93,7 @@ STATUS_BATCH = 1
 STATUS_CACHE_SECONDS = 15
 status_cache = dict()
 @util.mfun(link, 'nickserv.statuses')
-def statuses(bot, nicks, ret):
+def statuses(bot, nicks, ret, timeout_const_s=20, timeout_linear_s=1):
     global status_cache
     earliest = time.time() - STATUS_CACHE_SECONDS
     for nick, (status, stime) in status_cache.items():
@@ -117,7 +117,8 @@ def statuses(bot, nicks, ret):
             result[nick] = status_cache[nick][0]
 
     if remain:
-        timeout = yield runtime.timeout(10 + len(nicks)/10)
+        lines = -(-len(send_nicks) // STATUS_BATCH)
+        timeout = yield runtime.timeout(timeout_const_s + lines*timeout_linear_s)
     while remain:
         event, args = yield hold(bot, 'NICKSERV_NOTICE', timeout)
         if event == timeout: break
