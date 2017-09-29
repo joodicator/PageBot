@@ -289,7 +289,7 @@ def h_untell(bot, id, target, args, full_msg):
         channel = target
     else:
         reply(bot, id, target,
-            'Error: the "untell" command may only be used in a channel.')
+            'Error: the !untell command may only be used in a channel.')
         return # No return with argument allowed in a generator.
 
     if args:
@@ -374,7 +374,7 @@ def h_help_dismiss(bot, reply, args):
 @multi('!dismiss', limit=4)
 def h_dismiss(bot, id, chan, query, full_msg, reply):
     if chan is None: return reply(
-        'Error: the "dismiss" command may only be used in a channel.')
+        'Error: the !dismiss command may only be used in a channel.')
 
     state = get_state()
     msgs = [m for m in state.msgs
@@ -393,8 +393,8 @@ def h_dismiss(bot, id, chan, query, full_msg, reply):
     state.dismissed_msgs.append(msg)
 
     count = len([m for m in state.msgs if would_deliver(id, chan, m)])
-    msg = ('1 message from %s deleted; you now have %s message%s.'
-       ' (You may reverse this using "undismiss").'
+    msg = ('1 message from %s deleted; you now have %s message%s'
+       ' (you may reverse this using !undismiss).'
        % (msg.from_id.nick, count, 's' if count != 1 else ''))
 
     put_state(state)
@@ -413,7 +413,7 @@ def h_help_undismiss(bot, reply, args):
 @link('!undismiss')
 def h_undismiss(bot, id, chan, query, *args):
     if chan == None: return reply(bot, id, chan,
-        'Error: the "undismiss" command may only be used in a channel.')
+        'Error: the !undismiss command may only be used in a channel.')
 
     state = get_state()
     msgs = [m for m in state.dismissed_msgs if would_deliver(id, chan, m)
