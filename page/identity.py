@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+from itertools import *
 import traceback
 import datetime
 import time
@@ -38,8 +39,8 @@ def h_post_reload(bot):
     if prev_track_id is not None:
         for nick in all_nicks:
             track_id[nick] = Record()
-            if nick in prev_track_id and hasattr(prev_track_id[nick], 'hostmask'):
-                track_id[nick].hostmask = prev_track_id[nick].hostmask
+            if nick in prev_track_id and hasattr(prev_track_id[nick], 'id'):
+                track_id[nick].id = prev_track_id[nick].id
         prev_track_id = None
     yield refresh(bot, list(all_nicks))
 
@@ -48,10 +49,10 @@ def h_post_reload(bot):
 # is a Record instance, which exists only if the bot shares a channel with nick
 # or if nick is the bot's own nick.
 class Record(object):
-    __slots__ = 'hostmask', 'access'
-    def __init__(self, hostmask=None):
-        self.hostmask = hostmask # 'nick!user@host' if known, else None.
-        self.access = set()      # set of access_name.lower() granted.
+    __slots__ = 'id', 'access'
+    def __init__(self, id=None):
+        self.id = id         # ID('nick', 'user', 'host') if known, else None.
+        self.access = set()  # set of access_name.lower() granted.
     def __repr__(self):
         return 'Record(%s)' % ', '.join(
             '%s=%r' % (attr, getattr(self,attr))
@@ -70,10 +71,19 @@ def read_credentials():
     if os.path.exists(CREDENTIALS_FILE):
         try:
             raw_creds = util.fdict(CREDENTIALS_FILE)
-            return {name.lower():creds for (name,creds) in raw_creds.iteritems()}
+            return {name.lower(): process_credentials(creds)
+                    for (name,creds) in raw_creds.iteritems()}
         except Exception:
             traceback.print_exc()
     return {}    
+
+def process_credentials(creds):
+    return sorted(creds, key=lambda cred:
+        0 if cred[0] == 'hostmask' else
+        1 if cred[0] == 'access' else
+        2 if cred[0] == 'prev_hosts' else
+        3 if cred[0] == 'nickserv' else
+        4)
 
 credentials = read_credentials()
 
@@ -111,16 +121,12 @@ def check_access(bot, query, name, ret):
 
     if isinstance(query, tuple):
         nick = query.nick.lower()
-        host = ('%s!%s@%s' % query).lower()
         id = query
     else:
         nick = query.lower()
-        host = yield get_hostmask(bot, nick)
-        if host:
-            match = re.match(r'(.*)!(.*)@(.*)$', host)
-            id = util.ID(*match.groups())
-        else:
-            id = None
+        id = yield get_id(bot, nick)
+
+    host = None if id is None else id_to_hostmask(id).lower()
 
     # If a positive result is already cached, return that result.
     if nick in track_id and name in track_id[nick].access:
@@ -128,13 +134,6 @@ def check_access(bot, query, name, ret):
         return
 
     creds = credentials.get(name, list())
-    creds = sorted(creds, key=lambda cred:
-        0 if cred[0] == 'hostmask' else
-        1 if cred[0] == 'access' else
-        2 if cred[0] == 'prev_hosts' else
-        3 if cred[0] == 'nickserv' else
-        4)
-
     has_access = False
     for cred in creds:
         if cred[0] == 'hostmask' and len(cred) > 1:
@@ -172,55 +171,135 @@ def check_access(bot, query, name, ret):
     yield ret(has_access)
 
 #-------------------------------------------------------------------------------
-# yield get_hostmask(bot, nick) -> 'nick!user@host' or None
-@util.mfun(link, 'identity.get_hostmask')
-def get_hostmask(bot, nick, ret):
-    nick = nick.lower()
-    if nick in track_id and track_id[nick].hostmask:
-        yield ret(track_id[nick].hostmask)
-        return
-    result = yield who(bot, nick)
-    if not result:
-        yield ret(None)
-        return
-    r_nick, r_user, r_host, r_real = result
-    hostmask = '%s!%s@%s' % (r_nick, r_user, r_host)
-    if nick in track_id:
-        track_id[nick].hostmask = hostmask
-    elif nick.lower() == bot.nick.lower():
-        track_id[nick] = Record(hostmask=hostmask)
-    yield ret(hostmask)
-
-#-------------------------------------------------------------------------------
 # yield get_id(bot, nick) -> ID(nick,user,host) or None
 @util.mfun(link, 'identity.get_id')
 def get_id(bot, nick, ret):
-    hostmask = yield get_hostmask(bot, nick)
-    if hostmask:
-        yield ret(hostmask_to_id(hostmask))
-    else:
-        yield ret(None)
+    result = yield get_ids(bot, [nick])
+    yield ret(result[0])
 
+RPL_USERHOST = '302'
+UH_BATCH = 5
+UH_CONST_S = 5
+UH_LINEAR_S = 1
+UH_RE = re.compile('(?P<nick>[^*]*)\*?=\+?(?P<user>[^@]*)@(?P<host>.*)$')
+
+# get_id_cache[nick.lower()] = (ID(nick,user,host) or None, time.time())
+GET_ID_CACHE_S = 5
+get_id_cache = {}
+
+# yield get_ids(bot, [nick1, ...]) -> [ID(nick1,user1,host1) or None, ...]
+# This is more efficient than multiple separate invocations of get_id.
+@util.mfun(link, 'identity.get_ids')
+def get_ids(bot, nicks, ret):
+    cut = time.time() - GET_ID_CACHE_S
+    for nick, (id, ctime) in get_id_cache.items():
+        if ctime < cut: del get_id_cache[nick]
+
+    userhost_nicks = []
+    wait_nicks = []
+    nick_ids = {}
+    for nick in nicks:
+        nick = nick.lower()
+        if nick in track_id and track_id[nick].id is not None:
+            nick_ids[nick] = track_id[nick].id
+        elif nick in get_id_cache:
+            if get_id_cache[nick][0] is not None:
+                nick_ids[nick] = get_id_cache[nick][0]
+            else:
+                wait_nicks.append(nick)
+        else:
+            userhost_nicks.append(nick)
+            wait_nicks.append(nick)
+
+    for i in xrange(0, len(userhost_nicks), UH_BATCH):
+        bot.send_cmd('USERHOST %s' % ' '.join(userhost_nicks[i:i+UH_BATCH]))
+    for nick in userhost_nicks:
+        get_id_cache[nick] = (None, time.time())
+
+    if wait_nicks:
+        lines = -(-len(wait_nicks) // UH_BATCH)
+        timeout = yield runtime.timeout(UH_CONST_S + lines*UH_LINEAR_S)
+    while wait_nicks:
+        event, args = yield hold(bot, RPL_USERHOST, timeout)
+        if event == timeout: break
+        _bot, _from, _to, userhosts = args
+        for userhost in userhosts.split():
+            match = UH_RE.match(userhost)
+            if not match: continue
+            id = util.ID(*match.group('nick', 'user', 'host'))
+            nick = id.nick.lower()
+            wait_nicks.remove(nick)
+            if nick in track_id:
+                track_id[nick].id = id
+            get_id_cache[nick] = (id, time.time())
+            nick_ids[nick] = id
+
+    yield ret([nick_ids.get(n.lower()) for n in nicks])
+
+#-------------------------------------------------------------------------------
+# yield get_hostmask(bot, nick) -> 'nick!user@host' or None
+@util.mfun(link, 'identity.get_hostmask')
+def get_hostmask(bot, nick, ret):
+    id = yield get_id(bot, nick)
+    yield ret(None if id is None else id_to_hostmask(id))
+
+# yield get_hostmasks(bot, [nick1, ...]) -> ['nick1!user1@host1' or None, ..]
+# This is more efficient than multiple separate invocations of get_hostmask.
+def get_hostmasks(bot, nicks, ret):
+    ids = yield get_ids(bot, nicks)
+    yield ret([None if id is None else id_to_hostmask(id) for id in ids])
+
+#-------------------------------------------------------------------------------
+# hostmask_to_id('nick!user@host') = ID('nick', 'user', 'host')
 def hostmask_to_id(hostmask):
     return util.ID(*re.match(r'(.*)!(.*)@(.*)$', hostmask).groups())
+
+# id_to_hostmask(ID('nick', 'user', 'host')) = 'nick!user@host'
+def id_to_hostmask(id):
+    return '%s!%s@%s' % id
 
 #-------------------------------------------------------------------------------
 # yield refresh(bot, nicks) -> re-check certain credentials for each nick.
 @util.msub(link, 'identity.refresh')
 def refresh(bot, nicks):
     nicks = map(str.lower, nicks)
-    cred_nicks = dict()
+
+    ids = yield get_ids(bot, nicks)
+    for nick, id in izip(nicks, ids):
+        if nick not in track_id: continue
+        track_id[nick].id = id
+
+    ns_nick_access = dict()
     for access_name, creds in credentials.iteritems():
+        granted_nicks = set()
         for cred in creds:
-            if cred[0] == 'nickserv' and len(cred) > 1:
+            if cred[0] == 'hostmask' and len(cred) > 1:
+                for id in ids:
+                    if id.nick.lower() in granted_nicks: continue
+                    hostmask = id_to_hostmask(id)
+                    if re.match(util.wc_to_re(cred[1]), hostmask, re.I):
+                        yield grant_access(bot, id, access_name)
+                        granted_nicks.add(id.nick.lower())
+
+            elif cred[0] == 'prev_hosts' and len(cred) > 1:
+                for id in ids:
+                    if id.nick.lower() in granted_nicks: continue
+                    if access_name.lower() not in prev_hosts: continue
+                    userhost = '%s@%s' % (id.user, id.host)
+                    if userhost in prev_hosts[access_name][-cred[1]]:
+                        yield grant_access(bot, id, access_name)
+                        granted_nicks.add(id.nick.lower())
+
+            elif cred[0] == 'nickserv' and len(cred) > 1:
                 cred_nick = cred[1].lower()
                 if cred_nick not in nicks: continue
-                access_names = cred_nicks.get(cred_nick, [])
+                if cred_nick in granted_nicks: continue
+                access_names = ns_nick_access.get(cred_nick, [])
                 if access_name.lower() in access_names: continue
-                cred_nicks[cred_nick] = access_names + [access_name.lower()]
+                ns_nick_access[cred_nick] = access_names + [access_name.lower()]
 
-    status = yield nickserv.statuses(bot, cred_nicks.keys())
-    for nick, access_names in cred_nicks.iteritems():
+    status = yield nickserv.statuses(bot, ns_nick_access.keys())
+    for nick, access_names in ns_nick_access.iteritems():
         if status.get(nick) < 2: continue
         for access_name in access_names:
             yield grant_access(bot, nick, access_name)
@@ -247,9 +326,7 @@ def grant_access(bot, nick_or_id, access_name):
         max_prev_hosts = max(cred[1], max_prev_hosts)
     if max_prev_hosts:
         if not id:
-            hostmask = yield get_hostmask(bot, nick)
-            if hostmask:
-                id = util.ID(*re.match(r'(.*)!(.*)@(.*)', hostmask).groups())
+            id = yield get_id(bot, nick)
         if id:
             userhost = '%s@%s' % (id.user, id.host)
             hosts = prev_hosts.get(access_name.lower(), list())
@@ -285,35 +362,6 @@ def enum_access(bot, access_name, ret):
             nicks.add(nick)
     yield ret(tuple(nicks))
 
-#===============================================================================
-# yield who(bot, query_nick) -> (nick, user, host, real) or None
-whois_cache = dict()
-@util.mfun(link, 'identity.who')
-def who(bot, nick, ret):
-    for cnick, (_, ctime) in whois_cache.items():
-        if ctime < time.time() - 10:
-            del whois_cache[cnick]
-
-    cached = whois_cache.get(nick.lower())
-    if cached is not None and cached[0] is not None:
-        result = cached[0]
-    else:
-        if cached is None:
-            bot.send_cmd('WHOIS %s' % nick)
-            whois_cache[nick.lower()] = (None, time.time())
-        timeout = yield runtime.timeout(5)
-        result = None
-        while True:
-            event, args = yield hold(bot, RPL_WHOISUSER, timeout)
-            if event != RPL_WHOISUSER: break
-            (e_bot, e_source, e_target,
-             e_nick, e_user, e_host, e_star, e_real) = args
-            if e_nick.lower() != nick.lower(): continue
-            result = (e_nick, e_user, e_host, e_real)
-            whois_cache[nick.lower()] = (result, time.time())
-    
-    yield ret(result)
-
 # A sequence of nicks by which the given access name is known, according to
 # 'known_as' records in the credentials file, but which are not necessarily
 # online or authenticated to the given access name.
@@ -330,7 +378,6 @@ def h_names_sync(bot, chan, chan_nicks, chan_umodes):
     # records for any previously unknown nicks in the channel.
     refresh_nicks = []
     for nick in chan_nicks:
-        if nick.lower() == bot.nick.lower(): continue
         if nick.lower() not in track_id:
             track_id[nick.lower()] = Record()
         refresh_nicks.append(nick)
@@ -343,7 +390,7 @@ def h_other_join(bot, id, chan):
     nick = id.nick.lower()
     if nick not in track_id:
         track_id[nick] = Record()
-    track_id[nick].hostmask = '%s!%s@%s' % id
+    track_id[nick].id = id
     yield refresh(bot, [nick])
 
 @link('SELF_NICK',  a=lambda bot,     new_nick: (None, bot.nick, new_nick))
@@ -353,10 +400,10 @@ def h_other_nick(bot, *args, **kwds):
     id, old_nick, new_nick = kwds.pop('a')(bot, *args, **kwds)
     if old_nick.lower() in track_id:
         record = track_id.pop(old_nick.lower())
-        if id is None and record.hostmask:
-            id = hostmask_to_id(record.hostmask)
+        if id is None and record.id:
+            id = record.id
         if id is not None:
-            record.hostmask = '%s!%s@%s' % (new_nick, id.user, id.host)
+            record.id = util.ID(new_nick, id.user, id.host)
         track_id[new_nick.lower()] = record
 
 @link('CHAN_MODE')
