@@ -177,9 +177,7 @@ def get_id(bot, nick, ret):
     result = yield get_ids(bot, [nick])
     yield ret(result[0])
 
-RPL_USERHOST = '302'
-UH_BATCH = 5
-UH_RE = re.compile('(?P<nick>[^*]*)\*?=\+?(?P<user>[^@]*)@(?P<host>.*)$')
+RPL_WHOREPLY = '352'
 
 # get_id_cache[nick.lower()] = (ID(nick,user,host) or None, time.time())
 get_id_cache = {}
@@ -193,7 +191,7 @@ def get_ids(bot, nicks, ret, timeout_const_s=15, timeout_linear_s=2):
         if id is not None and ctime < now-10 or ctime < now-300:
             del get_id_cache[nick]
 
-    userhost_nicks = []
+    who_nicks = []
     wait_nicks = set()
     nick_ids = {}
     for nick in nicks:
@@ -206,35 +204,31 @@ def get_ids(bot, nicks, ret, timeout_const_s=15, timeout_linear_s=2):
             else:
                 wait_nicks.add(nick)
         else:
-            userhost_nicks.append(nick)
+            who_nicks.append(nick)
             wait_nicks.add(nick)
 
-    for i in xrange(0, len(userhost_nicks), UH_BATCH):
-        bot.send_cmd('USERHOST %s' % ' '.join(userhost_nicks[i:i+UH_BATCH]))
-    for nick in userhost_nicks:
+    for nick in who_nicks:
+        bot.send_cmd('WHO %s' % nick)
         get_id_cache[nick] = (None, time.time())
 
     if wait_nicks:
-        lines = -(-len(wait_nicks) // UH_BATCH)
+        lines = len(wait_nicks)
         timeout = yield runtime.timeout(timeout_const_s + lines*timeout_linear_s)
     while wait_nicks:
-        event, args = yield hold(bot, RPL_USERHOST, timeout)
+        event, args = yield hold(bot, RPL_WHOREPLY, timeout)
         if event == timeout: break
-        _bot, _from, _to, userhosts = args
-        for userhost in userhosts.split():
-            match = UH_RE.match(userhost)
-            if not match: continue
-            id = util.ID(*match.group('nick', 'user', 'host'))
-            nick = id.nick.lower()
-            if nick not in wait_nicks: continue
-            wait_nicks.remove(nick)
-            if nick in track_id:
-                track_id[nick].id = id
-            get_id_cache[nick] = (id, time.time())
-            nick_ids[nick] = id
+        _bot, _from, _to, _chan, user, host, _server, nick = args[:8]
+        id = util.ID(nick, user, host)
+        nick = nick.lower()
+        if nick not in wait_nicks: continue
+        wait_nicks.remove(nick)
+        if nick in track_id:
+            track_id[nick].id = id
+        get_id_cache[nick] = (id, time.time())
+        nick_ids[nick] = id
 
-    for nick in userhost_nicks:
-        if get_id_cache[nick][0] is None:
+    for nick in who_nicks:
+        if nick in get_id_cache and get_id_cache[nick][0] is None:
             del get_id_cache[nick]
 
     yield ret([nick_ids.get(n.lower()) for n in nicks])
