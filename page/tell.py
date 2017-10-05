@@ -501,7 +501,7 @@ def h_tell_list(bot, id, target, args, full_msg):
     rexp = re.compile(re.escape(args), re.I)
     for (num, msg) in izip(count(1), msgs):
         if not any(rexp.search(text) for text in (
-            msg.from_id.nick, msg.to_nick, msg.message)): continue
+            msg.channel, msg.from_id.nick, msg.to_nick, msg.message)): continue
         lines.append((
             str(num),
             '%s!%s@%s' % tuple(msg.from_id),
