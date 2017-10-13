@@ -347,6 +347,10 @@ def get_title_imgur(url, type, stream=None):
         imgur_image_info = imgur_info['images'][0]
         url_info = add_imgur_image_info(imgur_image_info, url_info, path, type)
     else:
+        if any(i.get('nsfw') for i in imgur_info['images']):
+            url_info['nsfw'] = True
+        elif all(not i.get('nsfw') for i in imgur_info['images']):
+            url_info['nsfw'] = False
         url_info['info'] = '%d images' % len(imgur_info['images'])
         url_info['size'] = None
 
@@ -371,6 +375,9 @@ def add_imgur_image_info(imgur_info, url_info, path, orig_type):
     and decode_url_path(URL_PART_RE.match(img_url).group('path'))[0] != path:
         url_info['url'] = img_url
 
+    if imgur_info.get('nsfw') is not None:
+        url_info['nsfw'] = imgur_info['nsfw']
+
     url_info['info'] = type
     url_info['title'] = title
     return url_info
@@ -390,9 +397,6 @@ def add_imgur_general_info(imgur_info, url_info):
 
     if imgur_info.get('section'):
         info_parts.append('Section: "%s"' % imgur_info['section'])
-
-    if imgur_info.get('nsfw') is not None:
-        url_info['nsfw'] = imgur_info['nsfw']
 
     url_info['info'] = '; '.join(info_parts) if info_parts else None
     return url_info    
