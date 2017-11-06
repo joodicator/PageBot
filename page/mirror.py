@@ -71,25 +71,24 @@ def get_mirror_url(url, chan):
     for time_url, time_s in times.items():
         if time_s + REPEAT_S < now: del times[time_url]
     if normal_url in times: return
-    times[normal_url] = now
     
     # Try to obtain from cache.
     mirror_url = get_cache(normal_url)
-    if mirror_url: return mirror_url
+    if mirror_url:
+        times[normal_url] = now
+        return mirror_url
 
     # Otherwise, upload to imgur.com.
     try:
         res = imgur.upload_url(url)
-    except imgur.ImgurError:
-        traceback.print_exc()
-        return
-    except urllib2.URLError:
+    except (imgur.ImgurError, urllib2.URLError):
         traceback.print_exc()
         return
 
     mirror_url = res.get('link')
     if mirror_url: put_cache(normal_url, mirror_url)
 
+    times[normal_url] = now
     return mirror_url
 
 @link('URL_COLLECT_URLS', 'URL_CMD_URLS')
@@ -99,14 +98,15 @@ def h_url_collect_urls(bot, urls, chan, id, orig_msg):
     delete_indices = []
 
     for url_spec, index in izip(urls, count()):
-        url, is_nsfw = url_nsfw(url_spec)
+        url, is_nsfw = url_collect.url_nsfw(url_spec)
         mirror_url = get_mirror_url(url, chan)
         if not mirror_url: continue
 
         nsfw_str = '\2NSFW:\2 ' if is_nsfw else ''
         msg = '%s%s copied to <%s>.' % (nsfw_str, url, mirror_url)
         message.reply(bot, id, chan, msg, prefix=False)
-        url_collect.history[chan].append([nsfw_url(mirror_url, is_nsfw)])
+        url_collect.history[chan].append([
+            url_collect.nsfw_url(mirror_url, is_nsfw)])
         delete_indices.append(index)
 
     new_urls = [u for (i,u) in izip(count(),urls) if i not in delete_indices]
@@ -117,13 +117,3 @@ def h_url_collect_urls(bot, urls, chan, id, orig_msg):
             else:
                 del url_collect.history[chan][index]
             break
-
-# ('NSFW',url) -> (url,True); url -> (url,False)
-def url_nsfw(spec):
-    return (spec[1],True) \
-        if type(spec) is tuple and spec[0] == 'NSFW' \
-      else (spec, False)
-
-# (url,True) -> ('NSFW',url); (url,False) -> url
-def nsfw_url(url, is_nsfw):
-    return ('NSFW',url) if is_nsfw else url

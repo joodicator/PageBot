@@ -77,3 +77,14 @@ def extract_urls(message, full_msg=None):
     if re.search(r'\bNSFW\b', message, re.I):
         urls = map(lambda u: ('NSFW', u), urls)
     return urls    
+
+#==============================================================================#
+# ('NSFW',url) -> (url,True); url -> (url,False)
+def url_nsfw(spec):
+    return (spec[1],True) \
+        if type(spec) is tuple and spec[0] == 'NSFW' \
+      else (spec, False)
+
+# (url,True) -> ('NSFW',url); (url,False) -> url
+def nsfw_url(url, is_nsfw):
+    return ('NSFW',url) if is_nsfw else url

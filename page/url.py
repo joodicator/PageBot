@@ -18,8 +18,8 @@ import os.path
 from bs4 import BeautifulSoup
 from untwisted.magic import sign
 
-from util import multi
 from url_collect import URL_PART_RE
+from util import multi
 import url_collect
 import runtime
 import util
@@ -53,37 +53,16 @@ def get_default_headers():
 
 default_headers = tuple(get_default_headers())
 
-class AbstractCustomHTTPHandler:
-    def __init__(self, *args, **kwds):
-        self.source_address = kwds.pop('source_address', None)
-        self.http_handler_class.__init__(self, *args, **kwds)
-
-    def do_open(self, http_class, req, **http_conn_args):
-        return self.http_handler_class.do_open(
-            self, http_class, req, source_address=self.source_address,
-            **http_conn_args)
-
-class CustomHTTPHandler(AbstractCustomHTTPHandler, urllib2.HTTPHandler):
-    http_handler_class = urllib2.HTTPHandler
-
-class CustomHTTPSHandler(AbstractCustomHTTPHandler, urllib2.HTTPSHandler):
-    http_handler_class = urllib2.HTTPSHandler
-
 def get_opener(bind_host=None):
-    sslcxt = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
     if bind_host is None and 'bind_host' in conf:
         bind_host = conf['bind_host']
     elif bind_host is None and 'bind_hosts' in conf:
         bind_host = conf['bind_hosts'][0]
-    if bind_host is not None:
-        saddr = (bind_host, 0)
-        http_handler = CustomHTTPHandler(source_address=saddr)
-        https_handler = CustomHTTPSHandler(source_address=saddr, context=sslcxt)
-    else:
-        http_handler = urllib2.HTTPHandler()
-        https_handler = urllib2.HTTPSHandler(context=sslcxt)
-    return urllib2.build_opener(
-        http_handler, https_handler, urllib2.HTTPCookieProcessor)
+
+    return util.ext_url_opener(
+        bind_host   = bind_host,
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23),
+        handlers    = (urllib2.HTTPCookieProcessor,))
 
 #==============================================================================#
 @link('HELP*')
@@ -140,7 +119,9 @@ def h_url(bot, id, target, args, full_msg, reply):
             yield runtime.sleep(0.01)
         except Exception as e:
             traceback.print_exc()
-            reply('Error: %s [%s]' % (e, abbrev_url(url)))
+            url, is_nsfw = url_collect.url_nsfw(url)
+            reply('Error: %s [%s%s]' %
+                (e, abbrev_url(url), ' \2NSFW\2' if is_nsfw else ''))
 
 #==============================================================================#
 # May be raised by get_title, get_title_proxy, etc, to indicate that the
@@ -159,11 +140,7 @@ def get_title(url):
 #   'proxy_msg':      The part of 'title' considered to be a proxy message.
 #   'proxy_msg_full': The unabbreviated version of 'proxy_msg'.
 def get_title_proxy(url):
-    is_nsfw = False
-    if type(url) is tuple:
-        if url[0] == 'NSFW': is_nsfw = True
-        url = url[1]
-
+    url, is_nsfw = url_collect.url_nsfw(url)
     url = utf8_url_to_ascii(url)
 
     request = urllib2.Request(url)
@@ -174,13 +151,20 @@ def get_title_proxy(url):
     if not is_global_address(host): raise PageURLError(
         'Access to this host is denied: %s.' % host)
 
-    with closing(get_opener().open(
-    request, timeout=TIMEOUT_S)) as stream:
-        info = stream.info()
-        ctype = info.gettype()
-        size = info['Content-Length'] if 'Content-Length' in info else None
-        final_url = stream.geturl()
-        parts = get_title_parts(final_url, ctype, stream=stream)
+    bind_hosts = conf.get('bind_hosts', [None])
+    for index, bind_host in izip(count(), bind_hosts):
+        try:
+            with closing(get_opener(bind_host=bind_host).open(
+            request, timeout=TIMEOUT_S)) as stream:
+                info = stream.info()
+                ctype = info.gettype()
+                size = info['Content-Length'] if 'Content-Length' in info else None
+                final_url = stream.geturl()
+                parts = get_title_parts(final_url, ctype, stream=stream)
+                break
+        except urllib2.HTTPError as e:
+            if e.code not in (403, 503) or index == len(bind_hosts) - 1:
+                raise
 
     title = parts.get('title', 'Title: (none)')
     extra = parts.get('info', ctype)
@@ -538,20 +522,20 @@ def utf8_url_to_ascii(url):
     return m.group('pref') \
          + utf8_host_to_ascii(m.group('host')) \
          + m.group('suff') \
-         + utf8_path_to_ascii(m.group('path')) \
-         + m.group('frag')
+         + utf8_percent_encode(m.group('path') + m.group('frag'))
 
 def utf8_host_to_ascii(host):
     parts = host.split('.')
     for i in xrange(len(parts)):
-        try: parts[i] = parts[i].decode('utf8')
+        try: d_part = parts[i].decode('utf8')
         except UnicodeError: continue
-        if parts[i].encode('ascii', 'ignore') == parts[i]: continue
-        parts[i] = 'xn--' + parts[i].lower().encode('punycode')
+        if d_part.encode('ascii', 'ignore') != d_part:
+            parts[i] = 'xn--' + d_part.lower().encode('punycode')
     return '.'.join(parts)
 
-def utf8_path_to_ascii(path):
-    return path
+def utf8_percent_encode(url_part):
+    return ''.join(
+        c if ord(c) in range(128) else ('%%%02X' % ord(c)) for c in url_part)
 
 #-------------------------------------------------------------------------------
 def ascii_url_to_utf8(url):
@@ -560,8 +544,7 @@ def ascii_url_to_utf8(url):
     return m.group('pref') \
          + ascii_host_to_utf8(m.group('host')) \
          + m.group('suff') \
-         + ascii_path_to_utf8(m.group('path')) \
-         + m.group('frag')
+         + utf8_percent_decode(m.group('path') + m.group('frag'))
 
 def ascii_host_to_utf8(host):
     parts = host.split('.')
@@ -571,8 +554,11 @@ def ascii_host_to_utf8(host):
         except UnicodeError: pass
     return '.'.join(parts)
 
-def ascii_path_to_utf8(path):
-    return path
+def utf8_percent_decode(url_part):
+    def repl(match):
+        code = int(match.group('code'), 16)
+        return match.group() if code in xrange(128) else chr(code)
+    return re.sub(r'%(?P<code>[A-Fa-f0-9]{2})', repl, url_part)
 
 #-------------------------------------------------------------------------------
 # Returns (p, q), where p is the given URL path excluding any query part, and

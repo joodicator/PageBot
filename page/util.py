@@ -8,6 +8,7 @@ import inspect
 import random
 import sys
 import re
+import urllib2
 
 ID = namedtuple('ID', ('nick', 'user', 'host'))
 ID.__getstate__ = lambda *a, **k: None
@@ -530,3 +531,33 @@ def same_user(id1, id2):
     return id1.host.lower() == id2.host.lower() and \
            (id1.user.lower() == id2.user.lower() or \
             id1.user.startswith('~') or id2.user.startswith('~'))
+
+#===============================================================================
+# Extensions to urllib2's URL openers and handlers.
+
+def ext_url_opener(bind_host=None, ssl_context=None, handlers=()):
+    if bind_host is not None:
+        saddr = (bind_host, 0)
+        h_handler = ExtHTTPHandler(source_address=saddr)
+        s_handler = ExtHTTPSHandler(source_address=saddr, context=ssl_context)
+    else:
+        h_handler = urllib2.HTTPHandler()
+        s_handler = urllib2.HTTPSHandler(context=ssl_context)
+    return urllib2.build_opener(
+        h_handler, s_handler, *handlers)
+
+class AbstractExtHTTPHandler:
+    def __init__(self, *args, **kwds):
+        self.source_address = kwds.pop('source_address', None)
+        self.http_handler_class.__init__(self, *args, **kwds)
+
+    def do_open(self, http_class, req, **http_conn_args):
+        return self.http_handler_class.do_open(
+            self, http_class, req, source_address=self.source_address,
+            **http_conn_args)
+
+class ExtHTTPHandler(AbstractExtHTTPHandler, urllib2.HTTPHandler):
+    http_handler_class = urllib2.HTTPHandler
+
+class ExtHTTPSHandler(AbstractExtHTTPHandler, urllib2.HTTPSHandler):
+    http_handler_class = urllib2.HTTPSHandler
