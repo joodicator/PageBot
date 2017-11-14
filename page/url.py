@@ -79,7 +79,7 @@ def h_help_url(bot, reply, args):
     ' called. Further "!url" commands (up to %s in total) may be given on the'
     ' same line.' % CMDS_PER_LINE_MAX)
 
-@link('!url', '!title')
+@link('!url', '!title', ('ACTION', '!url'), ('ACTION', '!title'))
 @multi('!url', '!title', limit=CMDS_PER_LINE_MAX, prefix=False)
 def h_url(bot, id, target, args, full_msg, reply):
     channel = (target or ('%s!%s@%s' % id)).lower()

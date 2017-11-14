@@ -39,7 +39,7 @@ def h_proxy_msg(bot, id, target, msg, full_msg=None, no_url=False, **kwds):
     if no_url: return
     yield examine_message(bot, id, target, msg, full_msg=full_msg)
 
-@link('COMMAND')
+@link('COMMAND', 'ACTION_COMMAND')
 def h_command(bot, id, target, cmd, args, full_msg):
     if cmd in ('!url', '!title'): return
     yield examine_message(bot, id, target or id.nick, args)
