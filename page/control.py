@@ -65,6 +65,7 @@ def _eval(bot, id, target, args, full_msg):
     try:
         result = eval(args, sys.modules, {'bot':bot})
     except Exception as e:
+        traceback.print_exc()
         result = e
     echo(bot, id, target, repr(result))
 
@@ -74,6 +75,7 @@ def _exec(bot, id, target, args, full_msg):
     try:
         exec args in sys.modules, {'bot':bot}
     except Exception as e:
+        traceback.print_exc()
         echo(bot, id, target, repr(e))
 
 @link('!yield')
