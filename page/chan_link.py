@@ -246,8 +246,8 @@ def h_proxy_msg(bot, id, chan, msg, no_link=False, **kwds):
 def h_topic(bot, source, chan, topic):
     if chan.lower() not in links: return
     if isinstance(source, tuple): source = source[0]
-    msg = '%s: %s set topic to: %s' % (source, topic) if topic else \
-          '%s: %s unset the topic.' % source
+    msg = '%s: %s set topic to: %s' % (chan, source, topic) if topic else \
+          '%s: %s unset the topic.' % (chan, source)
     for lchan in links[chan.lower()]: bot.send_msg(lchan, msg, no_link=True)
 
 @link('MODE')
