@@ -23,34 +23,35 @@ def init_client_id():
         traceback.print_exc()
 client_id = init_client_id()
 
-def api_request(rel_url, *args, **kwds):
+def api_request(rel_url, **req_kwds):
     if not client_id: raise ImgurError('No client ID specified.')
-    req = urllib2.Request(API_URL+rel_url, *args, **kwds)
+    req = urllib2.Request(API_URL + rel_url, **req_kwds)
     req.add_header('Authorization', 'Client-ID %s' % client_id)
     return req
 
-def api_result(*args, **kwds):
-    req = api_request(*args, **kwds)
-    res = json.load(urllib2.urlopen(req, context=ssl_context))
+def api_result(rel_url, opener=None, **req_kwds):
+    req = api_request(rel_url, **req_kwds)
+    open = urllib2.urlopen if opener is None else opener.open
+    res = json.load(open(req, context=ssl_context))
     if not res['success']:
         raise ImgurError(res['data'])
     return res['data']
 
-def image_info(id):
-    return api_result('/image/%s' % id)
+def image_info(id, **kwds):
+    return api_result('/image/%s' % id, **kwds)
 
-def album_info(id):
-    return api_result('/album/%s' % id)
+def album_info(id, **kwds):
+    return api_result('/album/%s' % id, **kwds)
 
-def gallery_info(id):
-    return api_result('/gallery/%s' % id)
+def gallery_info(id, **kwds):
+    return api_result('/gallery/%s' % id, **kwds)
 
-def gallery_image_info(id):
-    return api_result('/gallery/image/%s' % id)
+def gallery_image_info(id, **kwds):
+    return api_result('/gallery/image/%s' % id, **kwds)
 
-def gallery_album_info(id):
-    return api_result('/gallery/album/%s' % id)
+def gallery_album_info(id, **kwds):
+    return api_result('/gallery/album/%s' % id, **kwds)
 
-def upload_url(img_url):
+def upload_url(img_url, **kwds):
     data = urllib.urlencode({'image':img_url})
-    return api_result('/image', data=data)
+    return api_result('/image', data=data, **kwds)
