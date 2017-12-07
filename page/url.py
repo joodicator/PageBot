@@ -1,6 +1,8 @@
 # coding=utf8
 
 #==============================================================================#
+from __future__ import print_function
+
 from contextlib import closing
 from itertools import *
 from math import *
@@ -14,6 +16,7 @@ import ssl
 import re
 import locale
 import os.path
+import sys
 
 from bs4 import BeautifulSoup
 from untwisted.magic import sign
@@ -29,7 +32,7 @@ import identity
 #==============================================================================#
 link, install, uninstall = util.LinkSet().triple()
 
-USER_AGENT = 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:50.0) Gecko/20100101 Firefox/50.0'
+USER_AGENT = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:57.0) Gecko/20100101 Firefox/57.0'
 ACCEPT_ENCODING = 'gzip, deflate'
 
 TIMEOUT_S = 20
@@ -151,8 +154,8 @@ def get_title_proxy(url):
     if not is_global_address(host): raise PageURLError(
         'Access to this host is denied: %s.' % host)
 
-    bind_hosts = conf.get('bind_hosts', [None])
-    for index, bind_host in izip(count(), bind_hosts):
+    exceptions = []
+    for bind_host in conf.get('bind_hosts', [None]):
         try:
             with closing(get_opener(bind_host=bind_host).open(
             request, timeout=TIMEOUT_S)) as stream:
@@ -160,11 +163,18 @@ def get_title_proxy(url):
                 ctype = info.gettype()
                 size = info['Content-Length'] if 'Content-Length' in info else None
                 final_url = stream.geturl()
-                parts = get_title_parts(final_url, ctype, stream=stream)
+                parts = get_title_parts(
+                    final_url, ctype, stream=stream, bind_host=bind_host)
                 break
-        except urllib2.HTTPError as e:
-            if e.code not in (403, 503) or index == len(bind_hosts) - 1:
-                raise
+        except urllib2.URLError as e:
+            if isinstance(e, urllib2.HTTPError):
+                if e.code not in (403, 503): raise
+            elif isinstance(e.reason, IOError):
+                if e.reason.errno != -2: raise
+            print('[bind_host=%s] %s' % (bind_host, e), file=sys.stderr)
+            exceptions.append(e)
+    else:
+        raise exceptions[0]
 
     title = parts.get('title', 'Title: (none)')
     extra = parts.get('info', ctype)
@@ -206,29 +216,29 @@ def get_title_proxy(url):
 #   'proxy':      the part of 'info' (if any) considered to be a proxy message.
 #   'proxy_full': the unabbreviated version (if any) of 'proxy'.
 #   'nsfw':       True to indicate that the content is "not safe for work".
-def get_title_parts(url, type, stream=None):
+def get_title_parts(url, type, **kwds):
     match = URL_PART_RE.match(url)
     path, query = decode_url_path(match.group('path'))
     # YouTube
     if re.search(r'(^|\.)youtube\.com$', match.group('host')):
-        res = get_title_youtube(url, type)
+        res = get_title_youtube(url, type, **kwds)
         if res: return res
     # imgur
     if re.match(r'(www\.|i\.)?imgur\.com$', match.group('host')):
-        res = get_title_imgur(url, type, stream)
+        res = get_title_imgur(url, type, **kwds)
         if res: return res
     # HTML
     if 'html' in type:
-        res = get_title_html(url, type, stream=stream)
+        res = get_title_html(url, type, **kwds)
         if res: return res
     # image files
     if type.startswith('image/'):
-        return get_title_image(url, type)
+        return get_title_image(url, type, **kwds)
     # Other
     return dict()
 
 #-------------------------------------------------------------------------------
-def get_title_html(url, type, stream=None):
+def get_title_html(url, type, stream=None, **kwds):
     if stream is None:
         request = urllib2.Request(url)
         for header in default_headers:
@@ -261,13 +271,13 @@ def get_title_html(url, type, stream=None):
         return { 'title': title }
 
 #-------------------------------------------------------------------------------
-def get_title_image(url, type):
-    title = google_image_best_guess(url)
+def get_title_image(url, type, **kwds):
+    title = google_image_best_guess(url, **kwds)
     title = 'Best guess: %s' % (format_title(title) if title else '(none)')
     return { 'title': title }
 
 #-------------------------------------------------------------------------------
-def get_title_youtube(url, type):
+def get_title_youtube(url, type, **kwds):
     match = URL_PART_RE.match(url)
     path, query = decode_url_path(match.group('path'))
     if path != '/watch' or not query.get('v'): return
@@ -302,7 +312,7 @@ def get_title_youtube(url, type):
         traceback.print_exc(e)
 
 #-------------------------------------------------------------------------------
-def get_title_imgur(url, type, stream=None):
+def get_title_imgur(url, type, stream=None, **kwds):
     match = URL_PART_RE.match(url)
     path, query = decode_url_path(match.group('path'))
     path_match = re.match(
@@ -426,12 +436,12 @@ def bytes_to_human_size(bytes):
 # Returns the "best guess" phrase that Google's reverse image search offers to
 # describe the image at the given URL, or None if no such phrase is offered.
 gibg_cache = dict()
-def google_image_best_guess(url, use_cache=False):
+def google_image_best_guess(url, use_cache=False, **kwds):
     if use_cache and url in gibg_cache:
         return gibg_cache[url]
 
     PHRASE = 'Best guess for this image:'
-    soup = google_image_title_soup(url)
+    soup = google_image_title_soup(url, **kwds)
     node = soup.find(text=re.compile(re.escape(PHRASE)))
 
     result = node and node.parent.text.replace(PHRASE, '').strip()
@@ -441,20 +451,16 @@ def google_image_best_guess(url, use_cache=False):
             gibg_cache.popitem()
     return result
 
-def google_image_title_soup(url):
+def google_image_title_soup(url, bind_host=None, **kwds):
     request = urllib2.Request('https://www.google.com/searchbyimage?'
         + urllib.urlencode({'image_url':url, 'safe':'off'}))
     request.add_header('Referer', 'https://www.google.com/imghp?hl=en&tab=wi')
     request.add_header('User-Agent', USER_AGENT)
-    bind_hosts = conf.get('bind_hosts', [None])
-    for index, bind_host in izip(count(), bind_hosts):
-        try:
-            opener = get_opener(bind_host=bind_host)
-            with closing(opener.open(request, timeout=TIMEOUT_S)) as stream:
-                text = stream.read(READ_BYTES_MAX)
-                return BeautifulSoup(text, BS4_PARSER)
-        except urllib2.HTTPError as e:
-            if e.code != 503 or index == len(bind_hosts) - 1: raise
+
+    opener = get_opener(bind_host=bind_host)
+    with closing(opener.open(request, timeout=TIMEOUT_S)) as stream:
+        text = stream.read(READ_BYTES_MAX)
+        return BeautifulSoup(text, BS4_PARSER)
 
 #==============================================================================#
 # True if the given hostname or IPV4 or IPV6 address string is not in any
