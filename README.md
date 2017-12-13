@@ -170,7 +170,7 @@ Allows pairs of channels to be linked together, so that messages from one channe
 * **`state/chan_link_persistent.txt`** - a newline-separated list of Python tuples of strings `(CHAN1, CHAN2)` representing a persistent link from `CHAN1` to `CHAN2`. The link is mutual if and only if `(CHAN2, CHAN1)` is also present in the list.
 
 #### `limit`
-Implements per-user flood protection for user commands and other actions causing processor or network usage, to curtail denial-of-service attacks against the bot. When a user exceeds the limits defined in [`flood.py`](page/flood.py), they are ignored for a period of time and given a notification of this.
+Implements per-user flood protection for user commands and other actions causing processor or network usage, to curtail denial-of-service attacks against the bot. When a user exceeds the limits defined in [`limit.py`](page/limit.py), they are ignored for a period of time and given a notification of this.
 
 #### `modal`
 Allows different plugins to share access to limited resources associated with IRC channels, such as the right to respond to a command whose name is the same for two different plugins. Access is mediated based on a centrally managed *mode* determining which plugin has access at any given time. See comments in [`modal.py`](page/modal.py) for more information.
