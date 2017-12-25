@@ -837,9 +837,11 @@ def roll_def_query(
     noun = 'definition%s' % s if multiple or not private and not external else \
            'definition%s in %s' % (s, chan_case) if not private else \
            'private definition%s' % s
-    defs_str = '%d matching %s' % (len(defs), noun) if not multiple else \
-               '\2Private:\2 %d matching %s' % (len(defs), noun) if private else \
-               '\2%s:\2 %d matching %s' % (chan_case, len(defs), noun)
+    if args:
+        noun = 'matching %s' % noun
+    defs_str = '%d %s' % (len(defs), noun) if not multiple else \
+               '\2Private:\2 %d %s' % (len(defs), noun) if private else \
+               '\2%s:\2 %d %s' % (chan_case, len(defs), noun)
 
     if len(defs) == 0:
         chan_defs = sum(
@@ -881,7 +883,7 @@ def roll_def_query(
             message.reply(bot, id, target, '    %s' % row, prefix=False)
     else:
         names = ', '.join(sorted(d.name for d in defs))
-        if len(names) > 300: names = names[:300] + '(...)'
+        if len(names) > 400: names = names[:400] + '(...)'
         suffix = '' if multiple else \
                  ' Use \2!rd?%s NAME\2 to view the details of a definition.' % (
                      (' %s' % chan_case) if external and not (target and
