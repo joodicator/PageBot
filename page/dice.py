@@ -72,8 +72,10 @@ def h_help_roll(bot, reply, args, bridge):
         reply('roll ... {{NAME}} ...',
         'Where NAME corresponds to a definition set using \2roll-def+\2,'
         ' {{NAME}} is replaced with the body of the definition, which is itself'
-        ' further expanded if it contains any !roll syntax. See also:'
-        ' \2!help roll-def+\2.')
+        ' further expanded if it contains any !roll syntax. If NAME has been'
+        ' altered by making some characters uppercase or lowercase, a corresponding'
+        ' transformation will be applied to the result.'
+        ' See also: \2!help roll-def+\2.')
     else:
         reply('roll MdN\2 or \2!roll MdN+K\2 or \2!roll MdN-K',
         'Simulates the rolling of M dice, each of which has N sides, giving'
@@ -92,9 +94,9 @@ class UserError(Exception):
 @link(('ACTION', '!roll'), ('ACTION', '!r'), action=True)
 def h_roll(bot, id, target, args, full_msg, action):
     if target is not None:
-        defs = global_defs.get(target.lower())
+        defs = AutoDefs(global_defs.get(target.lower()))
     else:
-        defs = PrivateDefs(id)
+        defs = AutoDefs(PrivateDefs(id))
     def reply(rmsg=None, from_name=None, **kwds):
         if rmsg is None: rmsg = from_name(id.nick)
         message.reply(bot, id, target, rmsg, **kwds)
@@ -237,7 +239,7 @@ def e_name(name, context):
             ' of %d definitions would be expanded.' % context.max_names_expanded)
 
     defn = context.defs[name.name]
-    for s in e_string(defn.body_ast, context):
+    for s in defn.postprocess(e_string(defn.body_ast, context)):
         yield s
 
     if context.max_stack_depth is not None:
@@ -531,10 +533,11 @@ class DictStack(object, DictMixin):
             if key in dict:
                 return dict[key]
         raise KeyError
-    def __setitem__(self, key):
-        raise TypeError('%r does not support item assignment.' % type(self))
-    def __delitem__(self, key):
-        raise TypeError('%r does not support item deletion.' % type(self))
+    def __iter__(self):
+        for i in xrange(len(self.stack)):
+            for key in self.stack[i]:
+                if all(key not in self.stack[j] for j in xrange(i)):
+                    yield key
 
 class GlobalDefs(dict):
     __slots__ = 'decay_start'
@@ -574,6 +577,9 @@ class Def(object):
         return self._body_ast if self._body_ast is not None else \
                parse_string(self._body_str) if self._body_str is not None else \
                None
+
+    def postprocess(self, str_iter):
+        return str_iter
 
 class GlobalDef(Def):
     __slots__ = 'id', 'modes', 'time'
@@ -625,11 +631,66 @@ class UserChannelDefs(DictMixin):
             raise KeyError
         return defn
 
-    def __setitem__(self, key):
-        raise TypeError('%r does not support item assignment.' % type(self))
+    def __iter__(self):
+        for chan, nicks in channel.track_channels.iteritems():
+            if chan.lower() in global_defs \
+            and any(self.id.nick.lower() == n.lower() for n in nicks):
+                for key in global_defs[chan.lower()]:
+                    yield key
 
-    def __delitem__(self, key):
-        raise TypeError('%r does not support item deletion.' % type(self))
+# Automatic definitions provided in addition to, and possibly derived from, an
+# iterable dict-like container of underlying definitions. Not iterable.
+class AutoDefs(DictStack):
+    def __init__(self, base_defs):
+        super(AutoDefs, self).__init__(base_defs, CaseAutoDefs(base_defs))
+    def __iter__(self):
+        raise NotImplementedError('AutoDefs instances are not iterable.')
+
+# Class of AutoDefs consisting of case transformations applied to the results of
+# definitions based on corresponding transformations to their names. For example,
+# looking up 'BEVERAGE' when there is a definition named 'beverage' will return
+# a virtual definition which turns the results of 'beverage' into all uppercase.
+class CaseAutoDefs(object, DictMixin):
+    __slots__ = '_base_defs'
+    def __init__(self, base_defs):
+        self._base_defs = base_defs
+    def __getitem__(self, key):
+        base_keys = sorted(b for b in self._base_defs if b.lower() == key.lower())
+        if key in base_keys: return self._base_defs[key]
+        if not base_keys: raise KeyError
+        base_key = min(base_keys, key=lambda b: sum(1 for c in b if c.isupper()))
+        return CaseAutoDef(self._base_defs[base_key], base_key, key)
+
+# A virtual definition produced by CaseAutoDefs.
+class CaseAutoDef(Def):
+    __slots__ = '_old_key', '_new_key'
+
+    def __init__(self, base, old_key, new_key):
+        self._old_key, self._new_key = old_key, new_key
+        super(CaseAutoDef, self).__init__(
+            name=new_key, body_ast=base._body_ast, body_str=base._body_str)
+
+    def postprocess(self, str_iter):
+        old = ''.join(c for c in self._old_key if c.isupper() or c.islower())
+        new = ''.join(c for c in self._new_key if c.isupper() or c.islower())
+
+        tail_map = str.upper if new[-1:].isupper() and not old[-1:].isupper() \
+              else str.lower if new[-1:].islower() and not old[-1:].islower() \
+              else lambda x: x
+
+        i = 0
+        for s in str_iter:
+            n = min(len(old)-i, len(new)-i, len(s))
+            yield ''.join(
+                c.upper() if nc.isupper() and not oc.isupper() else
+                c.lower() if nc.islower() and not oc.islower() else c
+                for (c,oc,nc) in izip(s, old[i:], new[i:]))
+            i += n
+            if n < len(s):
+                yield tail_map(s[n:])
+                break
+        for s in str_iter:
+            yield tail_map(s)
 
 global_defs = load_defs()
 
