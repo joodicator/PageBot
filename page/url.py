@@ -56,6 +56,10 @@ def get_default_headers():
 
 default_headers = tuple(get_default_headers())
 
+class CustomHTTPRedirectHandler(urllib2.HTTPRedirectHandler):
+    max_repeats = 12
+    max_redirections = 30
+
 def get_opener(bind_host=None):
     if bind_host is None and 'bind_host' in conf:
         bind_host = conf['bind_host']
@@ -65,7 +69,8 @@ def get_opener(bind_host=None):
     return util.ext_url_opener(
         bind_host   = bind_host,
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23),
-        handlers    = (urllib2.HTTPCookieProcessor,))
+        handlers    = (urllib2.HTTPCookieProcessor,
+                       CustomHTTPRedirectHandler))
 
 #==============================================================================#
 @link('HELP*')
