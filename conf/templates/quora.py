@@ -1,3 +1,3 @@
-'channel',      'daily_frequency',  'exclude_topics'
+'channel',      'daily_frequency',  'source_topics', 'exclude_topics'
 
-'#PageBot',     0.2,                ('Suicide',)
+'#PageBot',     0.2,                (),              ('Suicide',)

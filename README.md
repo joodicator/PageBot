@@ -413,13 +413,14 @@ Whenever onamatapoeic laughter is detected in the channel, the bot joins in. Sup
 #### `quora`
 Posts questions from [Quora](https://www.quora.com) at random intervals in configured channels.
 
-* **`conf/quora.py`** - a CSV-style newline-separated list of Python tuples, each representing a channel in which Quora questions should be posted, under the header `'channel', 'daily_frequency', 'exclude_topics'`, whose columns have the following meanings:
+* **`conf/quora.py`** - a CSV-style newline-separated list of Python tuples, each representing a channel in which Quora questions should be posted, under the header `'channel', 'daily_frequency', 'source_topics', 'exclude_topics'`, whose columns have the following meanings:
 
     Field             | Type             | Description
     ------------------|------------------|-------------
     `channel`         | `str`            | The channel name. Should start with `#`.
     `daily_frequency` | `Number`         | The average number of questions posted per day while conditions on recent channel activity are met - see comments in [`quora.py`](page/quora.py) for details of the latter. For values much smaller than 2880, the distribution of posts over time resembles a [Poisson point process](https://en.wikipedia.org/wiki/Poisson_point_process). A sensible value for this parameter is `0.2`.
-    `exclude_topics`  | `tuple` of `str` | A tuple `()`, `('TOPIC1',)` `('TOPIC1','TOPIC2',...)` listing respectively 0, 1 or several case-insensitive Quora *topics* which shall not occur in any question posted by this module.
+    `source_topics`   | `str`, `meta(str)` or `tuple` | A string `'TOPIC'` or a tuple `()` or `('TOPIC1', 'TOPIC2', ...)` listing the case-insensitive Quora *topics* from which questions shall be drawn. Instead of plain topic strings, *meta-topics* may also be specified as `meta('CATEGORY')`, where `CATEGORY` is a category name, such as `'Health and Medicine'`, from [this list](https://www.quora.com/sitemap). If an empty tuple is given, all questions on Quora are considered.
+    `exclude_topics`  | `str` or `tuple` | A string `'TOPIC'` or a tuple `()` or `('TOPIC1','TOPIC2',...)` listing case-insensitive Quora *topics* which shall not occur in any question posted by this module.
 
 * **`state/quora.json`** - persistent internal state recorded by the module.
 
