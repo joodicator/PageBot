@@ -2,6 +2,7 @@ from collections import namedtuple
 from UserDict import DictMixin
 from itertools import *
 from functools import *
+from cStringIO import StringIO
 import re
 import random
 import math
@@ -185,17 +186,17 @@ def e_string(string, context):
     return chain(*(e_part(part, context) for part in string.parts))
 
 def e_part(part, context):
-    if   isinstance(part, (Text, Escape)):         return e_text(part, context)
-    elif isinstance(part, (Roll, FtRoll, ExRoll)): return e_roll(part, context)
-    elif isinstance(part, Name):                   return e_name(part, context)
-    elif isinstance(part, Branch):                 return e_branch(part, context)
-    else:                                          assert False
+    if   isinstance(part, (Text, Escape)): return e_text(part, context)
+    elif isinstance(part, Expr):           return e_expr(part, context)
+    elif isinstance(part, Name):           return e_name(part, context)
+    elif isinstance(part, Branch):         return e_branch(part, context)
+    else:                                  assert False
 
 def e_text(text, context):
     yield text.text
 
-def e_roll(roll, context):
-    yield str(eval_roll(roll))
+def e_expr(roll, context):
+    yield str(eval_expr(roll))
 
 def e_branch(branch, context):
     weight_sum = 0.0
@@ -247,6 +248,41 @@ def e_name(name, context):
 
 #-------------------------------------------------------------------------------
 # Evaluation of dice rolls from abstract syntax tree nodes:
+
+# Returns (roll_int, roll_str, roll_spec), where:
+#   roll_spec = ((dice, drop_low, drop_high), sides, add) or None
+def e_expr_full(expr):
+    r_int, r_str = 0, StringIO()
+    first, paren, paren_prefix = True, False, False
+    while isinstance(expr, Expr):
+        term = expr.term
+
+        if isinstance(term, TermCnst):
+            r_int = r_int + term.num if expr.op == '+' else r_int - term.num
+            if not paren: r_str.write('(')
+            if not first or expr.op != '+': r_str.write(expr.op)
+            r_str.write(str(term.num))
+            paren = True
+            paren_prefix = first or paren_prefix
+        else:
+            if paren and not paren_prefix: r_str.write(')')
+            if not first or expr.op != '+': r_str.write(expr.op)
+            if paren and paren_prefix: r_str.write(')')
+            paren = paren_prefix = False
+
+        if isinstance(term, (TermDice, TermFATE)):
+            a, b = (1, term.sides) if isinstance(term, TermDice) else (-1, 1)
+            rolls = [random.randint(a, b) for n in xrange(term.dice)]
+            r_int = r_int + sum(rolls) if expr.op == '+' else r_int - sum(rolls)
+            d_str = '+'.join(str(roll) for roll in rolls)
+            r_str.write(d_str if expr.op == '+' else '(%s)' % d_str)
+        elif isinstance(term, TermKeep):
+            
+        else:
+            assert isinstance(term, TermCnst)
+
+        expr = expr.expr
+        first = False
 
 # Returns an integer result.
 def eval_roll(roll):
@@ -330,9 +366,13 @@ def roll_list(dice, sides, drop_low=0, drop_high=0):
 String = namedtuple('String', ('parts',                  'source'))
 Text   = namedtuple('Text',   ('text',                   'source'))
 Escape = namedtuple('Escape', ('text',                   'source'))
-Roll   = namedtuple('Roll',   ('dice', 'sides', 'add',   'source'))
-FtRoll = namedtuple('FtRoll', ('dice', 'add',            'source')) # FATE dice.
-ExRoll = namedtuple('ExRoll', ('type', 'number', 'roll', 'source'))
+
+Expr     = namedtuple('Expr',     ('op', 'term', 'expr', 'source'))
+TermDice = namedtuple('TermDice', ('dice', 'sides',      'source'))
+TermFATE = namedtuple('TermFATE', ('dice',               'source'))
+TermKeep = namedtuple('TermKeep', ('bw', 'num', 'expr',  'source'))
+TermCnst = namedtuple('TermCnst', ('num',                'source'))
+
 Name   = namedtuple('Name',   ('name',                   'source'))
 Branch = namedtuple('Branch', ('choices',                'source'))
 Choice = namedtuple('Choice', ('weight', 'string',       'source'))
@@ -344,63 +384,60 @@ def parse_string(input):
 def p_string(input, choice=False):
     if choice:
         text_re = re.compile(
-            r'([^,}\s][^bBwWdD\d{,}\\\s]*|\s+(?![,}]))?')
-        part_ps = p_escape, p_ex_roll, p_roll, p_name, p_branch
+            r'[^,}\s]((?!\b[bBwWdD])[^\d{,}\\\s+-])*|\s+(?=[^,}\s])|')
+        part_ps = p_escape, p_expr, p_name, p_branch, (p_text, text_re)
     else:
-        text_re = re.compile(r'(.[^bBwWdD\d{]*?)?')
-        part_ps = p_ex_roll, p_roll, p_name, p_branch
+        text_re = re.compile(r'.((?!\b[bBwWdD])[^\d{+-])*|')
+        part_ps = p_expr, p_name, p_branch, (p_text, text_re)
 
     start = input
     parts = []
     while input:
-        for p_part in part_ps:
-            try:
-                part, input = p_part(input)
-                parts.append(part)
-                break
-            except ParseFail:
-                continue
-        else:
-            text_start, (match, input) = input, p_match(text_re, input)
-            if not match.group():
+        part, input = p_any(*part_ps + (input,))
+        if isinstance(part, Text):
+            if not part.text:
                 break
             if parts and isinstance(parts[-1], Text):
                 parts[-1] = Text(
-                    text   = parts[-1].text + match.group(),
-                    source = parts[-1].source + (input-text_start))
-            else:
-                parts.append(Text(text=match.group(), source=input-text_start))
+                    text   = parts[-1].text + part.text,
+                    source = parts[-1].source + part.source)
+                continue
+        parts.append(part)
 
     return String(parts=parts, source=input-start), input
+
+def p_text(text_re, start):
+    match, input = p_match(text_re, start)
+    return Text(text=match.group(), source=input-start), input
 
 def p_choice_string(input):
     return p_string(input, choice=True)
 
-def p_ex_roll(input):
-    match, roll, _, end_input = p_seq(
-        (p_match, r'(?P<t>[bBwW])(?P<n>\d*)\('), partial(p_roll, ex=True),
-         (p_token, ')'), input)
-    return ExRoll(
-        type   = match.group('t').lower(),
-        number = int(match.group('n')) if match.group('n') else 1,
-        roll   = roll,
-        source = end_input - input), end_input
+def p_expr(start):
+    match, input = p_match(r'((?P<op>[+-])\s*)?', start)
+    op = match.group('op') or '+'
+    term, input = p_any(p_term_dice, p_term_keep, p_term_cnst, input)
+    try: expr, input = p_expr(input)
+    except ParseFail: expr = None
+    return Expr(op=op, term=term, expr=expr, source=input-start), input
 
-def p_roll(input, ex=False):
-    match, end_input = p_match(r'(?P<d>\d*)[dD](?P<s>\d+|F)(?P<a>[+-]\d+)?', input)
-    if match.group('s') == 'F':
-        if not match.group('d') and not ex:
-            raise ParseFail
-        return FtRoll(
-            dice   = int(match.group('d')) if match.group('d') else 1,
-            add    = int(match.group('a')) if match.group('a') else 0,
-            source = end_input - input), end_input
-    else:
-        return Roll(
-            dice   = int(match.group('d')) if match.group('d') else 1,
-            sides  = int(match.group('s')),
-            add    = int(match.group('a')) if match.group('a') else 0,
-            source = end_input - input), end_input
+def p_term_dice(start):
+    match, input = p_match(r'(?!DF)(?P<sides>\d*)[dD](?P<dice>\d+)', start)
+    sides, dice = match.group('sides', 'dice')
+    return (TermFATE(sides,       source=input-start), input) if dice == 'F' else \
+           (TermDice(sides, dice, source=input-start), input)
+
+def p_term_keep(start):
+    match, input = p_match(r'(?P<bw>[bBwW])(?P<num>\d*)\(\s*', start)
+    expr, input = p_expr(input)
+    _, input = p_match(r'\s*\)', input)
+    bw, num = match.group('bw', 'num')
+    num = int(num) if num else 1
+    return TermKeep(bw=bw, num=num, expr=expr, source=input-start), start
+
+def p_term_cnst(start):
+    match, input = p_match(r'\d+', start)
+    return TermCnst(num=int(match.group()), source=input-start), input
 
 def p_name(input):
     match, end_input = p_match(r'\{\{(?P<n>[a-zA-Z_-][a-zA-Z0-9_-]*)\}\}', input)
@@ -494,6 +531,16 @@ def p_seq(*args):
             yield value
         yield input
     return tuple(p_seq_iter(args[:-1], args[-1]))
+
+def p_any(*args):
+    for parser in args[:-1]:
+        if isinstance(parser, tuple):
+            parser = partial(parser[0], *parser[1:])
+        try:
+            return parser(args[-1])
+        except ParseFail:
+            continue
+    raise ParseFail
 
 #===============================================================================
 # Maintenance of global definitions.
