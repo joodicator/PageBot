@@ -2,6 +2,7 @@ from collections import namedtuple
 from UserDict import DictMixin
 from itertools import *
 from functools import *
+from cStringIO import StringIO
 import re
 import random
 import math
@@ -155,12 +156,11 @@ def eval_string_parts(
     rolls = []
     parts = list(string.parts)
     for i, part in zip(count(), string.parts):
-        if isinstance(part, (Roll, FtRoll, ExRoll)):
-            text, spec = eval_roll_spec(part, irc=irc)
-            parts[i] = Text(text=text, source=parts[i].source)
-            rolls.append(spec)
-    if rolls:
-        string = string._replace(parts=parts)
+        if isinstance(part, Expr):
+            text, spec = eval_expr_spec(part, irc=irc)
+            parts[i] = Text(text=text, source=part.source)
+            if spec is not None: rolls.append(spec)
+    string = string._replace(parts=parts)
 
     def eval_string_parts_iter():
         context = EvalContext(
@@ -185,17 +185,17 @@ def e_string(string, context):
     return chain(*(e_part(part, context) for part in string.parts))
 
 def e_part(part, context):
-    if   isinstance(part, (Text, Escape)):         return e_text(part, context)
-    elif isinstance(part, (Roll, FtRoll, ExRoll)): return e_roll(part, context)
-    elif isinstance(part, Name):                   return e_name(part, context)
-    elif isinstance(part, Branch):                 return e_branch(part, context)
-    else:                                          assert False
+    if   isinstance(part, (Text, Escape)): return e_text(part, context)
+    elif isinstance(part, Expr):           return e_expr(part, context)
+    elif isinstance(part, Name):           return e_name(part, context)
+    elif isinstance(part, Branch):         return e_branch(part, context)
+    else:                                  assert False
 
 def e_text(text, context):
     yield text.text
 
-def e_roll(roll, context):
-    yield str(eval_roll(roll))
+def e_expr(expr, context):
+    yield str(eval_expr_int(expr))
 
 def e_branch(branch, context):
     weight_sum = 0.0
@@ -248,81 +248,151 @@ def e_name(name, context):
 #-------------------------------------------------------------------------------
 # Evaluation of dice rolls from abstract syntax tree nodes:
 
-# Returns an integer result.
-def eval_roll(roll):
-    return roll_int(*_eval_roll(roll))
+# Returns an integer.
+def eval_expr_int(expr):
+    def eval_parts(parts):
+        total = 0
+        for part in parts:
+            if isinstance(part, tuple):
+                sign, p_parts = part[:2]
+                total += sign * eval_parts(p_parts)
+            elif isinstance(part, int):
+                total += part
+            else:
+                raise TypeError(part)
+        return total
+    return eval_parts(eval_expr_iter(expr))
 
-# Returns (r_str, r_spec), where:
-#   r_spec = ((d_spec, sides, add), value)
-#   d_spec = dice or (dice, drop_low, drop_high)
-def eval_roll_spec(roll, irc=False):
-    dice, sides, add, d_low, d_high = _eval_roll(roll)
-    r_str, value = roll_str_int(dice, sides, add, d_low, d_high, irc=irc)
-    d_spec = (dice, d_low, d_high) if d_low or d_high else dice
-    return r_str, ((d_spec, sides, add), value)
+# Returns (str, (((dice, drop_l, drop_h), sides, add), int) or None)
+def eval_expr_spec(expr, irc=False):
+    s = type('State', (object,), {})()
+    s.r_int, s.n_terms, r_str = 0, 0, StringIO()
+    s.head_paren, s.tail_paren, s.drop_paren = False, False, False
 
-# Returns (dice, sides, add, drop_low, drop_high), or raises UserError.
-def _eval_roll(roll):
-    if isinstance(roll, ExRoll):
-        if roll.number > roll.roll.dice: raise UserError(
-            '"%s" is invalid: it is not possible to keep %d out of %s dice rolls.'
-            % (roll.source, roll.number, roll.roll.dice))
-        if roll.type == 'w':
-            drop_low, drop_high = 0, roll.roll.dice - roll.number
-        elif roll.type == 'b':
-            drop_low, drop_high = roll.roll.dice - roll.number, 0
+    def eval_parts(parts, sign=1, start=False, cnst=False, drop=False):
+        dice, sides, add, drop_l, drop_h = 0, 0, 0, 0, 0
+        for part in parts:
+            if cnst and not (s.head_paren or s.tail_paren):
+                r_str.write('(')
+                s.head_paren, s.tail_paren = start, not start
+
+            o_sign = sign*part if isinstance(part, int) else sign*part[0]
+            if isinstance(part, int) \
+            or isinstance(part[3], TermKeep) and o_sign < 0:
+                if s.tail_paren and not cnst: r_str.write(')')
+                if drop and not s.drop_paren:
+                    r_str.write('[')
+                    s.drop_paren = True
+                if (o_sign >= 0 or s.head_paren) and not start: r_str.write('+')
+                if s.head_paren and not cnst: r_str.write(')')
+                if o_sign < 0: r_str.write('-')
+                if not cnst: s.head_paren, s.tail_paren = False, False
+
+            if isinstance(part, int):
+                num = -sign*part if o_sign < 0 else sign*part
+                r_str.write('(%d)' % num if num < 0 else str(num))
+                add += sign*part
+                s.r_int += sign*part
+                s.n_terms += 1
+            else:
+                p_sign, p_parts, p_spec, p_term = part
+                if isinstance(p_term, TermKeep) and o_sign < 0:
+                    r_str.write('(')
+                    pp_spec = eval_parts(p_parts, start=True)
+                    r_str.write(')')
+                else:
+                    p_sign *= sign
+                    p_cnst = isinstance(p_term, TermCnst)
+                    if p_spec is not None and p_spec[-2:] != (0, 0):
+                        eval_parts([sum(p_parts)], p_sign, start, p_cnst, True)
+                        r_str.write(']')
+                        s.drop_paren = False
+                    else:
+                        pp_spec = eval_parts(p_parts, p_sign, start, p_cnst)
+                if p_spec is None: p_spec = pp_spec
+                p_dice, p_sides, p_add, p_drop_l, p_drop_h = p_spec
+                sides = p_sides if sides == 0 or sides == p_sides else \
+                        sides if p_sides == 0 else None
+                dice, add = dice+p_dice, add+p_add
+                if p_drop_l != 0 or p_drop_h != 0:
+                    if drop_l == drop_h == 0: drop_l, drop_h = p_drop_l, p_drop_h
+                    else: sides, drop_l, drop_h = None, None, None
+
+            start = False
+        return dice, sides, add, drop_l, drop_h
+
+    spec  = eval_parts(eval_expr_iter(expr), start=True)
+    if s.head_paren or s.tail_paren: r_str.write(')')
+    dice, sides, add, drop_l, drop_h = spec
+    r_spec = None if sides is None else \
+             (((dice, drop_l, drop_h), sides, add), s.r_int)
+    r_str = ('%(b)s%(int)d%(b)s=%(str)s' if s.n_terms > 1 else
+             '%(b)s%(int)d%(b)s') \
+             % {'b':'\2' if irc else '', 'int':s.r_int, 'str':r_str.getvalue()}
+    return (r_str, r_spec)
+
+# Yields one or more terms of the form
+#   term = (sign, [part1, part2, ...], spec or None, ast_node or None)
+# where
+#   sign = 1 or -1
+#   part = term or int
+#   spec = (dice, sides, add, drop_low, drop_high)
+# representing sign * (part1 + part2 + ...)
+def eval_expr_iter(expr):
+    top_expr = expr
+    while expr is not None:
+        term = expr.term
+        sign = 1 if expr.op == '+' else -1
+
+        if isinstance(term, (TermDice, TermFATE)):
+            if term.dice > MAX_ROLL[0]: raise UserError(
+                'The number of dice in "%s" is too large: the maximum is %d.'
+                % (term.source, MAX_ROLL[0]))
+            if isinstance(term, TermFATE):
+                rolls = [random.randint(-1, 1) for i in xrange(term.dice)]
+                yield (sign, rolls, (term.dice, 'F', 0, 0, 0), term)
+            else:
+                if term.sides == 0: raise UserError(
+                    'The number of sides in "%s" is invalid: it must be positive.'
+                    % term.source)
+                if term.sides > MAX_ROLL[1]: raise UserError('The number of'
+                    ' sides in "%s" is too large: the maximum is %d.'
+                    % (term.source, MAX_ROLL[1]))
+                rolls = [random.randint(1, term.sides) for i in xrange(term.dice)]
+                yield (sign, rolls, (term.dice, term.sides, 0, 0, 0), term)
+
+        elif isinstance(term, TermKeep):
+            parts, rolls = [], []
+            for part in eval_expr_iter(term.expr):
+                p_sign, p_parts, p_spec, p_term = part
+                if isinstance(p_term, TermKeep): raise UserError(
+                    'The occurrence  of "%s" within "%s" is invalid: one best-of'
+                    ' or worst-of roll may not occur inside another.'
+                    % (p_term, term))
+                if isinstance(p_term, (TermDice, TermFATE)):
+                    rolls.extend(p_sign * roll for roll in p_parts)
+                parts.append(part)
+
+            if term.num > len(rolls): raise UserError(
+                '"%s" is invalid: it is not possible to keep %d out of %d dice'
+                ' rolls.' % (abbrev_right(str(term.source)), term.num, len(rolls)))
+            drop_l = len(rolls) - term.num if term.bw == 'b' else 0
+            drop_h = len(rolls) - term.num if term.bw == 'w' else 0
+            dropped = sorted(rolls)
+            del dropped[drop_l:len(rolls)-drop_h]
+            parts.append((-1, dropped, (0, 0, 0, drop_l, drop_h), None))
+            yield (sign, parts, None, term)
+
+        elif isinstance(term, TermCnst):
+            if term.num > MAX_ROLL[2]: raise UserError(
+                'The constant %d in "%s" is too large: the maximum is %d.'
+                % (term.num, abbrev_middle(str(top_expr.source)), MAX_ROLL[2]))
+            yield (sign, [term.num], (0, 0, sign * term.num, 0, 0), term)
+
         else:
-            assert False
-        roll = roll.roll
-    elif isinstance(roll, (Roll, FtRoll)):
-        drop_low, drop_high = 0, 0
-    else:
-        assert False
+            raise TypeError(expr.term)
 
-    if hasattr(roll, 'sides') and roll.sides == 0: raise UserError(
-        'The number of sides in "%s" is invalid: it must be positive.'
-        % roll.source)
-    if (roll.dice > MAX_ROLL[0]
-    or hasattr(roll, 'sides') and roll.sides > MAX_ROLL[1]
-    or abs(roll.add) > MAX_ROLL[2]): raise UserError(
-        'Some parameters of "%s" are too large: the largest dice roll allowed'
-        ' is %dd%d+%d.' % ((roll.source,) + MAX_ROLL))
-
-    sides = 'F' if isinstance(roll, FtRoll) else roll.sides
-    return roll.dice, sides, roll.add, drop_low, drop_high
-
-#-------------------------------------------------------------------------------
-# Evaluation of dice rolls (independently of the abstract syntax tree):
-# FATE dice are represented by "sides" being 'F' rather than an integer.
-
-# Returns roll_value.
-def roll_int(dice, sides, add, drop_low=0, drop_high=0):
-    rolls, drop = roll_list(dice, sides, drop_low, drop_high)
-    return sum(rolls) + add - sum(drop)
-
-# Returns (roll_str, roll_value)
-def roll_str_int(dice, sides, add, drop_low=0, drop_high=0, irc=False):
-    rolls, drop = roll_list(dice, sides, drop_low, drop_high)
-    rint = sum(rolls) + add - sum(drop)
-    rstr = ''.join((
-        ('\2%d\2' if irc else '%d') % rint,
-        '=%d%s' % (rolls[0], ''.join('%+d'%r for r in rolls[1:]))
-                  if dice and (add or drop) or dice>1 else '',
-        ''.join('-%d'%d for d in drop) if type(sides) is int else
-            '-(%d%s)' % (drop[0], ''.join('%+d'%d for d in drop[1:]))
-            if drop else '',
-        '(%+d)' % add if dice and add else ''))
-    return (rstr, rint)
-
-# Returns ([roll1, roll2, ...], [drop1, drop2, ...])
-def roll_list(dice, sides, drop_low=0, drop_high=0):
-    if sides == 'F':
-        rolls = [random.randint(-1, 1) for i in xrange(dice)]
-    else:
-        rolls = [random.randint(1, sides) for i in xrange(dice)]
-    drop = sorted(rolls)
-    del drop[drop_low:dice-drop_high]
-    return rolls, drop
+        expr = expr.expr
 
 #===============================================================================
 # Parser for the argument of !roll, producing an abstract syntax tree.
@@ -330,9 +400,13 @@ def roll_list(dice, sides, drop_low=0, drop_high=0):
 String = namedtuple('String', ('parts',                  'source'))
 Text   = namedtuple('Text',   ('text',                   'source'))
 Escape = namedtuple('Escape', ('text',                   'source'))
-Roll   = namedtuple('Roll',   ('dice', 'sides', 'add',   'source'))
-FtRoll = namedtuple('FtRoll', ('dice', 'add',            'source')) # FATE dice.
-ExRoll = namedtuple('ExRoll', ('type', 'number', 'roll', 'source'))
+
+Expr     = namedtuple('Expr',     ('op', 'term', 'expr', 'source'))
+TermDice = namedtuple('TermDice', ('dice', 'sides',      'source'))
+TermFATE = namedtuple('TermFATE', ('dice',               'source'))
+TermKeep = namedtuple('TermKeep', ('bw', 'num', 'expr',  'source'))
+TermCnst = namedtuple('TermCnst', ('num',                'source'))
+
 Name   = namedtuple('Name',   ('name',                   'source'))
 Branch = namedtuple('Branch', ('choices',                'source'))
 Choice = namedtuple('Choice', ('weight', 'string',       'source'))
@@ -344,63 +418,75 @@ def parse_string(input):
 def p_string(input, choice=False):
     if choice:
         text_re = re.compile(
-            r'([^,}\s][^bBwWdD\d{,}\\\s]*|\s+(?![,}]))?')
-        part_ps = p_escape, p_ex_roll, p_roll, p_name, p_branch
+            r'[^,}\s]((?!\b[bBwWdD])[^\d{,}\\\s+-])*|\s+(?=[^,}\s])|')
+        part_ps = p_escape, p_expr, p_name, p_branch, (p_text, text_re)
     else:
-        text_re = re.compile(r'(.[^bBwWdD\d{]*?)?')
-        part_ps = p_ex_roll, p_roll, p_name, p_branch
+        text_re = re.compile(r'.((?!\b[bBwWdD])[^\d{+-])*|')
+        part_ps = p_expr, p_name, p_branch, (p_text, text_re)
 
     start = input
     parts = []
     while input:
-        for p_part in part_ps:
-            try:
-                part, input = p_part(input)
-                parts.append(part)
-                break
-            except ParseFail:
-                continue
-        else:
-            text_start, (match, input) = input, p_match(text_re, input)
-            if not match.group():
+        part, input = p_any(*part_ps + (input,))
+        if isinstance(part, Text):
+            if not part.text:
                 break
             if parts and isinstance(parts[-1], Text):
                 parts[-1] = Text(
-                    text   = parts[-1].text + match.group(),
-                    source = parts[-1].source + (input-text_start))
-            else:
-                parts.append(Text(text=match.group(), source=input-text_start))
+                    text   = parts[-1].text + part.text,
+                    source = parts[-1].source + part.source)
+                continue
+        parts.append(part)
 
     return String(parts=parts, source=input-start), input
+
+def p_text(text_re, start):
+    match, input = p_match(text_re, start)
+    return Text(text=match.group(), source=input-start), input
 
 def p_choice_string(input):
     return p_string(input, choice=True)
 
-def p_ex_roll(input):
-    match, roll, _, end_input = p_seq(
-        (p_match, r'(?P<t>[bBwW])(?P<n>\d*)\('), partial(p_roll, ex=True),
-         (p_token, ')'), input)
-    return ExRoll(
-        type   = match.group('t').lower(),
-        number = int(match.group('n')) if match.group('n') else 1,
-        roll   = roll,
-        source = end_input - input), end_input
+def p_expr(start, top=True, head=True):
+    match, input = p_match(r'((?P<op>[+-])\s*)' + ('?' if head else ''), start)
+    op = match.group('op') or '+'
+    term, input = p_any(p_term_dice, p_term_keep, p_term_cnst, input)
+    try:
+        tail, input = p_expr(p_match(r'\s*', input)[1], top=False, head=False)
+    except ParseFail:
+        tail = None
+    expr = Expr(op=op, term=term, expr=tail, source=input-start)
 
-def p_roll(input, ex=False):
-    match, end_input = p_match(r'(?P<d>\d*)[dD](?P<s>\d+|F)(?P<a>[+-]\d+)?', input)
-    if match.group('s') == 'F':
-        if not match.group('d') and not ex:
-            raise ParseFail
-        return FtRoll(
-            dice   = int(match.group('d')) if match.group('d') else 1,
-            add    = int(match.group('a')) if match.group('a') else 0,
-            source = end_input - input), end_input
-    else:
-        return Roll(
-            dice   = int(match.group('d')) if match.group('d') else 1,
-            sides  = int(match.group('s')),
-            add    = int(match.group('a')) if match.group('a') else 0,
-            source = end_input - input), end_input
+    def any_dice(expr):
+        while expr is not None:
+            if isinstance(expr.term, (TermDice, TermFATE)):
+                return True
+            if isinstance(expr.term, TermKeep) and any_dice(expr.term.expr):
+                return True
+            expr = expr.expr
+        return False
+
+    return (expr, input) if not top or any_dice(expr) else \
+           (Text(text=str(expr.source), source=expr.source), input)
+
+def p_term_dice(start):
+    match, input = p_match(r'(?!DF)(?P<dice>\d*)[dD](?P<sides>\d+|F)', start)
+    sides, dice = match.group('sides', 'dice')
+    dice = int(dice) if dice else 1
+    return (TermFATE(dice, source=input-start), input) if sides == 'F' else \
+           (TermDice(dice, int(sides), source=input-start), input)
+
+def p_term_keep(start):
+    match, input = p_match(r'(?P<bw>[bBwW])(?P<num>\d*)\(\s*', start)
+    expr, input = p_expr(input, top=False)
+    _, input = p_match(r'\s*\)', input)
+    bw, num = match.group('bw', 'num')
+    num = int(num) if num else 1
+    return TermKeep(bw=bw, num=int(num), expr=expr, source=input-start), input
+
+def p_term_cnst(start):
+    match, input = p_match(r'\d+', start)
+    return TermCnst(num=int(match.group()), source=input-start), input
 
 def p_name(input):
     match, end_input = p_match(r'\{\{(?P<n>[a-zA-Z_-][a-zA-Z0-9_-]*)\}\}', input)
@@ -494,6 +580,16 @@ def p_seq(*args):
             yield value
         yield input
     return tuple(p_seq_iter(args[:-1], args[-1]))
+
+def p_any(*args):
+    for parser in args[:-1]:
+        if isinstance(parser, tuple):
+            parser = partial(parser[0], *parser[1:])
+        try:
+            return parser(args[-1])
+        except ParseFail:
+            continue
+    raise ParseFail
 
 #===============================================================================
 # Maintenance of global definitions.
