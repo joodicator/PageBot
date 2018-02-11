@@ -344,38 +344,51 @@ def eval_expr_iter(expr):
         term = expr.term
         sign = 1 if expr.op == '+' else -1
 
-        if isinstance(term, (TermDice, TermFATE)):
+        if isinstance(term, (TermDice, TermDiceC, TermFATE)):
             if term.dice > MAX_ROLL[0]: raise UserError(
                 'The number of dice in "%s" is too large: the maximum is %d.'
-                % (term.source, MAX_ROLL[0]))
-            if isinstance(term, TermFATE):
-                rolls = [random.randint(-1, 1) for i in xrange(term.dice)]
-                yield (sign, rolls, (term.dice, 'F', 0, 0, 0), term)
-            else:
-                if term.sides == 0: raise UserError(
-                    'The number of sides in "%s" is invalid: it must be positive.'
-                    % term.source)
-                if term.sides > MAX_ROLL[1]: raise UserError('The number of'
-                    ' sides in "%s" is too large: the maximum is %d.'
-                    % (term.source, MAX_ROLL[1]))
-                rolls = [random.randint(1, term.sides) for i in xrange(term.dice)]
-                yield (sign, rolls, (term.dice, term.sides, 0, 0, 0), term)
+                % (abbrev_middle(str(term.source)), MAX_ROLL[0]))
 
+        if isinstance(term, TermDice):
+            if term.sides == 0: raise UserError(
+                'The number of sides in "%s" is invalid: it must be positive.'
+                % abbrev_middle(str(term.source)))
+            if term.sides > MAX_ROLL[1]: raise UserError('The number of'
+                ' sides in "%s" is too large: the maximum is %d.'
+                % (abbrev_middle(str(term.source)), MAX_ROLL[1]))
+            rolls = [random.randint(1, term.sides) for i in xrange(term.dice)]
+            yield (sign, rolls, (term.dice, term.sides, 0, 0, 0), term)
+
+        elif isinstance(term, TermDiceC):
+            if term.num > MAX_ROLL[1]: raise UserError(
+                'The constant %s in "%s" is too large: the maximum is %d.'
+                % (abbrev_right(str(term.num)),
+                   abbrev_middle(str(term.source)), MAX_ROLL[1]))
+            rolls = [term.num] * term.dice
+            yield (sign, rolls, (0, 0, term.dice*term.num, 0, 0), term)
+
+        elif isinstance(term, TermFATE):
+            rolls = [random.randint(-1, 1) for i in xrange(term.dice)]
+            yield (sign, rolls, (term.dice, 'F', 0, 0, 0), term)
+ 
         elif isinstance(term, TermKeep):
             parts, rolls = [], []
             for part in eval_expr_iter(term.expr):
                 p_sign, p_parts, p_spec, p_term = part
                 if isinstance(p_term, TermKeep): raise UserError(
-                    'The occurrence  of "%s" within "%s" is invalid: one best-of'
+                    'The occurrence of "%s" within "%s" is invalid: one best-of'
                     ' or worst-of roll may not occur inside another.'
-                    % (p_term, term))
-                if isinstance(p_term, (TermDice, TermFATE)):
+                    % (abbrev_middle(str(p_term.source)),
+                       abbrev_middle(str(term.source))))
+                if isinstance(p_term, (TermDice, TermDiceC, TermFATE)):
                     rolls.extend(p_sign * roll for roll in p_parts)
-                parts.append(part)
+                    if isinstance(p_term, TermDiceC) and p_parts:
+                        p_spec = p_spec[:1] + (None,) + p_spec[2:]
+                parts.append((p_sign, p_parts, p_spec, p_term))
 
             if term.num > len(rolls): raise UserError(
                 '"%s" is invalid: it is not possible to keep %d out of %d dice'
-                ' rolls.' % (abbrev_right(str(term.source)), term.num, len(rolls)))
+                ' rolls.' % (abbrev_middle(str(term.source)), term.num, len(rolls)))
             drop_l = len(rolls) - term.num if term.bw == 'b' else 0
             drop_h = len(rolls) - term.num if term.bw == 'w' else 0
             dropped = sorted(rolls)
@@ -385,8 +398,9 @@ def eval_expr_iter(expr):
 
         elif isinstance(term, TermCnst):
             if term.num > MAX_ROLL[2]: raise UserError(
-                'The constant %d in "%s" is too large: the maximum is %d.'
-                % (term.num, abbrev_middle(str(top_expr.source)), MAX_ROLL[2]))
+                'The constant %s in "%s" is too large: the maximum is %d.'
+                % (abbrev_right(str(term.num)),
+                   abbrev_middle(str(top_expr.source)), MAX_ROLL[2]))
             yield (sign, [term.num], (0, 0, sign * term.num, 0, 0), term)
 
         else:
@@ -401,11 +415,12 @@ String = namedtuple('String', ('parts',                  'source'))
 Text   = namedtuple('Text',   ('text',                   'source'))
 Escape = namedtuple('Escape', ('text',                   'source'))
 
-Expr     = namedtuple('Expr',     ('op', 'term', 'expr', 'source'))
-TermDice = namedtuple('TermDice', ('dice', 'sides',      'source'))
-TermFATE = namedtuple('TermFATE', ('dice',               'source'))
-TermKeep = namedtuple('TermKeep', ('bw', 'num', 'expr',  'source'))
-TermCnst = namedtuple('TermCnst', ('num',                'source'))
+Expr      = namedtuple('Expr',      ('op', 'term', 'expr', 'source'))
+TermDice  = namedtuple('TermDice',  ('dice', 'sides',      'source'))
+TermDiceC = namedtuple('TermDiceC', ('dice', 'num',        'source'))
+TermFATE  = namedtuple('TermFATE',  ('dice',               'source'))
+TermKeep  = namedtuple('TermKeep',  ('bw', 'num', 'expr',  'source'))
+TermCnst  = namedtuple('TermCnst',  ('num',                'source'))
 
 Name   = namedtuple('Name',   ('name',                   'source'))
 Branch = namedtuple('Branch', ('choices',                'source'))
@@ -459,7 +474,7 @@ def p_expr(start, top=True, head=True):
 
     def any_dice(expr):
         while expr is not None:
-            if isinstance(expr.term, (TermDice, TermFATE)):
+            if isinstance(expr.term, (TermDice, TermDiceC, TermFATE)):
                 return True
             if isinstance(expr.term, TermKeep) and any_dice(expr.term.expr):
                 return True
@@ -470,11 +485,13 @@ def p_expr(start, top=True, head=True):
            (Text(text=str(expr.source), source=expr.source), input)
 
 def p_term_dice(start):
-    match, input = p_match(r'(?!DF)(?P<dice>\d*)[dD](?P<sides>\d+|F)', start)
-    sides, dice = match.group('sides', 'dice')
+    match, input = p_match(
+        r'(?!DF)(?P<dice>\d*)(?P<dc>[dD]|[cC](?!F))(?P<sides>\d+|F)', start)
+    sides, dc, dice = match.group('sides', 'dc', 'dice')
     dice = int(dice) if dice else 1
-    return (TermFATE(dice, source=input-start), input) if sides == 'F' else \
-           (TermDice(dice, int(sides), source=input-start), input)
+    return (TermFATE( dice,             source=input-start) if sides == 'F'
+       else TermDiceC(dice, int(sides), source=input-start) if dc in 'cC'
+       else TermDice( dice, int(sides), source=input-start)), input
 
 def p_term_keep(start):
     match, input = p_match(r'(?P<bw>[bBwW])(?P<num>\d*)\(\s*', start)
