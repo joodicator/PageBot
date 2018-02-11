@@ -3,6 +3,8 @@ from UserDict import DictMixin
 from itertools import *
 from functools import *
 from cStringIO import StringIO
+from contextlib import contextmanager
+from numbers import Integral
 import re
 import random
 import math
@@ -28,7 +30,10 @@ DEF_MAX_NAME_LEN = 32
 DEF_DECAY_S = 30 * 24 * 60 * 60
 RESERVED_NAMES = 'me', 'nick'
 
-MAX_ROLL = 999, 999999999, 999999999
+MAX_ROLL             = 999, 999999999, 999999999
+MAX_DICE_DEF_LEN     = 200
+MAX_DICE_STACK_DEPTH = 100
+
 MAX_NAMES_EXPANDED = 5000
 MAX_STACK_DEPTH    = 500
 MAX_MESSAGE_LENGTH = 400
@@ -134,6 +139,9 @@ def h_roll_defs(bot, id, target, args, defs, action, reply):
 #===============================================================================
 # Evaluation of abstract syntax trees produced by the !roll argument parser.
 
+class RollNameError(NameError):
+    pass
+
 class EvalRecord():
     __slots__ = 'names_expanded', 'stack_depth'
     def __init__(self):
@@ -153,21 +161,22 @@ def eval_string_parts(
     string, max_len=None, irc=False, defs=None,
     max_names_expanded=None, max_stack_depth=None
 ):
+    context = EvalContext(
+        defs=defs,
+        record=EvalRecord(),
+        max_names_expanded=max_names_expanded,
+        max_stack_depth=max_stack_depth)
+
     rolls = []
     parts = list(string.parts)
     for i, part in zip(count(), string.parts):
         if isinstance(part, Expr):
-            text, spec = eval_expr_spec(part, irc=irc)
+            text, spec = eval_expr_spec(part, context, irc=irc)
             parts[i] = Text(text=text, source=part.source)
             if spec is not None: rolls.append(spec)
     string = string._replace(parts=parts)
 
     def eval_string_parts_iter():
-        context = EvalContext(
-            defs=defs,
-            record=EvalRecord(),
-            max_names_expanded=max_names_expanded,
-            max_stack_depth=max_stack_depth)
         written = 0
         for s in e_string(string, context):
             written += len(s)
@@ -195,7 +204,7 @@ def e_text(text, context):
     yield text.text
 
 def e_expr(expr, context):
-    yield str(eval_expr_int(expr))
+    yield str(eval_expr_int(expr, context))
 
 def e_branch(branch, context):
     weight_sum = 0.0
@@ -222,10 +231,20 @@ def e_branch(branch, context):
     return e_string(chosen.string, context)
 
 def e_name(name, context):
-    if context.defs is None or name.name not in context.defs:
+    try:
+        for s in e_name_(name.name, context): yield s
+    except RollNameError:
         yield str(name.source)
-        return
 
+def e_name_(name_str, context):
+    if context.defs is None or name_str not in context.defs:
+        raise RollNameError(name_str)
+    with expanding_name(context):
+        defn = context.defs[name_str]
+        for s in defn.postprocess(e_string(defn.body_ast, context)): yield s
+
+@contextmanager
+def expanding_name(context):
     if context.max_stack_depth is not None:
         context.record.stack_depth += 1
         if context.record.stack_depth >= context.max_stack_depth:
@@ -238,9 +257,7 @@ def e_name(name, context):
             raise UserError('In evaluating this result, more than the maximum'
             ' of %d definitions would be expanded.' % context.max_names_expanded)
 
-    defn = context.defs[name.name]
-    for s in defn.postprocess(e_string(defn.body_ast, context)):
-        yield s
+    yield context
 
     if context.max_stack_depth is not None:
         context.record.stack_depth -= 1
@@ -249,22 +266,22 @@ def e_name(name, context):
 # Evaluation of dice rolls from abstract syntax tree nodes:
 
 # Returns an integer.
-def eval_expr_int(expr):
+def eval_expr_int(expr, context=None):
     def eval_parts(parts):
         total = 0
         for part in parts:
             if isinstance(part, tuple):
                 sign, p_parts = part[:2]
                 total += sign * eval_parts(p_parts)
-            elif isinstance(part, int):
+            elif isinstance(part, Integral):
                 total += part
             else:
                 raise TypeError(part)
         return total
-    return eval_parts(eval_expr_iter(expr))
+    return eval_parts(eval_expr_iter(expr, context))
 
 # Returns (str, (((dice, drop_l, drop_h), sides, add), int) or None)
-def eval_expr_spec(expr, irc=False):
+def eval_expr_spec(expr, context=None, irc=False):
     s = type('State', (object,), {})()
     s.r_int, s.n_terms, r_str = 0, 0, StringIO()
     s.head_paren, s.tail_paren, s.drop_paren = False, False, False
@@ -276,8 +293,8 @@ def eval_expr_spec(expr, irc=False):
                 r_str.write('(')
                 s.head_paren, s.tail_paren = start, not start
 
-            o_sign = sign*part if isinstance(part, int) else sign*part[0]
-            if isinstance(part, int) \
+            o_sign = sign*part if isinstance(part, Integral) else sign*part[0]
+            if isinstance(part, Integral) \
             or isinstance(part[3], TermKeep) and o_sign < 0:
                 if s.tail_paren and not cnst: r_str.write(')')
                 if drop and not s.drop_paren:
@@ -288,7 +305,7 @@ def eval_expr_spec(expr, irc=False):
                 if o_sign < 0: r_str.write('-')
                 if not cnst: s.head_paren, s.tail_paren = False, False
 
-            if isinstance(part, int):
+            if isinstance(part, Integral):
                 num = -sign*part if o_sign < 0 else sign*part
                 r_str.write('(%d)' % num if num < 0 else str(num))
                 add += sign*part
@@ -321,7 +338,7 @@ def eval_expr_spec(expr, irc=False):
             start = False
         return dice, sides, add, drop_l, drop_h
 
-    spec  = eval_parts(eval_expr_iter(expr), start=True)
+    spec = eval_parts(eval_expr_iter(expr, context), start=True)
     if s.head_paren or s.tail_paren: r_str.write(')')
     dice, sides, add, drop_l, drop_h = spec
     r_spec = None if sides is None else \
@@ -338,13 +355,13 @@ def eval_expr_spec(expr, irc=False):
 #   part = term or int
 #   spec = (dice, sides, add, drop_low, drop_high)
 # representing sign * (part1 + part2 + ...)
-def eval_expr_iter(expr):
+def eval_expr_iter(expr, context=None, reduce=False):
     top_expr = expr
     while expr is not None:
         term = expr.term
         sign = 1 if expr.op == '+' else -1
 
-        if isinstance(term, (TermDice, TermDiceC, TermFATE)):
+        if isinstance(term, (TermDice, TermDiceC, TermDiceD)):
             if term.dice > MAX_ROLL[0]: raise UserError(
                 'The number of dice in "%s" is too large: the maximum is %d.'
                 % (abbrev_middle(str(term.source)), MAX_ROLL[0]))
@@ -367,28 +384,39 @@ def eval_expr_iter(expr):
             rolls = [term.num] * term.dice
             yield (sign, rolls, (0, 0, term.dice*term.num, 0, 0), term)
 
-        elif isinstance(term, TermFATE):
-            rolls = [random.randint(-1, 1) for i in xrange(term.dice)]
-            yield (sign, rolls, (term.dice, 'F', 0, 0, 0), term)
+        elif isinstance(term, TermDiceD):
+            try:
+                rolls = roll_dice_def(
+                    term.dice, 'd'+term.name, term, context, reduce)
+            except RollNameError: raise UserError(
+                'The die type "%s" in "%s" is not defined.%s'
+                % (term.name, abbrev_middle(str(top_expr.source)),
+                  (' You may define it here with \2!roll-def+ d%s ='
+                  ' {SIDE1,SIDE2,...}\2. See also: \2!help roll-def+\2.'
+                  % term.name) if context is not None else ''))
+            if any(isinstance(roll, Integral) for roll in rolls):
+                yield (sign, rolls, (term.dice, term.name, 0, 0, 0), term)
+            else:
+                yield (sign, rolls, None, term)
  
         elif isinstance(term, TermKeep):
             parts, rolls = [], []
-            for part in eval_expr_iter(term.expr):
+            for part in eval_expr_iter(term.expr, context, reduce=True):
                 p_sign, p_parts, p_spec, p_term = part
                 if isinstance(p_term, TermKeep): raise UserError(
                     'The occurrence of "%s" within "%s" is invalid: one best-of'
                     ' or worst-of roll may not occur inside another.'
                     % (abbrev_middle(str(p_term.source)),
                        abbrev_middle(str(term.source))))
-                if isinstance(p_term, (TermDice, TermDiceC, TermFATE)):
-                    rolls.extend(p_sign * roll for roll in p_parts)
+                if isinstance(p_term, (TermDice, TermDiceC, TermDiceD)):
                     if isinstance(p_term, TermDiceC) and p_parts:
                         p_spec = p_spec[:1] + (None,) + p_spec[2:]
+                    rolls.extend(p_sign * roll for roll in p_parts)
                 parts.append((p_sign, p_parts, p_spec, p_term))
 
-            if term.num > len(rolls): raise UserError(
-                '"%s" is invalid: it is not possible to keep %d out of %d dice'
-                ' rolls.' % (abbrev_middle(str(term.source)), term.num, len(rolls)))
+            if term.num > len(rolls): raise UserError('"%s" is invalid:'
+                ' it is not possible to keep %d out of %d dice rolls.'
+                % (abbrev_middle(str(term.source)), term.num, len(rolls)))
             drop_l = len(rolls) - term.num if term.bw == 'b' else 0
             drop_h = len(rolls) - term.num if term.bw == 'w' else 0
             dropped = sorted(rolls)
@@ -408,6 +436,45 @@ def eval_expr_iter(expr):
 
         expr = expr.expr
 
+def roll_dice_def(dice, name, term, context, reduce=False):
+    if name == 'dF':
+        return [random.randint(-1, 1) for i in xrange(dice)]
+
+    if context is None or context.defs is None or name not in context.defs \
+    or isinstance(context.defs[name], CaseAutoDef):
+        raise RollNameError(name)
+
+    context = context._replace(max_stack_depth=MAX_DICE_STACK_DEPTH)
+
+    defn = context.defs[name]
+    if not reduce and defn.postprocess.is_identity:
+        ast = defn.body_ast
+        if isinstance(ast, String) and len(ast.parts) == 1 \
+        and isinstance(ast.parts[0], Expr):
+            with expanding_name(context):
+                return [x for x in eval_expr_iter(ast.parts[0], context)
+                          for i in xrange(dice)]
+
+    return [roll_dice_def_(name, term, context) for i in xrange(dice)]
+
+def roll_dice_def_(name, term, context):
+    o_str, o_len = StringIO(), 0
+    for s in e_name_(name, context):
+        o_str.write(s)
+        o_len += len(s)
+        if o_len > MAX_DICE_DEF_LEN: raise UserError('Expanding the custom die'
+            ' definition for "%s" produced a string longer than the maximum'
+            ' allowed length of %d: "%s(...)".'
+            % (abbrev_middle(str(term.source)), MAX_DICE_DEF_LEN,
+               o_str.getvalue()[:MAX_DICE_DEF_LEN]))
+
+    o_str = o_str.getvalue()
+    try: o_int = int(o_str)
+    except ValueError: raise UserError('Expanding the custom die definition for'
+        '"%s" produced a string which was not recognised as an integer: "%s".'
+        % (abbrev_middle(str(term.source)), o_str))
+    return o_int
+
 #===============================================================================
 # Parser for the argument of !roll, producing an abstract syntax tree.
 
@@ -418,7 +485,7 @@ Escape = namedtuple('Escape', ('text',                   'source'))
 Expr      = namedtuple('Expr',      ('op', 'term', 'expr', 'source'))
 TermDice  = namedtuple('TermDice',  ('dice', 'sides',      'source'))
 TermDiceC = namedtuple('TermDiceC', ('dice', 'num',        'source'))
-TermFATE  = namedtuple('TermFATE',  ('dice',               'source'))
+TermDiceD = namedtuple('TermDiceD', ('dice', 'name',       'source'))
 TermKeep  = namedtuple('TermKeep',  ('bw', 'num', 'expr',  'source'))
 TermCnst  = namedtuple('TermCnst',  ('num',                'source'))
 
@@ -474,7 +541,7 @@ def p_expr(start, top=True, head=True):
 
     def any_dice(expr):
         while expr is not None:
-            if isinstance(expr.term, (TermDice, TermDiceC, TermFATE)):
+            if isinstance(expr.term, (TermDice, TermDiceC, TermDiceD)):
                 return True
             if isinstance(expr.term, TermKeep) and any_dice(expr.term.expr):
                 return True
@@ -486,12 +553,16 @@ def p_expr(start, top=True, head=True):
 
 def p_term_dice(start):
     match, input = p_match(
-        r'(?!DF)(?P<dice>\d*)(?P<dc>[dD]|[cC](?!F))(?P<sides>\d+|F)', start)
-    sides, dc, dice = match.group('sides', 'dc', 'dice')
+        r'(?P<dice>\d*)(?P<dc>[dcDC])(?P<sides>\d+|[A-Z][A-Za-z0-9]*)', start)
+    dice, dc, sides = match.group('dice', 'dc', 'sides')
     dice = int(dice) if dice else 1
-    return (TermFATE( dice,             source=input-start) if sides == 'F'
-       else TermDiceC(dice, int(sides), source=input-start) if dc in 'cC'
-       else TermDice( dice, int(sides), source=input-start)), input
+    if sides[0].isdigit():
+        if dc.isupper() and not match.group('dice'): raise ParseFail
+        return (TermDiceC(dice, int(sides), input-start) if dc in 'cC' else
+                TermDice( dice, int(sides), input-start), input)
+    else:
+        if dc not in 'dD': raise ParseFail
+        return TermDiceD(dice, sides, input-start), input
 
 def p_term_keep(start):
     match, input = p_match(r'(?P<bw>[bBwW])(?P<num>\d*)\(\s*', start)
@@ -693,6 +764,7 @@ class Def(object):
 
     def postprocess(self, str_iter):
         return str_iter
+    postprocess.is_identity = True
 
 class GlobalDef(Def):
     __slots__ = 'id', 'modes', 'time'
