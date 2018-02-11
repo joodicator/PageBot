@@ -142,6 +142,9 @@ def h_roll_defs(bot, id, target, args, defs, action, reply):
 class RollNameError(NameError):
     pass
 
+class CancelExpansion(Exception):
+    pass
+
 class EvalRecord():
     __slots__ = 'names_expanded', 'stack_depth'
     def __init__(self):
@@ -171,9 +174,12 @@ def eval_string_parts(
     parts = list(string.parts)
     for i, part in zip(count(), string.parts):
         if isinstance(part, Expr):
-            text, spec = eval_expr_spec(part, context, irc=irc)
-            parts[i] = Text(text=text, source=part.source)
-            if spec is not None: rolls.append(spec)
+            try:
+                text, spec = eval_expr_spec(part, context, irc=irc)
+                parts[i] = Text(text=text, source=part.source)
+                if spec is not None: rolls.append(spec)
+            except CancelExpansion:
+                pass
     string = string._replace(parts=parts)
 
     def eval_string_parts_iter():
@@ -204,7 +210,10 @@ def e_text(text, context):
     yield text.text
 
 def e_expr(expr, context):
-    yield str(eval_expr_int(expr, context))
+    try:
+        yield str(eval_expr_int(expr, context))
+    except CancelExpansion:
+        yield str(expr.source)
 
 def e_branch(branch, context):
     weight_sum = 0.0
@@ -350,11 +359,10 @@ def eval_expr_spec(expr, context=None, irc=False):
 
 # Yields one or more terms of the form
 #   term = (sign, [part1, part2, ...], spec or None, ast_node or None)
-# where
+# representing sign * (part1 + part2 + ...), where
 #   sign = 1 or -1
 #   part = term or int
 #   spec = (dice, sides, add, drop_low, drop_high)
-# representing sign * (part1 + part2 + ...)
 def eval_expr_iter(expr, context=None, reduce=False):
     top_expr = expr
     while expr is not None:
@@ -388,12 +396,19 @@ def eval_expr_iter(expr, context=None, reduce=False):
             try:
                 rolls = roll_dice_def(
                     term.dice, 'd'+term.name, term, context, reduce)
-            except RollNameError: raise UserError(
-                'The die type "%s" in "%s" is not defined.%s'
-                % (term.name, abbrev_middle(str(top_expr.source)),
-                  (' You may define it here with \2!roll-def+ d%s ='
-                  ' {SIDE1,SIDE2,...}\2. See also: \2!help roll-def+\2.'
-                  % term.name) if context is not None else ''))
+            except RollNameError:
+                # In this special case where the user might have not intended
+                # a dice roll, ignore the error instead of reporting it:
+                if not reduce and expr is top_expr and expr.expr is None \
+                and term.source.start > 0 and str(term.source)[:1].isalpha():
+                    raise CancelExpansion
+                may = context is not None and len(term.name) < DEF_MAX_NAME_LEN
+                raise UserError('The die type "%s" in "%s" is not defined.%s'
+                    % (abbrev_right(term.name),
+                       abbrev_middle(str(top_expr.source)),
+                       (' You may define it here with \2!roll-def+ d%s ='
+                        ' {SIDE1,SIDE2,...}\2. See also: \2!help roll-def+\2.'
+                        % term.name) if may else ''))
             if any(isinstance(roll, Integral) for roll in rolls):
                 yield (sign, rolls, (term.dice, term.name, 0, 0, 0), term)
             else:
@@ -452,8 +467,8 @@ def roll_dice_def(dice, name, term, context, reduce=False):
         if isinstance(ast, String) and len(ast.parts) == 1 \
         and isinstance(ast.parts[0], Expr):
             with expanding_name(context):
-                return [x for x in eval_expr_iter(ast.parts[0], context)
-                          for i in xrange(dice)]
+                return [x for i in xrange(dice)
+                          for x in eval_expr_iter(ast.parts[0], context)]
 
     return [roll_dice_def_(name, term, context) for i in xrange(dice)]
 
@@ -553,11 +568,12 @@ def p_expr(start, top=True, head=True):
 
 def p_term_dice(start):
     match, input = p_match(
-        r'(?P<dice>\d*)(?P<dc>[dcDC])(?P<sides>\d+|[A-Z][A-Za-z0-9]*)', start)
+        r'\b(?P<dice>\d*)(?P<dc>[dcDC])(?P<sides>\d+|[A-Z][A-Za-z0-9]*)',
+        start)
     dice, dc, sides = match.group('dice', 'dc', 'sides')
     dice = int(dice) if dice else 1
+    if dc.isupper() and not match.group('dice'): raise ParseFail
     if sides[0].isdigit():
-        if dc.isupper() and not match.group('dice'): raise ParseFail
         return (TermDiceC(dice, int(sides), input-start) if dc in 'cC' else
                 TermDice( dice, int(sides), input-start), input)
     else:
@@ -565,7 +581,7 @@ def p_term_dice(start):
         return TermDiceD(dice, sides, input-start), input
 
 def p_term_keep(start):
-    match, input = p_match(r'(?P<bw>[bBwW])(?P<num>\d*)\(\s*', start)
+    match, input = p_match(r'\b(?P<bw>[bBwW])(?P<num>\d*)\(\s*', start)
     expr, input = p_expr(input, top=False)
     _, input = p_match(r'\s*\)', input)
     bw, num = match.group('bw', 'num')
@@ -573,7 +589,7 @@ def p_term_keep(start):
     return TermKeep(bw=bw, num=int(num), expr=expr, source=input-start), input
 
 def p_term_cnst(start):
-    match, input = p_match(r'\d+', start)
+    match, input = p_match(r'\b\d+', start)
     return TermCnst(num=int(match.group()), source=input-start), input
 
 def p_name(input):
