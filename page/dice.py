@@ -324,17 +324,18 @@ def eval_expr_spec(expr, context=None, irc=False):
                 p_sign, p_parts, p_spec, p_term = part
                 if isinstance(p_term, TermKeep) and o_sign < 0:
                     r_str.write('(')
+                    s.r_int *= o_sign
                     pp_spec = eval_parts(p_parts, start=True)
+                    s.r_int *= o_sign
                     r_str.write(')')
                 else:
-                    p_sign *= sign
                     p_cnst = isinstance(p_term, TermCnst)
                     if p_spec is not None and p_spec[-2:] != (0, 0):
-                        eval_parts([sum(p_parts)], p_sign, start, p_cnst, True)
+                        eval_parts([sum(p_parts)], o_sign, start, p_cnst, True)
                         r_str.write(']')
                         s.drop_paren = False
                     else:
-                        pp_spec = eval_parts(p_parts, p_sign, start, p_cnst)
+                        pp_spec = eval_parts(p_parts, o_sign, start, p_cnst)
                 if p_spec is None: p_spec = pp_spec
                 p_dice, p_sides, p_add, p_drop_l, p_drop_h = p_spec
                 sides = p_sides if sides == 0 or sides == p_sides else \
@@ -462,7 +463,7 @@ def roll_dice_def(dice, name, term, context, reduce=False):
     context = context._replace(max_stack_depth=MAX_DICE_STACK_DEPTH)
 
     defn = context.defs[name]
-    if not reduce and defn.postprocess.is_identity:
+    if not reduce and getattr(defn.postprocess, 'is_identity', False):
         ast = defn.body_ast
         if isinstance(ast, String) and len(ast.parts) == 1 \
         and isinstance(ast.parts[0], Expr):
