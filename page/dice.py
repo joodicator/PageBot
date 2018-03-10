@@ -1092,7 +1092,7 @@ def roll_def_query(
     bot, id, target, args, chan, chan_case, external=False, skip_empty=False,
     multiple=False
 ):
-    defs = sorted(def_search(chan, args), key=lambda d: d.time)
+    defs = list(def_search(chan, args, match_case=False))
     if skip_empty and not defs: return 0
 
     private = not chan.startswith('#')
@@ -1156,9 +1156,10 @@ def roll_def_query(
 
     return len(defs)
 
-# An iterator (in no particular order) over the definitions matched by `queries'
-# as per !rd? and !rd-.
-def def_search(chan, queries):
+# An iterator over the definitions matched by `queries' as per !rd? and !rd-,
+# sorted according to (1) the position of the first matching positive query in the
+# sequence, and (2) by the case-insensitive name of the definition.
+def def_search(chan, queries, *args, **kwds):
     pos, neg = [], []
     for query in queries:
         if query.startswith('!'):
@@ -1167,17 +1168,27 @@ def def_search(chan, queries):
             pos.append(query)
     if not pos:
         pos.append('*')
-    return (d for d in global_defs.get(chan, {}).itervalues()
-            if any(def_match(q, d) for q in pos)
-            and not any(def_match(q, d) for q in neg))
+
+    results = []
+    for defn_name, defn in global_defs.get(chan, {}).iteritems():
+        if any(def_match(neg_q, d, *args, **kwds) for neg_q in neg):
+            continue
+        for pos_q, pos_q_index in izip(pos, count()):
+            if def_match(pos_q, defn, *args, **kwds):
+                sort_key = (pos_q_index, defn_name.lower())
+                results.append((defn, sort_key))
+                break
+
+    return (d for (d,_) in sorted(results, key=lambda t: t[1]))
 
 # True iff `query' positively matches `defn' as per !rd? and !rd-.
-def def_match(query, defn):
+def def_match(query, defn, match_case=True):
     if '!' in query or '@' in query:
         id_str = ('%s!%s@%s' % defn.id) if defn.id is not None else '*!*@*'
         return re.match(util.wc_to_re(query), id_str, flags=re.I) is not None
     else:
-        return re.match(util.wc_to_re(query), defn.name) is not None
+        flags = 0 if match_case else re.I
+        return re.match(util.wc_to_re(query), defn.name, flags=flags) is not None
 
 #===============================================================================
 # Miscellaneous utilities:
