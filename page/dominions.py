@@ -21,9 +21,10 @@ BS4_PARSER = 'html5lib'
 UPDATE_PERIOD_S = 15
 TICK_PERIOD_S = 15
 
-PLAYED = 'Turn played'
-UNFINISHED = 'Turn played but unfinished'
-AI = 'AI'
+PLAYED = re.compile(r'Turn played$')
+UNFINISHED = re.compile(r'Turn (played but )?unfinished$')
+ELIMINATED = re.compile(r'Eliminated$')
+AI = re.compile(r'AI$')
 
 #-------------------------------------------------------------------------------
 link = util.LinkSet()
@@ -171,7 +172,7 @@ class Report(Core):
             self.players.add(Player(index=index, soup=rows[index]))
 
     def show_irc(self, format=True):
-        show_players = [p for p in self.players if p.status != AI]
+        show_players = [p for p in self.players if not AI.match(p.status)]
         show_players = sorted(show_players, key=lambda p: p.index)
         return '%s, turn %s [%s]' % (
             ('\2%s\2' if format else '%s') % self.name,
@@ -234,8 +235,9 @@ class Player(object):
     def show_irc(self, format=True):
         return '%s: %s' % (
             self.name.split(',', 1)[0],
-            'played' if self.status == PLAYED else
-            'unfinished' if self.status == UNFINISHED else
+            'played' if PLAYED.match(self.status) else
+            'unfinished' if UNFINISHED.match(self.status) else
+            'eliminated' if ELIMINATED.match(self.status) else
             self.status)
 
     def id(self):
@@ -272,15 +274,15 @@ def update_urls(bot, urls, report_to=None, log_level=None):
         prev_report = state.games.get(url)
         report = state.games[url] = get_report(url)
 
-        if (hasattr(report, 'players')
-        and all(p.status in (PLAYED, AI) for p in report.players)):
+        if hasattr(report, 'players') and all(any(r.match(p.status)
+        for r in (PLAYED, ELIMINATED, AI)) for p in report.players):
             continue
 
         for chan, cobj in state.channels.iteritems():
             chan_urls = cobj.games
             if url not in chan_urls: continue
-            if report_to is not None and chan == report_to.lower():
-                msgs.append((chan, report.show_irc()))
+            if report_to is not None:
+                msgs.append((report_to, report.show_irc()))
             elif (type(report) is Report and type(prev_report) is Report
             and report.turn > prev_report.turn):
                 msgs.append((chan, '\2%s\2 has advanced to turn \2%d\2.'
@@ -315,6 +317,7 @@ def update_topic(bot, chan, ret, explicit=False, **kwds):
             return
 
         topic = yield channel.topic(bot, chan)
+        topic = '' if topic is None else topic
 
         if new_dyn in topic:
             yield ret()
@@ -354,27 +357,35 @@ def h_dominions_tick(bot, log_level=None):
     yield sign('DOMINIONS_TICK', bot, log_level=log_level)
 
 @link('!turn')
-def h_turn(bot, id, chan, args, full_msg):
-    if chan is None: return
+def h_turn(bot, id, c_chan, args, full_msg):
+    chan = c_chan
+    if args.startswith('#'):    
+        is_admin = yield auth.check(bot, id)
+        if is_admin: chan = args
+    if not chan: return
     cobj = state.channels.get(chan.lower())
     urls = cobj.games if cobj else []
-    yield update_urls(bot, urls, report_to=chan)
+    yield update_urls(bot, urls, report_to=c_chan)
 
 @link('!dom+')
 @auth.admin
 @util.further
-def h_dom_add(bot, id, chan, add_spec, full_msg, cont):
+def h_dom_add(bot, id, c_chan, add_spec, full_msg, cont):
     try:
+        aurls = re.findall(r'\S+', add_spec.lower())
+        if aurls and aurls[0].startswith('#'): chan = aurls.pop(0)
+        else: chan = c_chan
+
         if chan is None: return
         chan = chan.lower()
-        aurls = re.findall(r'\S+', add_spec.lower())
+
         if chan in state.channels:
             cobj = state.channels[chan]
         else:
             cobj = state.channels[chan] = Channel()
         for aurl in aurls:
             if aurl in cobj.games:
-                message.reply(bot, id, chan,
+                message.reply(bot, id, c_chan,
                     'Error: "%s" is already monitored here.' % aurl)
                 break
         else:
@@ -384,10 +395,10 @@ def h_dom_add(bot, id, chan, add_spec, full_msg, cont):
             try:
                 state.save_path(STATE_FILE)
             except Exception as e:
-                message.reply(bot, id, chan, 'Error: %s' % str(e))
+                message.reply(bot, id, c_chan, 'Error: %s' % str(e))
                 raise
         
-            message.reply(bot, id, chan, '%d game(s) added.' % len(aurls))
+            message.reply(bot, id, c_chan, '%d game(s) added.' % len(aurls))
             yield update_urls(bot, aurls, None)
     finally:
         yield cont
@@ -395,13 +406,16 @@ def h_dom_add(bot, id, chan, add_spec, full_msg, cont):
 @link('!dom-')
 @auth.admin
 @util.further
-def h_dom_del(bot, id, chan, del_spec, full_msg, cont):
+def h_dom_del(bot, id, c_chan, del_spec, full_msg, cont):
     try:
+        del_spec = re.findall(r'\S+', del_spec.lower())
+        if del_spec and del_spec[0].startswith('#'): chan = del_spec.pop(0)
+        else: chan = c_chan
+
         if chan is None: return
         chan = chan.lower()
         if chan not in state.channels: return
 
-        del_spec = re.findall(r'\S+', del_spec.lower())
         if not del_spec: return
     
         del_urls = []
@@ -411,7 +425,7 @@ def h_dom_del(bot, id, chan, del_spec, full_msg, cont):
                 if spec == str(i+1): break
                 if iurl in state.games and spec == state.games[iurl].name: break
             else:
-                message.reply(bot, id, chan,
+                message.reply(bot, id, c_chan,
                     'Error: no game matching "%s" is monitored here.' % spec)
                 return
             del_urls.append(iurl)
@@ -432,30 +446,33 @@ def h_dom_del(bot, id, chan, del_spec, full_msg, cont):
         try:
             state.save_path(STATE_FILE)
         except Exception as e:
-            message.reply(bot, id, chan, 'Error: %s' % str(e))
+            message.reply(bot, id, c_chan, 'Error: %s' % str(e))
             raise
-        message.reply(bot, id, chan, '%d game(s) removed.' % del_count)
+        message.reply(bot, id, c_chan, '%d game(s) removed.' % del_count)
     finally:
         yield cont
 
 @link('!dom?')
 @auth.admin
 @util.further
-def h_dom_query(bot, id, chan, args, full_msg, cont):
+def h_dom_query(bot, id, c_chan, args, full_msg, cont):
     try:
-        if chan is None: return
+        if args.startswith('#'): chan = args
+        else: chan = c_chan
+
+        if not chan: return
         cobj = state.channels.get(chan.lower())
         urls = cobj.games if cobj else []
         if urls:
             for index, url in izip(count(), urls):
                 name = getattr(state.games[url], 'name', None) \
                        if url in state.games else None
-                message.reply(bot, id, chan, '%d. %s%s%s' % (
+                message.reply(bot, id, c_chan, '%d. %s%s%s' % (
                     index + 1,
                     url,
                     ' (%s)' % name if name is not None else '',
                     ',' if index < len(urls)-1 else '.'), prefix=False)
         else:
-            message.reply(bot, id, chan, 'None.', prefix=False)
+            message.reply(bot, id, c_chan, 'None.', prefix=False)
     finally:
         yield cont
