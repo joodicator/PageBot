@@ -16,6 +16,7 @@ import re
 from untwisted.magic import sign
 
 from message import reply
+from runtime import later
 from util import same_user as same_sender
 from util import multi, wc_to_re
 from auth import admin
@@ -686,7 +687,7 @@ def deliver_msg(bot, id, chan, msg, tag=''):
 @link('TELL_DELIVERY')
 def h_tell_delivery(bot, from_id, to_id, chan, msg):
     target = ('%s!%s@%s' % to_id) if chan is None else chan
-    yield sign('PROXY_MSG', bot, from_id, target, msg)
+    yield later(sign('PROXY_MSG', bot, from_id, target, msg))
 
 #==============================================================================#
 # Returns True if `msg' would be delivered at this time to `id' in `chan',

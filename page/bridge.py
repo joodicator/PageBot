@@ -4,6 +4,7 @@ import re
 
 from untwisted.magic import sign
 
+from runtime import later
 import util
 import channel
 import message
@@ -105,8 +106,8 @@ def h_bridge(bot, target_chan, msg, source, no_proxy=False, **kwds):
     bot.send_msg(target_chan, msg, no_bridge=True)
     if isinstance(msg, unicode): msg = msg.encode('utf-8')
     if not no_proxy:
-        yield sign('PROXY_MSG', bot, None, target_chan, msg,
-                   no_auto = source.startswith('#'))
+        yield later(sign('PROXY_MSG', bot, None, target_chan, msg,
+                         no_auto = source.startswith('#')))
 
 @link(('BRIDGE', 'NAMES_REQ'))
 def h_bridge_names_req(bot, target, source, query):

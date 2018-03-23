@@ -38,6 +38,14 @@ def reinstall(prev):
         mode = prev.mode
 
 
+# Schedule an action, which may be yielded in an untwisted event handler,
+# to be yielded after all handlers for the current event have run.
+@util.msub(b_link, 'runtime.later')
+def later(action):
+    yield sleep(0)
+    yield action
+
+
 @util.mfun(b_link, 'runtime.timeout')
 def timeout(delta, ret):
     token = ('TIMEOUT',object())

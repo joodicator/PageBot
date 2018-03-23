@@ -11,6 +11,7 @@ import UserDict
 from bs4 import BeautifulSoup
 from untwisted.magic import sign
 
+from runtime import later
 import util
 import runtime
 import identity
@@ -129,7 +130,7 @@ class Private(Configuration):
                             msg = msg.encode('utf8')
                         bot.send_msg(nick, msg)
                         hm = yield identity.get_hostmask(bot, nick)
-                        yield sign('PROXY_MSG', bot, None, hm, fquote, quiet=True)
+                        yield later(sign('PROXY_MSG', bot, None, hm, fquote, quiet=True))
     
             last_quote = max(
                 last_quote, max(qid for (qid, quote) in quotes))
@@ -194,7 +195,8 @@ class Public(Configuration):
                 fquote = format_quote(quote)
                 msg = '%s: new quote added: %s "%s"' % (title, quote_url, fquote)
                 bot.send_msg(self.channel, msg)
-                yield sign('PROXY_MSG', bot, None, self.channel, fquote, quiet=True)
+                yield later(sign('PROXY_MSG', bot, None, self.channel, fquote,
+                                 quiet=True))
 
             if len(quotes) > len(sample):
                 msg = '%s: ...and %d others. See: <%s>.' % (

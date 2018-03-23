@@ -2,6 +2,7 @@
 import re
 
 from channel import not_quiet
+from runtime import later
 import message
 import util
 import limit
@@ -53,5 +54,5 @@ def kakasi(bot, id, target, msg, prefix=True, **kwds):
     else:
         reply = '<%s> %s' % (id.nick, raw_reply) if prefix else raw_reply
     bot.send_msg(target, reply)
-    bot.drive('PROXY_MSG', bot, id, target, raw_reply,
-        **dict(kwds, no_kakasi=True))
+    bot.drive('runtime.later', sign(
+        'PROXY_MSG', bot, id, target, raw_reply, **dict(kwds, no_kakasi=True)))

@@ -7,6 +7,7 @@ import re
 
 from untwisted.magic import sign
 
+from runtime import later
 import auth
 import util
 import channel
@@ -232,15 +233,15 @@ def h_message(*args, **kwds):
     for lchan in links[chan.lower()]:
         bot.send_msg(lchan, msg, no_link=True)
         if id is not None and id.nick.lower() != bot.nick.lower():
-            yield sign('PROXY_MSG', bot, id, lchan, msg,
-                       no_link=True, no_auto=True)
+            yield later(sign('PROXY_MSG', bot, id, lchan, msg,
+                             no_link=True, no_auto=True))
 
 @link('PROXY_MSG')
 def h_proxy_msg(bot, id, chan, msg, no_link=False, **kwds):
     if no_link or chan.lower() not in links: return
     for lchan in links[chan.lower()]:
-        yield sign('PROXY_MSG', bot, id, lchan, msg,
-            **dict(kwds, no_link=True, no_auto=True))
+        yield later(sign('PROXY_MSG', bot, id, lchan, msg,
+                         **dict(kwds, no_link=True, no_auto=True)))
 
 @link('TOPIC')
 def h_topic(bot, source, chan, topic):
