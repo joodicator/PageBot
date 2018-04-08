@@ -118,7 +118,7 @@ def h_simple_roll(bot, name, target, args, reply, action):
 def h_roll_defs(bot, id, target, args, defs, action, reply):
     try:
         msg, rolls = eval_string(
-            parse_string(args), defs=defs, irc=True,
+            parse_string(args), defs=defs, user_id=id, irc=True,
             max_len            = MAX_MESSAGE_LENGTH,
             max_names_expanded = MAX_NAMES_EXPANDED,
             max_stack_depth    = MAX_STACK_DEPTH)
@@ -152,7 +152,7 @@ class EvalRecord():
         self.stack_depth = 0
 
 EvalContext = namedtuple('EvalContext', (
-    'defs', 'record', 'max_names_expanded', 'max_stack_depth'))
+    'defs', 'user_id', 'record', 'max_names_expanded', 'max_stack_depth'))
 
 # Returns (str, [roll_spec_1, roll_spec_2, ...])
 def eval_string(*args, **kwds):
@@ -161,12 +161,11 @@ def eval_string(*args, **kwds):
 
 # Returns (str_iterator, [roll_spec_1, roll_spec_2, ...])
 def eval_string_parts(
-    string, max_len=None, irc=False, defs=None,
+    string, max_len=None, irc=False, defs=None, user_id=None,
     max_names_expanded=None, max_stack_depth=None
 ):
     context = EvalContext(
-        defs=defs,
-        record=EvalRecord(),
+        defs=defs, user_id=user_id, record=EvalRecord(),
         max_names_expanded=max_names_expanded,
         max_stack_depth=max_stack_depth)
 
@@ -241,15 +240,23 @@ def e_branch(branch, context):
 
 def e_name(name, context):
     try:
-        for s in e_name_(name.name, context): yield s
+        for s in e_name_(name, context): yield s
     except RollNameError:
         yield str(name.source)
 
-def e_name_(name_str, context):
-    if context.defs is None or name_str not in context.defs:
-        raise RollNameError(name_str)
+def e_name_(name, context):
+    if name.namespace is not None:
+        if context.user_id is None:
+            raise RollNameError(str(name.source))
+        chan_lower = name.namespace.lower()
+        if context.user_id.nick.lower() not in channel.track_channels[chan_lower]:
+            raise UserError('To use "%s", you and this bot must both be in %s.'
+            % (abbrev_middle(str(name.source)), abbrev_right(name.namespace)))
+        context = context._replace(defs=AutoDefs(global_defs.get(chan_lower)))
+    if context.defs is None or name.name not in context.defs:
+        raise RollNameError(name.name)
     with expanding_name(context):
-        defn = context.defs[name_str]
+        defn = context.defs[name.name]
         for s in defn.postprocess(e_string(defn.body_ast, context)): yield s
 
 @contextmanager
@@ -500,12 +507,12 @@ Escape = namedtuple('Escape', ('text',                   'source'))
 
 Expr      = namedtuple('Expr',      ('op', 'term', 'expr', 'source'))
 TermDice  = namedtuple('TermDice',  ('dice', 'sides',      'source'))
-TermDiceC = namedtuple('TermDiceC', ('dice', 'num',        'source'))
-TermDiceD = namedtuple('TermDiceD', ('dice', 'name',       'source'))
+TermDiceC = namedtuple('TermDiceC', ('dice', 'num',        'source')) # Constant
+TermDiceD = namedtuple('TermDiceD', ('dice', 'name',       'source')) # Defined
 TermKeep  = namedtuple('TermKeep',  ('bw', 'num', 'expr',  'source'))
 TermCnst  = namedtuple('TermCnst',  ('num',                'source'))
 
-Name   = namedtuple('Name',   ('name',                   'source'))
+Name   = namedtuple('Name',   ('namespace', 'name',      'source'))
 Branch = namedtuple('Branch', ('choices',                'source'))
 Choice = namedtuple('Choice', ('weight', 'string',       'source'))
 
@@ -593,9 +600,13 @@ def p_term_cnst(start):
     match, input = p_match(r'\b\d+', start)
     return TermCnst(num=int(match.group()), source=input-start), input
 
-def p_name(input):
-    match, end_input = p_match(r'\{\{(?P<n>[a-zA-Z_-][a-zA-Z0-9_-]*)\}\}', input)
-    return Name(name=match.group('n'), source=end_input-input), end_input
+def p_name(start_input):
+    _, input = p_token('{{', start_input)
+    chan_match, input = p_match(r'((?P<ch>#[^\s,]*)/)?', input)
+    name_match, input = p_match(r'[^{},:\\]*', input)
+    _, input = p_token('}}', input)
+    return Name(namespace=chan_match.group('ch'), name=name_match.group(),
+                source=input-start_input), input
 
 def p_branch(start_input):
     choices = []
@@ -844,7 +855,10 @@ class UserChannelDefs(DictMixin):
 # iterable dict-like container of underlying definitions. Not iterable.
 class AutoDefs(DictStack):
     def __init__(self, base_defs):
-        super(AutoDefs, self).__init__(base_defs, CaseAutoDefs(base_defs))
+        if base_defs is not None:
+            super(AutoDefs, self).__init__(base_defs, CaseAutoDefs(base_defs))
+        else:
+            super(AutoDefs, self).__init__()
     def __iter__(self):
         raise NotImplementedError('AutoDefs instances are not iterable.')
 
@@ -962,6 +976,13 @@ def h_roll_def_p(bot, id, target, args, full_msg):
             'Error: this channel has too many definitions - no more than %d are'
             ' permitted. See \2!help roll-def-\2 to delete existing definitions.'
             % DEF_MAX_PER_CHAN)
+
+        for node in traverse_ast(parse_string(body), Name):
+            if node.namespace is not None: return message.reply(bot, id, target,
+            'Error: "%s" is illegal: references specifying a source channel may'
+            ' not occur in channel roll definitions.'
+            % abbrev_middle(str(node.source)))
+
         is_op = channel.has_op_in(bot, id.nick, chan, 'h')
         udefs = None if is_op else \
                 sum(1 for d in defs.itervalues() if util.same_user(d.id, id))
@@ -1202,4 +1223,21 @@ def abbrev_middle(str, max_len=50, mark='(...)'):
 def abbrev_right(str, max_len=50, mark='(...)'):
     if len(str) <= max_len: return str
     return str[:max_len-len(mark)] + mark
+
+def traverse_ast(node, *types):
+    if type(node) in types:
+        yield node
+    if type(node) is String:
+        for part in node.parts:
+            for t_node in traverse_ast(part, *types): yield t_node
+    elif type(node) in (Expr, TermKeep) and any(t in (
+    Expr, TermDice, TermDiceC, TermDiceD, TermKeep, TermCnst) for t in types):
+        if type(node) is Expr:
+            for t_node in traverse_ast(node.term, *types): yield t_node
+        for t_node in traverse_ast(node.expr, *types): yield t_node
+    elif type(node) is Branch:
+        for choice in node.choices:
+            for t_node in traverse_ast(choice, *types): yield t_node
+    elif type(node) is Choice:
+        for t_node in traverse_ast(node.string, *types): yield t_node
 
