@@ -249,7 +249,8 @@ def e_name_(name, context):
         if context.user_id is None:
             raise RollNameError(str(name.source))
         chan_lower = name.namespace.lower()
-        if context.user_id.nick.lower() not in channel.track_channels[chan_lower]:
+        if context.user_id.nick.lower() not in \
+        map(str.lower, channel.track_channels[chan_lower]):
             raise UserError('To use "%s", you and this bot must both be in %s.'
             % (abbrev_middle(str(name.source)), abbrev_right(name.namespace)))
         context = context._replace(defs=AutoDefs(global_defs.get(chan_lower)))
