@@ -8,6 +8,7 @@ from numbers import Integral
 import re
 import random
 import math
+import os
 import os.path
 import time
 import json
@@ -23,6 +24,9 @@ import channel
 link, install, uninstall = util.LinkSet().triple()
 
 DEF_FILE = 'state/roll_def.json'
+DEF_BACKUP_NAME = 'state/roll_def.json.d/roll_def.%d.json'
+DEF_BACKUPS = 9
+
 DEF_MAX_TOTAL = 100000
 DEF_MAX_PER_CHAN = 1000
 DEF_MAX_PER_USER = 100
@@ -718,10 +722,35 @@ def load_defs():
         jdict = util.recursive_encode(json.load(file), 'utf8')
         return {c: GlobalDefs(jdict=d) for (c,d) in jdict.iteritems()}
 
-def save_defs():
+def save_defs(backup=True):
     prune_defs()
     jstring = json.dumps({
-        c: d.save_jdict() for (c,d) in global_defs.iteritems()})
+        c: d.save_jdict() for (c,d) in global_defs.iteritems()},
+        separators=(',', ':'))
+
+    if backup:
+        if not os.path.exists(os.path.dirname(DEF_BACKUP_NAME)):
+            os.mkdir(os.path.dirname(DEF_BACKUP_NAME))
+        prev_name = None
+        for n in xrange(DEF_BACKUPS, -1, -1):
+            name = (DEF_BACKUP_NAME % n) if n > 0 else DEF_FILE
+            # To prevent floods of changes from destroying all viable backups,
+            # the oldest, 2nd-oldest, and 3rd-oldest backups are only replaced
+            # by files newer than them by resp. 1 day, 1 hour, and 5 minutes.
+            # (Unless DEF_BACKUPS < 4, in which case the 4th-, 3rd- and
+            # 2nd-newest backups, when they exist, assume these roles.)
+            min_d = 86400 if n == max(3, DEF_BACKUPS-1) else \
+                     3600 if n == max(2, DEF_BACKUPS-2) else \
+                      300 if n == max(1, DEF_BACKUPS-3) else None
+            if os.path.exists(name) and prev_name is not None \
+            and (not os.path.exists(prev_name) \
+            or os.stat(name).st_mtime - os.stat(prev_name).st_mtime > min_d):
+                os.rename(name, prev_name)
+            prev_name = name
+
+    if not os.path.exists(os.path.dirname(DEF_FILE)):
+        os.mkdir(os.path.dirname(DEF_FILE))
+
     with open(DEF_FILE, 'w') as file:
         file.write(jstring)
 
