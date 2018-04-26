@@ -998,14 +998,6 @@ def h_roll_def_p(bot, id, target, args, full_msg):
     def_modes = defs[name].modes if name in defs else \
                 modes if target is not None else None
 
-    if target is not None and not is_op and name in defs \
-    and channel.modes_has_op_in(bot, defs[name].modes, 'h') \
-    and not util.same_user(id, def_id):
-        def_nick = channel.modes_prefix_nick(bot, def_id.nick, def_modes)
-        return message.reply(bot, id, target, 'Error: this name was defined by'
-            ' a channel operator, namely %s!%s@%s; only the same user or another'
-            ' operator may change it.' % (def_nick, def_id.user, def_id.host))
-
     defs[name] = GlobalDef(
         name=name, id=def_id, modes=def_modes, time=now, body_str=body)
     defs.touch()
