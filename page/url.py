@@ -274,8 +274,8 @@ def get_title_html(url, type, stream=None, **kwds):
     soup = BeautifulSoup(data, BS4_PARSER, from_encoding=charset)
     title = soup.find('title')
     if title:
-        title = 'Title: %s' % format_title(title.text.strip())
-        return { 'title': title }
+        title = ''.join(re.sub(r'\s+', ' ', s) for s in title.strings).strip()
+        return { 'title': 'Title: %s' % format_title(title) }
 
 #-------------------------------------------------------------------------------
 def get_title_image(url, type, **kwds):
@@ -429,8 +429,11 @@ def url_to_unicode(url):
     except UnicodeError: return url
 
 def format_title(title):
-    title = '\2%s\2' % re.sub(r'\r\n|\r|\n', ' ', title)
-    return title
+    title = re.sub(r'\r\n|\r|\n', ' ', title)
+    if len(title) > 300:
+        return '\2%s\2(...)' % title[:300]
+    else:
+        return '\2%s\2' % title
 
 def bytes_to_human_size(bytes):
     bytes = int(bytes)
