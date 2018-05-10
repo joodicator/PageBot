@@ -53,5 +53,5 @@ def gallery_album_info(id, **kwds):
     return api_result('/gallery/album/%s' % id, **kwds)
 
 def upload_url(img_url, **kwds):
-    data = urllib.urlencode({'image':img_url})
+    data = urllib.urlencode({'image':img_url, 'type':'URL'})
     return api_result('/image', data=data, **kwds)

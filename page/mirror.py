@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 from itertools import *
 from collections import defaultdict
 import traceback
@@ -5,11 +7,13 @@ import urllib2
 import time
 import ssl
 import re
+import sys
 
 import util
 import imgur
 import message
 import url_collect
+import runtime
 
 MIRROR_HOSTS = (
     'i*.4cdn.org',
@@ -23,6 +27,9 @@ PATH_RE = re.compile(
 
 CACHE_SIZE = 1024
 REPEAT_S = 60*60*3
+
+UPLOAD_RETRIES = 10
+UPLOAD_RETRY_S = 60
 
 link, install, uninstall = util.LinkSet().triple()
 
@@ -81,6 +88,11 @@ def get_mirror_url(url, chan):
     # Otherwise, upload to imgur.com.
     try:
         res = imgur.upload_url(url)
+    except urllib2.HTTPError as e:
+        if not hasattr(e, 'read'): raise e
+        print(e, file=sys.stderr)
+        print(e.read(), file=sys.stderr)
+        return
     except (imgur.ImgurError, urllib2.URLError):
         traceback.print_exc()
         return
@@ -99,8 +111,12 @@ def h_url_collect_urls(bot, urls, chan, id, orig_msg):
 
     for url_spec, index in izip(urls, count()):
         url, is_nsfw = url_collect.url_nsfw(url_spec)
-        mirror_url = get_mirror_url(url, chan)
-        if not mirror_url: continue
+        for tries in xrange(UPLOAD_RETRIES):
+            if tries: yield runtime.sleep(UPLOAD_RETRY_S)
+            mirror_url = get_mirror_url(url, chan)
+            if mirror_url: break
+        else:
+            continue
 
         nsfw_str = '\2NSFW:\2 ' if is_nsfw else ''
         msg = '%s%s copied to <%s>.' % (nsfw_str, url, mirror_url)
