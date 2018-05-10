@@ -992,7 +992,8 @@ def h_roll_def_p(bot, id, target, args, full_msg):
         return message.reply(bot, id, target, 'Error: there are too many defin'
         'itions stored. Please notify the bot administrator of this message.')
 
-    body = str(parse_string(body).source)
+    body_ast = parse_string(body)
+    body = str(body_ast.source)
     now = int(time.time())
     chan = (target or ('%s!%s@%s' % id)).lower()
     defs = global_defs.get(chan) or GlobalDefs()
@@ -1007,7 +1008,7 @@ def h_roll_def_p(bot, id, target, args, full_msg):
             ' permitted. See \2!help roll-def-\2 to delete existing definitions.'
             % DEF_MAX_PER_CHAN)
 
-        for node in traverse_ast(parse_string(body), Name):
+        for node in traverse_ast(body_ast, Name):
             if node.namespace is not None: return message.reply(bot, id, target,
             'Error: "%s" is illegal: references specifying a source channel may'
             ' not occur in channel roll definitions.'
