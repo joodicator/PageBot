@@ -21,8 +21,10 @@ class AbstractSlots(type):
         for base in bases:
             if not hasattr(base, __ab_slots): continue
             slots.extend(a for a in getattr(base, __ab_slots) if a not in slots)
-        if '__slots__' in dict:
-            slots.extend(a for a in dict['__slots__'] if a not in slots)
+        cls_slots = dict.get('__slots__')
+        if cls_slots is not None:
+            if isinstance(cls_slots, str): slots.append(cls_slots)
+            else: slots.extend(a for a in dict['__slots__'] if a not in slots)
 
         if '__metaclass__' in dict:
             dict[__ab_slots] = tuple(slots)
@@ -43,53 +45,69 @@ class AbstractSlots(type):
         return cls
 
 # This mixin class provides a __repr__ method based on the instance's __slots__
-# and __type__ name, similar to that of collections.namedtuple.
+# and type __name__, similar to that of collections.namedtuple.
 class ReprSlots(object):
     __slots__ = ()
     def __repr__(self):
-        slots = (a for a in self.__slots(self) if hasattr(self, a))
+        slots = (a for a in iter_slots(self) if hasattr(self, a))
         attrs = ('%s=%r' % (a, getattr(self, a)) for a in slots)
         return '%s(%s)' % (type(self).__name__, ', '.join(attrs))
 
-    @classmethod
-    def __slots(cls, inst, seen=None):
-        if seen is None: seen = set()
-        for base in type(inst).__bases__:
-            if base in seen: continue
-            seen.add(base)
-            for slot in cls.__slots(base, seen): yield slot
-        if not hasattr(inst, '__slots__'): return
-        for slot in inst.__slots__:
-            if slot in seen: continue
-            yield slot
-            seen.add(slot)
+# This mixin class provides an __init__ method that assigns each keyword
+# argument as an instance attribute, or raises ArgumentError if there is any
+# keyword not corresponding to a slot, or any slot remaining without a set value.
+class InitSlots(object):
+    __slots__ = ()
+    def __init__(self, **kwds):
+        super(InitSlots, self).__init__()
+        for slot in iter_slots(self):
+            if slot in kwds:
+                setattr(self, slot, kwds.pop(slot))
+            elif not hasattr(self, slot):
+                raise ArgumentError('Missing keyword argument: %s.' % slot)
+        if kwds:
+            raise ArgumentError('Unexpected keyword argument%s: %s.'
+                  % ('s' if len(kwds) > 1 else '', ', '.join(kwds.iterkeys())))
+
+# Return an iterator over the unique __slots__ names in the given class and
+# its superclasses, ordered from superclass to subclass, from left to right.
+def iter_slots(inst, seen=None):
+    if seen is None: seen = set()
+    for base in type(inst).__bases__:
+        if base in seen: continue
+        seen.add(base)
+        for slot in iter_slots(base, seen): yield slot
+
+    slots = getattr(inst, '__slots__', None)
+    if slots is None: return
+    for slot in (slots,) if isinstance(slots, str) else slots:
+        if slot in seen: continue
+        yield slot
+        seen.add(slot)
 
 #===============================================================================
 # Miscellaneous data classes:
 #===============================================================================
 
-# IRCSender(name, **k)     -> IRCServer(name=name, **k)
-# IRCSender(id, **k)       -> IRCUser(id=id, **k)
-# IRCSender(id, chan, **k) -> IRCChanUser(id=id, chan=chan, **k)
-class IRCSender(ReprSlots):
+# IRCActor(name, **k)     -> IRCServer(name=name, **k)
+# IRCActor(id, **k)       -> IRCUser(id=id, **k)
+# IRCActor(id, chan, **k) -> IRCChanUser(id=id, chan=chan, **k)
+class IRCActor(ReprSlots, InitSlots):
     __slots__ = ()
     class __metaclass__(type):
         def __call__(cls, *args, **kwds):
-            if cls is IRCSender: return cls._IRCSender__cls_call(*args, **kwds)
-            return super(IRCSender.__metaclass__, cls).__call__(*args, **kwds)
+            if cls is IRCActor: return cls._IRCActor__cls_call(*args, **kwds)
+            return super(IRCActor.__metaclass__, cls).__call__(*args, **kwds)
     @classmethod
     def __cls_call(cls, sender, chan=None, **kwds):
         return IRCServer(name=sender, **kwds) if isinstance(sender, str) else \
                IRCUser(id=sender, **kwds)     if chan is None else \
                IRCChanUser(id=sender, chan=chan, **kwds)
 
-class IRCServer(IRCSender):
-    __slots__ = 'name',
-    def __init__(self, name, **kwds):
-        super(IRCServer, self).__init__(**kwds)
-        self.name = name
+class IRCServer(IRCActor):
+    __slots__ = 'name'
 
-class IRCUser(IRCSender):
+class IRCUser(IRCActor):
     __slots__ = 'id', 'is_bot'
     def __init__(self, id=None, nick=None, is_bot=None, **kwds):
         super(IRCUser, self).__init__(**kwds)
@@ -120,15 +138,16 @@ class IRCChanUser(IRCUser):
 # Abstract event classes:
 #===============================================================================
 
-class Event(ReprSlots):
+class Event(ReprSlots, InitSlots):
     __metaclass__ = AbstractSlots
-    __slots__ = 'time', # UNIX timestamp in seconds when the event occurred.
+    __slots__ = 'time' # UNIX timestamp in seconds when the event occurred.
 
-    # Class attribute: a sequence of names of Untwisted events which may trigger
-    # the instantiation of this Event.
+    # Class attribute: a sequence of names (or a single name) of Untwisted
+    # events which may trigger the instantiation of this Event.
     links = ()
 
-    def __init__(self, time=None):
+    def __init__(self, time=None, **kwds):
+        super(Event, self).__init__(**kwds)
         self.time = m_time.time() if time is None else time
 
     # Register Untwisted event handlers in the given Mode instance which shall
@@ -139,10 +158,11 @@ class Event(ReprSlots):
         def event_link_handler(*args, **kwds):
             event = cls.link_new(*args, **kwds)
             if event is not None: cont(event)
-        for event_link in cls.links:
+        links = cls.links if hasattr(cls.links, '__iter__') else (cls.links,)
+        for event_link in links:
             mode.link(event_link, event_link_handler)
         def event_unlink():
-            for event_link in cls.links:
+            for event_link in links:
                 mode.unlink(event_link, event_link_handler)
         return event_unlink
 
@@ -154,92 +174,98 @@ class Event(ReprSlots):
 
 class IRCMsg(Event):
     __metaclass__ = AbstractSlots
-    __slots__ = 'sender',
-    def __init__(self, sender, **kwds):
-        super(IRCMsg, self).__init__(**kwds)
-        self.sender = sender
+    __slots__ = 'sender'
 
 class IRCChanMsg(IRCMsg):
     __metaclass__ = AbstractSlots
-    __slots__ = 'chan',
-    def __init__(self, chan, **kwds):
-        super(IRCChanMsg, self).__init__(**kwds)
-        self.chan = chan
+    __slots__ = 'chan'
 
 class IRCUserMsg(IRCMsg):
     __metaclass__ = AbstractSlots
-    __slots__ = 'target_user',
-    def __init__(self, target_user, **kwds):
-        super(IRCUserMsg, self).__init__(**kwds)
-        self.target_user = target_user
+    __slots__ = 'target_user'
 
 class IRCTextMsg(IRCMsg):
     __metaclass__ = AbstractSlots
-    __slots__ = 'text',
-    def __init__(self, text, **kwds):
-        super(IRCTextMsg, self).__init__(**kwds)
-        self.text = text
+    __slots__ = 'text'
 
 #===============================================================================
 # Events:
 #===============================================================================
 
 class Nick(IRCMsg):
-    __slots__ = 'new_nick',
-    def __init__(self, new_nick, **kwds):
-        super(Nick, self).__init__(**kwds)
-        self.new_nick = new_nick
+    __slots__ = 'new_nick'
 
-    links = 'SOME_NICK',
+    links = 'SOME_NICK'
     link_new = classmethod(lambda cls, _bot, id, nn:
-               cls(sender=IRCSender(id), new_nick=nn))
+               cls(sender=IRCActor(id), new_nick=nn))
 
 class ChanNick(Nick, IRCChanMsg):
-    links = 'SOME_NICK_CHAN',
+    links = 'SOME_NICK_CHAN'
     link_new = classmethod(lambda cls, _bot, id, nn, ch:
-               cls(sender=IRCSender(id, ch), new_nick=nn, chan=ch))
+               cls(sender=IRCActor(id, ch), new_nick=nn, chan=ch))
 
 class Quit(IRCTextMsg):
-    links = 'OTHER_QUIT',
+    links = 'OTHER_QUIT'
     link_new = classmethod(lambda cls, _bot, id, msg:
-               cls(sender=IRCSender(id), text=msg))
+               cls(sender=IRCActor(id), text=msg))
 
 class ChanQuit(Quit, IRCChanMsg):
-    links = 'OTHER_QUIT_CHAN',
+    links = 'OTHER_QUIT_CHAN'
     link_new = classmethod(lambda cls, _bot, id, msg, ch:
-               cls(sender=IRCSender(id, ch), text=msg, chan=ch))
+               cls(sender=IRCActor(id, ch), text=msg, chan=ch))
 
 class Join(IRCChanMsg):
     links = 'SOME_JOIN'
     link_new = classmethod(lambda cls, _bot, id, ch:
-               cls(sender=IRCSender(id, ch), chan=ch))
+               cls(sender=IRCActor(id, ch), chan=ch))
 
 class Part(IRCChanMsg, IRCTextMsg):
     links = 'SOME_PART'
     link_new = classmethod(lambda cls, _bot, ch, msg:
-               cls(sender=IRCSender(id, ch), chan=ch, text=msg))
+               cls(sender=IRCActor(id, ch), chan=ch, text=msg))
 
 class Mode(IRCChanMsg):
-    __slots__ = 'modes', 'params'
-    def __init__(self, modes, *params, **kwds):
-        super(IRCChanMsg, self).__init__(**kwds)
-        self.modes = modes
-        self.params = params
+    __slots__ = 'params'
+
+    links = 'MODE'
+    link_new = classmethod(lambda cls, _bot, src, ch, *params:
+               cls(sender=IRCActor(src, ch), chan=ch, params=params))
 
 class Topic(IRCChanMsg, IRCTextMsg):
     links = 'CHAN_TOPIC'
     link_new = classmethod(lambda cls, _bot, ch, topic:
-               cls(sender=IRCSender(id, ch), chan=ch, text=topic))
+               cls(sender=IRCActor(id, ch), chan=ch, text=topic))
 
 class Invite(IRCChanMsg, IRCUserMsg):
-    pass
+    links = 'INVITE'
+    link_new = classmethod(lambda cls, _bot, src, tgt, ch, *_args:
+               cls(sender=IRCActor(src, ch), chan=ch, target_user=tgt))
 
 class Kick(IRCChanMsg, IRCUserMsg, IRCTextMsg):
-    pass
+    links = 'SOME_KICKED'
+    link_new = classmethod(lambda cls, _bot, tgt, src, ch, msg:
+               cls(sender=IRCActor(src, ch), chan=ch, text=msg,
+                   target_user=IRCActor(tgt)))
 
-class Message(IRCChanMsg, IRCTextMsg):
-    pass
+class UserTextMsg(IRCUserMsg, IRCTextMsg):
+    link_new = classmethod(lambda cls, _bot, src, tgt, msg, *_args:
+               cls(sender=IRCActor(src), target_user=IRCActor(tgt), text=msg)
+               if not target.startswith('#') else None)
 
-class Notice(IRCChanMsg, IRCTextMsg):
-    pass
+class ChanTextMsg(IRCChanMsg, IRCTextMsg):
+    link_new = classmethod(lambda cls, _bot, src, ch, msg, *_args:
+               cls(sender=IRCActor(src, ch), chan=ch, text=msg)
+               if tgt.startswith('#') else None)
+
+class UserPrivMsg(UserTextMsg):
+    links = 'PRIVMSG'
+
+class ChanPrivMsg(ChanTextMsg):
+    links = 'PRIVMSG'
+
+class UserNotice(UserPrivMsg):
+    links = 'NOTICE'
+
+class ChanNotice(ChanPrivMsg):
+    links = 'NOTICE'
 
