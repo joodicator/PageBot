@@ -1,6 +1,8 @@
 #===============================================================================
 import re
 
+from untwisted.magic import sign
+
 from channel import not_quiet
 from runtime import later
 import message
@@ -12,19 +14,21 @@ import kakasi_lib
 link, install, uninstall = util.LinkSet().triple()
 
 #===============================================================================
+'''
 @link('MESSAGE')
 @not_quiet()
 def h_message(bot, id, target, msg):
-    if not kakasi_lib.is_ja(msg) or limit.mark_activity(bot, id): return
-    kakasi(bot, id, target or id.nick, msg, target is not None)
+    if limit.mark_activity(bot, id): return
+    kakasi(bot, id, target or id.nick, msg, target is not None, auto=True)
 
 @link('PROXY_MSG')
 @not_quiet()
 def h_proxy_message(
     bot, id, target, msg, no_kakasi=False, no_auto=False, **kwds
 ):
-    if no_kakasi or no_auto or not kakasi_lib.is_ja(msg): return
-    kakasi(bot, id, target, msg, target.startswith('#'), **kwds)
+    if no_kakasi or no_auto: return
+    kakasi(bot, id, target, msg, target.startswith('#'), auto=True, **kwds)
+'''
 
 #===============================================================================
 @link('HELP')
@@ -47,12 +51,12 @@ def h_romaji(bot, id, target, args, full_msg):
     kakasi(bot, id, target or id.nick, args, target is not None)
 
 #===============================================================================
-def kakasi(bot, id, target, msg, prefix=True, **kwds):
+def kakasi(bot, id, target, msg, prefix=True, auto=False, **kwds):
+    if auto and not kakasi_lib.is_ja(msg): return
     raw_reply = kakasi_lib.kakasi(msg)
-    if id is None:
-        reply = raw_reply
-    else:
-        reply = '<%s> %s' % (id.nick, raw_reply) if prefix else raw_reply
+    if auto and len(raw_reply) > 200: return
+    reply = ('<%s> %s' % (id.nick, raw_reply)) if prefix and id else raw_reply
     bot.send_msg(target, reply)
     bot.drive('runtime.later', sign(
         'PROXY_MSG', bot, id, target, raw_reply, **dict(kwds, no_kakasi=True)))
+
