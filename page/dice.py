@@ -1189,14 +1189,25 @@ def roll_def_query(
         for row in rows:
             message.reply(bot, id, target, '    %s' % row, prefix=False)
     else:
-        names = ', '.join(sorted(d.name for d in defs))
-        if len(names) > 400: names = names[:400] + '(...)'
-        suffix = '' if multiple else \
-                 ' Use \2!rd?%s NAME\2 to view the details of a definition.' % (
-                     (' %s' % chan_case) if external and not (target and
-                     target.lower() == chan) else '')
-        message.reply(bot, id, target,
-            '%s: %s.%s' % (defs_str, names, suffix), prefix=False)
+        names = sorted(d.name for d in defs)
+        parts = ['%s:' % defs_str]
+        parts += [nm + ('.' if ix == len(defs)-1 else ',') for (nm, ix)
+                  in izip(sorted(df.name for df in defs), count())]
+        parts += ['' if multiple else 'Use \2!rd?%s NAME\2 to view the details'
+                  ' of a definition.' % ((' %s' % chan_case) if external
+                  and not (target and target.lower() == chan) else '')]
+        i = 0
+        while i < len(parts):
+            len_sum = 0
+            for j in xrange(i, len(parts)):
+                len_sum += len(parts[j]) + (1 if j > i else 0)
+                if j > i and len_sum > MAX_MESSAGE_LENGTH: break
+            else: j = len(parts)
+            prefix = '... ' if i > 0 else ''
+            suffix = ' ...' if j < len(parts) else ''
+            msg = prefix + ' '.join(parts[i:j]) + suffix
+            message.reply(bot, id, target, msg, prefix=False)
+            i = j
 
     return len(defs)
 
