@@ -5,6 +5,8 @@ if sys.argv[0]:
     os.chdir(os.path.dirname(sys.argv[0]))
 sys.path[0:0] = ['.', 'ameliabot', 'page', 'lib']
 
+assert sys.version_info[:2] == (2, 7), 'Python 2.7 is required.'
+
 if __name__ == '__main__':
     conf = {
         'server':   'localhost',
