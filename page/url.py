@@ -6,6 +6,8 @@ from __future__ import print_function
 from contextlib import closing
 from itertools import *
 from math import *
+from urllib2 import URLError, HTTPError
+from ssl import SSLError
 import collections
 import traceback
 import urllib
@@ -33,7 +35,7 @@ import identity
 #==============================================================================#
 link, install, uninstall = util.LinkSet().triple()
 
-USER_AGENT = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:57.0) Gecko/20100101 Firefox/57.0'
+USER_AGENT = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:60.0) Gecko/20100101 Firefox/60.0'
 ACCEPT_ENCODING = 'gzip, deflate'
 
 TIMEOUT_S = 20
@@ -173,12 +175,15 @@ def get_title_proxy(url):
                 parts = get_title_parts(
                     final_url, ctype, stream=stream, bind_host=bind_host)
                 break
-        except urllib2.URLError as e:
-            if isinstance(e, urllib2.HTTPError):
+        except (HTTPError, URLError, SSLError, socket.error) as e:
+            if isinstance(e, HTTPError):
                 if e.code not in (403, 503): raise
-            elif isinstance(e.reason, IOError):
+            elif isinstance(e, SSLError):
+                if e.args != ('The read operation timed out',): raise
+            elif isinstance(e, URLError) and isinstance(e.reason, IOError):
                 if e.reason.errno != -2: raise
-            print('[bind_host=%s] %s' % (bind_host, e), file=sys.stderr)
+            print('[bind_host=%s] %r, %r, errno=%r' % (bind_host, e,
+                type(e), getattr(e, 'errno', None)), file=sys.stderr)
             exceptions.append(e)
     else:
         raise exceptions[0]
