@@ -13,6 +13,7 @@ import os.path
 import time
 import json
 import datetime
+import string
 
 from untwisted.magic import sign
 
@@ -917,26 +918,41 @@ class CaseAutoDef(Def):
             name=new_key, body_ast=base._body_ast, body_str=base._body_str)
 
     def postprocess(self, str_iter):
+        def decoded():
+            for part in str_iter:
+                if not part: continue
+                try: yield part.decode('utf8') if type(part) is str else part
+                except UnicodeDecodeError: yield part
+        for part in self.postprocess_(decoded()):
+            yield part.encode('utf8') if type(part) is unicode else part
+
+    def postprocess_(self, str_iter):
         old = ''.join(c for c in self._old_key if c.isupper() or c.islower())
         new = ''.join(c for c in self._new_key if c.isupper() or c.islower())
+        assert new != old
 
-        tail_map = str.upper if new[-1:].isupper() and not old[-1:].isupper() \
-              else str.lower if new[-1:].islower() and not old[-1:].islower() \
-              else lambda x: x
+        if new.isupper() and not old.isupper():
+            # Transform to all uppercase.
+            return imap(string.upper, str_iter)
+        elif new.islower() and not old.islower():
+            # Transform to all lowercase.
+            return imap(string.lower, str_iter)
+        elif new[0].isupper() and old[0].islower() and new[1:] == old[1:]:
+            # Capitalise the first character.
+            str_iter = iter(str_iter)
+            return chain(next(str_iter).capitalize(), str_iter)
 
-        i = 0
-        for s in str_iter:
-            n = min(len(old)-i, len(new)-i, len(s))
-            yield ''.join(
-                c.upper() if nc.isupper() and not oc.isupper() else
-                c.lower() if nc.islower() and not oc.islower() else c
-                for (c,oc,nc) in izip(s, old[i:], new[i:]))
-            i += n
-            if n < len(s):
-                yield tail_map(s[n:])
-                break
-        for s in str_iter:
-            yield tail_map(s)
+        def title_iter():
+            # Capitalise each word.
+            start_word = True
+            for part in str_iter:
+                if start_word: part = part[:1].upper() + part[1:]
+                flags = re.U if type(part) is unicode else 0
+                def repl(m):
+                    return m.group().capitalize() if m.start() else m.group()
+                yield re.sub(r"([^\W_]|')+", repl, part, 0, flags)
+                start_word = re.match(r'[^\W_]', part[-1:], flags) is None
+        return title_iter()
 
 global_defs = load_defs()
 
