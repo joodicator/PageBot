@@ -217,10 +217,14 @@ def prefix_nick(bot, nick, chan):
 # As `prefix_nick', but takes a sequence of channel user modes instead of
 # a channel.
 def modes_prefix_nick(bot, nick, modes):
+    return modes_prefix(bot, modes) + nick
+
+# As `modes_prefix_nick', but returns only the prefix string.
+def modes_prefix(bot, modes):
     pre_ms, pre_cs = bot.isupport['PREFIX']
     for pre_m, pre_c in izip(pre_ms, pre_cs):
-        if pre_m in modes: return pre_c + nick
-    return nick
+        if pre_m in modes: return pre_c
+    return ''
 
 # Returns True if (according to current records) "nick" has a channel mode
 # matching "op", or greater in power than "op", according to the ISUPPORT PREFIX
