@@ -62,10 +62,9 @@ def after(after):
 # Replace every handler for the event `find' in the given Mode instance with
 # an identical handler for the event `repl'.
 def event_sub(mode, find, repl):
-    for ((event, func), args) in mode.base.items():
-        if event != find: continue
-        mode.unlink(find, func)
-        mode.link(repl, func)
+    handlers = mode._base.pop(find, None)
+    if handlers is None: return
+    mode._base[repl] = handlers
 
 # Reads a list of namedtuples from a file, where each line evalutes to a tuple,
 # and the first line is a tuple of strings giving the names. Lines containing
