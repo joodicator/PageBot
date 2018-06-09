@@ -5,11 +5,9 @@ import time
 import sys
 import re
 
-from plugins.standard import head
 from untwisted.core import gear
 from untwisted.network import Mac
-from untwisted.event import CLOSE, TICK
-from untwisted.usual import Kill
+from untwisted.event import TICK
 import stdlog as std
 import xirclib
 

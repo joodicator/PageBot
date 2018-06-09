@@ -1,54 +1,46 @@
-try:
-    from collections import OrderedDict
-except ImportError:
-    from ordereddict import OrderedDict
+from itertools import chain
+from collections import OrderedDict
 import traceback
+
 from usual import *
 
 class Mode(object):
     def __init__(self, default=void):
         # Constructor for Mode
 
-        self.base = OrderedDict()
+        self._base = dict()
         self.default = default
-    
+
     def drive(self, event, *args, **kwds):
         # It evaluates all callbacks linked to event
-
-        for signal, handle in self.base.keys():
-            ################
-            if signal == event:
+        handlers = self._base.get(event)
+        if handlers:
+            for handler, (h_args, h_kwds) in handlers.items():
+                if kwds:
+                    h_kwds = h_kwds.copy()
+                    h_kwds.update(kwds)
                 try:
-                    old_args, old_kwds = self.base[signal, handle] 
-                except KeyError:
-                    continue
-                new_args = glue(args, old_args)
-                new_kwds = dict(old_kwds)
-                new_kwds.update(kwds)
-
-                try:
-                    #it evaluates handle
-                    seq = handle(*new_args, **new_kwds)
-
-                    if seq:
-                        chain(self, seq)
+                    seq = handler(*(h_args + args), **h_kwds)
+                    if seq: chain(self, seq)
                 except Stop:
                     break
-                except Exception:
-                    traceback.print_exc()
                 except Kill:
                     raise
-
-             ################
-
+                except Exception:
+                    traceback.print_exc()
         self.default(event, *args, **kwds)
 
     def link(self, event, callback, *args, **kwds):
         # This function maps an event to a callback.
-
-        self.base[event, callback] = (args, kwds)
+        callbacks = self._base.get(event)
+        if callbacks is None:
+            callbacks = OrderedDict()
+            self._base[event] = callbacks
+        callbacks[callback] = (args, kwds)
 
     def unlink(self, event, callback, *args, **kwds):
         # This function unmap an event to a callback.
-
-        del self.base[event, callback]
+        callbacks = self._base[event]
+        del callbacks[callback]
+        if not callbacks:
+            del self._base[event]
