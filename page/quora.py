@@ -202,18 +202,20 @@ class Question(object):
             r'\[(?P<tag>\w+)[\w\s]*\](?P<body>.*?)\[/(?P=tag)\]', sub, text)
 
 def random_question(exclude_ids=(), exclude_topics=(), source_topics=()):
+    while isinstance(source_topics, tuple):
+        topics = []
+        for topic in source_topics:
+            if isinstance(topic, MetaTopic):
+                topics.extend(topic.topics)
+            else:
+                topics.append(topic)
+        source_topics = random.choice(topics)
+
     if not source_topics:
         return random_question_all(exclude_ids, exclude_topics)
 
-    topics = []
-    for topic in source_topics:
-        if isinstance(topic, MetaTopic):
-            topics.extend(topic.topics)
-        elif isinstance(topic, str):
-            topics.append(topic)
-
     exclude_topics = map(str.lower, exclude_topics)
-    for q, n in izip(topic_questions(random.choice(topics)), count()):
+    for q, n in izip(topic_questions(source_topics), count()):
         if n < TOPIC_Q_MAX and random.random() > 1.0/TOPIC_Q_MEAN: continue
         if q.id in exclude_ids: continue
         if any(t.lower() in exclude_topics for t in q.topics): continue
