@@ -608,7 +608,7 @@ def p_term_cnst(start):
 
 def p_name(start_input):
     _, input = p_token('{{', start_input)
-    chan_match, input = p_match(r'((?P<ch>#[^\s,]*)/)?', input)
+    chan_match, input = p_match(r'((?P<ch>#((?!}})[^\s,])*)/)?', input)
     name_match, input = p_match(r'[^{},:\\]*', input)
     _, input = p_token('}}', input)
     return Name(namespace=chan_match.group('ch'), name=name_match.group(),
