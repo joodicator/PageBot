@@ -1206,10 +1206,9 @@ def roll_def_query(
         for row in rows:
             message.reply(bot, id, target, '    %s' % row, prefix=False)
     else:
-        names = sorted(d.name for d in defs)
         parts = ['%s:' % defs_str]
         parts += [nm + ('.' if ix == len(defs)-1 else ',') for (nm, ix)
-                  in izip(sorted(df.name for df in defs), count())]
+                  in izip((df.name for df in defs), count())]
         parts += ['' if multiple else 'Use \2!rd?%s NAME\2 to view the details'
                   ' of a definition.' % ((' %s' % chan_case) if external
                   and not (target and target.lower() == chan) else '')]
@@ -1247,7 +1246,7 @@ def def_search(chan, queries, *args, **kwds):
             continue
         for pos_q, pos_q_index in izip(pos, count()):
             if def_match(pos_q, defn, *args, **kwds):
-                sort_key = (pos_q_index, defn_name.lower())
+                sort_key = (pos_q_index, defn_name.lower(), defn_name)
                 results.append((defn, sort_key))
                 break
 
