@@ -940,7 +940,8 @@ class CaseAutoDef(Def):
         elif new[0].isupper() and old[0].islower() and new[1:] == old[1:]:
             # Capitalise the first character.
             str_iter = iter(str_iter)
-            return chain(next(str_iter).capitalize(), str_iter)
+            part = next(str_iter)
+            return chain((part[0].upper() + part[1:],), str_iter)
 
         def title_iter():
             # Capitalise each word.
