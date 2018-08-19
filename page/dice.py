@@ -206,7 +206,8 @@ def e_string(string, context):
 def e_part(part, context):
     if   isinstance(part, (Text, Escape)): return e_text(part, context)
     elif isinstance(part, Expr):           return e_expr(part, context)
-    elif isinstance(part, Name):           return e_name(part, context)
+    elif isinstance(part, NameApp):        return e_name_app(part, context)
+    elif isinstance(part, StringApp):      return e_string_app(part, context)
     elif isinstance(part, Branch):         return e_branch(part, context)
     else:                                  assert False
 
@@ -243,11 +244,23 @@ def e_branch(branch, context):
 
     return e_string(chosen.string, context)
 
-def e_name(name, context):
+def e_name_app(name_app, context):
+    parts = e_name_(name_app.name, context)
+    return e_func_app(name_app.suffixes, parts, name_app, context)
+
+def e_string_app(string_app, context):
+    parts = e_string(string_app.string, context)
+    return e_func_app(string_app.suffixes, parts, string_app, context)
+
+def e_func_app(func_names, value_parts, node, context):
     try:
-        for s in e_name_(name, context): yield s
+        for func_name in func_names:
+            func = rd_functions.get(func_name.name)
+            if func is None: raise RollNameError(str(func_name.source))
+            value_parts = func(context, value_parts)
+        return value_parts
     except RollNameError:
-        yield str(name.source)
+        return (str(node.source),)
 
 def e_name_(name, context):
     if name.namespace is not None:
@@ -263,7 +276,8 @@ def e_name_(name, context):
         raise RollNameError(name.name)
     with expanding_name(context):
         defn = context.defs[name.name]
-        for s in defn.postprocess(e_string(defn.body_ast, context)): yield s
+        for s in defn.postprocess(e_string(defn.body_ast, context), context):
+            yield s
 
 @contextmanager
 def expanding_name(context):
@@ -518,22 +532,24 @@ TermDiceD = namedtuple('TermDiceD', ('dice', 'name',       'source')) # Defined
 TermKeep  = namedtuple('TermKeep',  ('bw', 'num', 'expr',  'source'))
 TermCnst  = namedtuple('TermCnst',  ('num',                'source'))
 
-Name   = namedtuple('Name',   ('namespace', 'name',      'source'))
-Branch = namedtuple('Branch', ('choices',                'source'))
-Choice = namedtuple('Choice', ('weight', 'string',       'source'))
+Name      = namedtuple('Name',      ('namespace', 'name',  'source'))
+NameApp   = namedtuple('NameApp',   ('name', 'suffixes',   'source'))
+StringApp = namedtuple('StringApp', ('string', 'suffixes', 'source'))
+Branch    = namedtuple('Branch',    ('choices',            'source'))
+Choice    = namedtuple('Choice',    ('weight', 'string',   'source'))
 
 def parse_string(input):
     string, remain = p_string(ParseInput(input))
     return string
 
-def p_string(input, choice=False):
-    if choice:
+def p_string(input, group=False):
+    if group:
         text_re = re.compile(
             r'[^,}\s]((?!\b[bBwWdD])[^\d{,}\\\s+-])*|\s+(?=[^,}\s])|')
-        part_ps = p_escape, p_expr, p_name, p_branch, (p_text, text_re)
+        part_ps = p_escape, p_expr, p_group, (p_text, text_re)
     else:
         text_re = re.compile(r'.((?!\b[bBwWdD])[^\d{+-])*|')
-        part_ps = p_expr, p_name, p_branch, (p_text, text_re)
+        part_ps = p_expr, p_group, (p_text, text_re)
 
     start = input
     parts = []
@@ -551,12 +567,15 @@ def p_string(input, choice=False):
 
     return String(parts=parts, source=input-start), input
 
+def p_group(input):
+    return p_any(p_name_app, p_string_app, p_branch, input)
+
 def p_text(text_re, start):
     match, input = p_match(text_re, start)
     return Text(text=match.group(), source=input-start), input
 
 def p_choice_string(input):
-    return p_string(input, choice=True)
+    return p_string(input, group=True)
 
 def p_expr(start, top=True, head=True):
     match, input = p_match(r'((?P<op>[+-])\s*)' + ('?' if head else ''), start)
@@ -607,12 +626,39 @@ def p_term_cnst(start):
     return TermCnst(num=int(match.group()), source=input-start), input
 
 def p_name(start_input):
-    _, input = p_token('{{', start_input)
-    chan_match, input = p_match(r'((?P<ch>#((?!}})[^\s,])*)/)?', input)
-    name_match, input = p_match(r'[^{},:\\]*', input)
-    _, input = p_token('}}', input)
+    chan_match, input = p_match(r'((?P<ch>#((?!}}|/.*!)[^\s,])*)/)?', start_input)
+    name_match, input = p_match(r'[^{},:\\\s!]*', input)
     return Name(namespace=chan_match.group('ch'), name=name_match.group(),
                 source=input-start_input), input
+
+def p_name_app(start):
+    _, input = p_token('{{', start)
+    name, input = p_name(input)
+    suffixes = []
+    while True:
+        try: _, input = p_token('!', input)
+        except ParseFail: break
+        suffix, input = p_name(input)
+        suffixes.append(suffix)
+    _, input = p_token('}}', input)
+    return NameApp(name=name, suffixes=suffixes, source=input-start), input
+
+def p_string_app(start):
+    _, input = p_match('{\s*', start)
+
+    (group, input), group_start = p_group(input), input
+    string = String(parts=[group], source=group_start-input)
+
+    suffixes = []
+    while True:
+        try: _, input = p_match('\s*!\s*', input)
+        except: break
+        suffix, input = p_name(input)
+        suffixes.append(suffix)
+    if not suffixes: raise ParseFail
+
+    _, input = p_match('\s*}', input)
+    return StringApp(string=string, suffixes=suffixes, source=start-input), input
 
 def p_branch(start_input):
     choices = []
@@ -620,10 +666,8 @@ def p_branch(start_input):
     while True:
         choice, input = p_choice(input)
         choices.append(choice)
-        try:
-            _, input = p_match(r'\s*,\s*', input)
-        except ParseFail:
-            break
+        try: _, input = p_match(r'\s*,\s*', input)
+        except ParseFail: break
     _, input = p_match(r'\s*\}', input)
     return Branch(choices=choices, source=input-start_input), input
 
@@ -712,6 +756,94 @@ def p_any(*args):
         except ParseFail:
             continue
     raise ParseFail
+
+#===============================================================================
+# Static global definitions.
+
+rd_functions = {}
+
+def rd_func(*names, **kwds):
+    def rd_func_decorator(func):
+        if kwds.get('unicode', False):
+            func = unicode_rd_func(func)
+        for name in names:
+            assert name not in rd_functions, (name, func)
+            rd_functions[name] = func
+        return func
+    return rd_func_decorator
+
+def unicode_rd_func(func):
+    def unicode_rd_func_(context, *args):
+        def decoded(parts):
+            for part in parts:
+                if not part: continue
+                try: yield part.decode('utf8') if type(part) is str else part
+                except UnicodeDecodeError: yield part
+        for part in func(context, *(decoded(arg) for arg in args)):
+            yield part.encode('utf8') if type(part) is unicode else part
+    return unicode_rd_func_
+
+@rd_func('lowercase', 'lc', unicode=True)
+def rd_func_lowercase(context, parts):
+    return imap(string.lower, parts)
+
+@rd_func('uppercase', 'uc', unicode=True)
+def rd_func_uppercase(context, parts):
+    return imap(string.upper, parts)
+
+@rd_func('initial-capital', 'ic', unicode=True)
+def rd_func_initial_capital(context, parts):
+    parts = iter(parts)
+    part = next(parts)
+    return chain((part[0].upper() + part[1:],), parts)
+
+@rd_func('title-case', 'tc', unicode=True)
+def rd_func_title_case(context, parts):
+    start_word = True
+    for part in parts:
+        if start_word: part = part[:1].upper() + part[1:]
+        flags = re.U if type(part) is unicode else 0
+        def repl(m):
+            part = m.group()
+            return part[0].upper() + part[1:] if m.start() else part
+        yield re.sub(r"([^\W_]|')+", repl, part, 0, flags)
+        start_word = re.match(r'[^\W_]', part[-1:], flags) is None
+
+@rd_func('swap-case', 'sc', unicode=True)
+def rd_func_swap_case(context, parts):
+    for part in parts: yield part.swapcase()
+
+@rd_func('alternating-case', 'ac', unicode=True)
+def rd_func_alternating_case(context, parts):
+    odd = [False]
+    def map_char(char):
+        if char.isupper() or char.islower():
+            char = char.lower() if odd[0] else char.upper()
+            odd[0] = not odd[0]
+        return char
+    for part in parts:
+        yield ''.join(imap(map_char, part))
+
+@rd_func('random-case', 'rc', unicode=True)
+def rd_func_random_case(context, parts):
+    for part in parts: yield ''.join(
+        c.upper() if random.randrange(2) else c.lower() for c in part)
+
+@rd_func('hyphenate', 'hy', unicode=True)
+def rd_func_hyphenate(context, parts):
+    for part in parts: yield re.sub(r'\s+', '-', part, flags=re.U)
+
+@rd_func('underscore', 'us', unicode=True)
+def rd_func_hyphenate(context, parts):
+    for part in parts: yield re.sub(r'\s+', '_', part, flags=re.U)
+
+@rd_func('remove-spaces', 'rs', unicode=True)
+def rd_func_remove_spaces(context, parts):
+    for part in parts: yield re.sub(r'\s+', '', part, flags=re.U)
+
+@rd_func('remove-punctuation', 'rp', unicode=True)
+def rd_func_remove_punctuation(context, parts):
+    for part in parts: yield re.sub(r'([^\w\s]|_)+', '', part, flags=re.U)
 
 #===============================================================================
 # Maintenance of global definitions.
@@ -821,7 +953,7 @@ class Def(object):
                parse_string(self._body_str) if self._body_str is not None else \
                None
 
-    def postprocess(self, str_iter):
+    def postprocess(self, str_iter, context=None):
         return str_iter
     postprocess.is_identity = True
 
@@ -917,43 +1049,28 @@ class CaseAutoDef(Def):
         super(CaseAutoDef, self).__init__(
             name=new_key, body_ast=base._body_ast, body_str=base._body_str)
 
-    def postprocess(self, str_iter):
+    def postprocess(self, str_iter, context=None):
         def decoded():
             for part in str_iter:
                 if not part: continue
                 try: yield part.decode('utf8') if type(part) is str else part
                 except UnicodeDecodeError: yield part
-        for part in self.postprocess_(decoded()):
+        for part in self.postprocess_(decoded(), context):
             yield part.encode('utf8') if type(part) is unicode else part
 
-    def postprocess_(self, str_iter):
+    def postprocess(self, str_iter, context):
         old = ''.join(c for c in self._old_key if c.isupper() or c.islower())
         new = ''.join(c for c in self._new_key if c.isupper() or c.islower())
         assert new != old
 
         if new.isupper() and not old.isupper():
-            # Transform to all uppercase.
-            return imap(string.upper, str_iter)
+            return rd_func_uppercase(context, str_iter)
         elif new.islower() and not old.islower():
-            # Transform to all lowercase.
-            return imap(string.lower, str_iter)
+            return rd_func_lowercase(context, str_iter)
         elif new[0].isupper() and old[0].islower() and new[1:] == old[1:]:
-            # Capitalise the first character.
-            str_iter = iter(str_iter)
-            part = next(str_iter)
-            return chain((part[0].upper() + part[1:],), str_iter)
-
-        def title_iter():
-            # Capitalise each word.
-            start_word = True
-            for part in str_iter:
-                if start_word: part = part[:1].upper() + part[1:]
-                flags = re.U if type(part) is unicode else 0
-                def repl(m):
-                    return m.group().capitalize() if m.start() else m.group()
-                yield re.sub(r"([^\W_]|')+", repl, part, 0, flags)
-                start_word = re.match(r'[^\W_]', part[-1:], flags) is None
-        return title_iter()
+            return rd_func_initial_capital(context, str_iter)
+        else:
+            return rd_func_title_case(context, str_iter)
 
 global_defs = load_defs()
 
@@ -1290,4 +1407,12 @@ def traverse_ast(node, *types):
             for t_node in traverse_ast(choice, *types): yield t_node
     elif type(node) is Choice:
         for t_node in traverse_ast(node.string, *types): yield t_node
-
+    elif type(node) is NameApp and Name in types:
+        for t_node in traverse_ast(node.name, *types): yield t_node
+        for suffix in node.suffixes:
+            for t_node in traverse_ast(suffix, *types): yield t_node
+    elif type(node) is StringApp:
+        for t_node in traverse_ast(node.string, *types): yield t_node
+        if Name in types:
+            for suffix in node.suffixes:
+                for t_node in traverse_ast(suffix, *types): yield t_node
