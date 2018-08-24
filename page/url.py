@@ -295,24 +295,38 @@ def get_title_youtube(url, type, **kwds):
     if path != '/watch' or not query.get('v'): return
     video_id = query['v']
     try:
+        lang, _ = locale.getdefaultlocale()
+        hl = lang.split('_')[0] if lang != 'C' else None
+
         from youtube import youtube
-        result = youtube.videos().list(id=video_id,
+        result = youtube.videos().list(id=video_id, hl=hl,
             part='snippet,contentDetails').execute()['items'][0]
 
-        title = result['snippet']['title']
-        desc_full = result['snippet']['description']
+        dl = result['snippet'].get('defaultLanguage')
+        title_dl = result['snippet']['title']
+        title_hl = result['snippet']['localized']['title']
+        desc_full = result['snippet']['localized']['description']
         desc = format_description(desc_full)
         channel = result['snippet']['channelId']
         channel = result['snippet'].get('channelTitle', channel)
         duration = result['contentDetails']['duration']
         duration = iso8601_period_human(duration)
 
+        if hl and dl and title_hl != title_dl:
+            title_str = 'Title (%s): %s -- Title (%s): %s' % (
+                hl, format_title(title_hl), dl, format_title(title_dl))
+        else:
+            title_str = 'Title: %s' % format_title(title_dl)
+
+        desc_h = ('Description (%s)' % hl) if hl else 'Description'
+
         url_info = {
-            'title':        'Title: %s' % format_title(title),
-            'info':         'Duration: %s; Channel: %s; Description: "%s"'
-                            % (duration, channel, desc),
-            'proxy':        'Description: "%s"' % desc,
-            'proxy_full':   'Description: "%s"' % desc_full}
+            'title':      title_str,
+            'info':       'Duration: %s; Channel: %s; %s: "%s"'
+                          % (duration, channel, desc_h, desc),
+            'proxy':      '%s: "%s"' % (desc_h, desc),
+            'proxy_full': '%s: "%s"' % (desc_h, desc_full),
+        }
 
         rating = result['contentDetails'].get('contentRating')
         if rating and rating.get('ytRating') == 'ytAgeRestricted':
