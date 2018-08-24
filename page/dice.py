@@ -245,8 +245,11 @@ def e_branch(branch, context):
     return e_string(chosen.string, context)
 
 def e_name_app(name_app, context):
-    parts = e_name_(name_app.name, context)
-    return e_func_app(name_app.suffixes, parts, name_app, context)
+    try:
+        parts = e_name_(name_app.name, context)
+        return e_func_app(name_app.suffixes, parts, name_app, context)
+    except RollNameError:
+        return (str(name_app.source),)
 
 def e_string_app(string_app, context):
     parts = e_string(string_app.string, context)
@@ -276,8 +279,7 @@ def e_name_(name, context):
         raise RollNameError(name.name)
     with expanding_name(context):
         defn = context.defs[name.name]
-        for s in defn.postprocess(e_string(defn.body_ast, context), context):
-            yield s
+        return defn.postprocess(e_string(defn.body_ast, context), context)
 
 @contextmanager
 def expanding_name(context):
