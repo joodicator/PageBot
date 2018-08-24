@@ -277,10 +277,28 @@ def get_title_html(url, type, stream=None, **kwds):
                 'Unsupported content-encoding: "%s"' % content_enc)
 
     soup = BeautifulSoup(data, BS4_PARSER, from_encoding=charset)
+
+    # The page title according to the <title> tag.
     title = soup.find('title')
     if title:
         title = ''.join(re.sub(r'\s+', ' ', s) for s in title.strings).strip()
-        return { 'title': 'Title: %s' % format_title(title) }
+
+    # The page title according to the <meta> tags.
+    title_meta = soup.find('meta', attrs={'name': 'title'}) or \
+                 soup.find('meta', attrs={'name': 'og:title'})
+    if title_meta:
+        title_meta = title_meta.attrs.get('content')
+
+    if not title and not title_meta:
+        return
+    elif title and (not title_meta or title_meta in title):
+        title_str = 'Title: %s' % format_title(title)
+    elif title_meta and (not title or title in title_meta):
+        title_str = 'Title: %s' % format_title(title_meta)
+    else:
+        title_str = 'Title (meta): %s -- Title (primary): %s' % (
+            format_title(title_meta), format_title(title))
+    return { 'title': title_str }
 
 #-------------------------------------------------------------------------------
 def get_title_image(url, type, **kwds):
