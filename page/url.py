@@ -36,6 +36,7 @@ import identity
 link, install, uninstall = util.LinkSet().triple()
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:60.0) Gecko/20100101 Firefox/60.0'
+USER_AGENT_TEXT = 'Links (2.16; Linux 4.16.3-1-ARCH x86_64; GNU C 8.1; text)'
 ACCEPT_ENCODING = 'gzip, deflate'
 
 TIMEOUT_S = 20
@@ -51,7 +52,7 @@ CONF_FILE = 'conf/url.py'
 conf = util.fdict(CONF_FILE) if os.path.exists(CONF_FILE) else {}
 
 def get_default_headers():
-    yield 'User-Agent', USER_AGENT
+    yield 'User-Agent', USER_AGENT_TEXT
     yield 'Accept-Encoding', ACCEPT_ENCODING
     language, encoding = locale.getdefaultlocale()
     if language != 'C':
