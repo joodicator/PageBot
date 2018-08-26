@@ -649,7 +649,7 @@ def p_string_app(start):
     _, input = p_match('{\s*', start)
 
     (group, input), group_start = p_group(input), input
-    string = String(parts=[group], source=group_start-input)
+    string = String(parts=[group], source=input-group_start)
 
     suffixes = []
     while True:
@@ -660,7 +660,7 @@ def p_string_app(start):
     if not suffixes: raise ParseFail
 
     _, input = p_match('\s*}', input)
-    return StringApp(string=string, suffixes=suffixes, source=start-input), input
+    return StringApp(string=string, suffixes=suffixes, source=input-start), input
 
 def p_branch(start_input):
     choices = []
@@ -1170,7 +1170,15 @@ def h_roll_def_p(bot, id, target, args, full_msg):
     global_defs[chan] = defs
     save_defs()
 
-    message.reply(bot, id, target, 'Defined.')
+    msg = 'Defined.'
+    odefs = sorted(o for o in defs if o.lower() == name.lower() and o != name)
+    if odefs:
+        ostr = '\2, \2'.join(odefs[:-2] + ['\2 and \2'.join(odefs[-2:])])
+        msg += (' (Note: the definition%s \2%s\2, which %s distinct from'
+                ' \2%s\2, %s unchanged.)' % (('s', ostr, 'are', name, 'were')
+                if len(odefs) > 1 else ('', ostr, 'is', name, 'was')))
+
+    message.reply(bot, id, target, msg)
 
 #-------------------------------------------------------------------------------
 @link(('HELP', 'roll-def-'), ('HELP', 'rd-'))
