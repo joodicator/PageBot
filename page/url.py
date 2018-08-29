@@ -91,12 +91,26 @@ def h_help_url(bot, reply, args):
     ' called. Further "!url" commands (up to %s in total) may be given on the'
     ' same line.' % CMDS_PER_LINE_MAX)
 
+    if 'dice' in sys.modules and bot in sys.modules['dice'].link.installed_modes:
+        reply('url !roll ...\2 or \2!url !r ...',
+        'Executes the \2!roll\2 command as usual, then executes the \2!url\2'
+        ' command on its result, analysing any URLs present in it. See'
+        ' \2!help roll\2 for more information.')
+
 @link('!url', '!title', ('ACTION', '!url'), ('ACTION', '!title'))
 @multi('!url', '!title', limit=CMDS_PER_LINE_MAX, prefix=False)
 def h_url(bot, id, target, args, full_msg, reply):
     channel = (target or ('%s!%s@%s' % id)).lower()
 
     if args:
+        dice = sys.modules.get('dice')
+        match = re.match(r'!r(oll)?\s+(?P<args>.*)', args)
+        if match and dice and bot in dice.link.installed_modes:
+            args = match.group('args')
+            args = dice.roll(bot, id, target, args, error_reply=reply)
+            if args is None: return
+            reply(args)
+
         urls = url_collect.extract_urls(args)
         yield sign('URL_CMD_URLS', bot, urls, target, id, full_msg)
     elif url_collect.history[channel]:
@@ -337,7 +351,9 @@ def get_title_youtube(url, type, **kwds):
         else:
             title_str = 'Title: %s' % format_title(title_dl)
 
-        desc_h = ('Description (%s)' % hl) if hl else 'Description'
+        desc_h = ('Description (%s)' % hl) \
+                 if hl and result['snippet']['description'] != desc_full else \
+                 'Description'
 
         url_info = {
             'title':      title_str,

@@ -14,6 +14,7 @@ import time
 import json
 import datetime
 import string
+import sys
 
 from untwisted.magic import sign
 
@@ -97,6 +98,12 @@ def h_help_roll(bot, reply, args, bridge):
         ' preferably in a private message. See also: \2!help missed-rolls\2.'
         if not bridge else ''))
 
+        if 'url' in sys.modules and bot in sys.modules['url'].link.installed_modes:
+            reply('url !roll ...\2 or \2!url !r ...',
+            'Executes the \2!roll\2 command as usual, then executes the \2!url\2'
+            ' command on its result, analysing any URLs present in it. See'
+            ' \2!help url\2 for more information.')
+
 #-------------------------------------------------------------------------------
 class UserError(Exception):
     pass
@@ -104,23 +111,33 @@ class UserError(Exception):
 @link('!roll', '!r', action=False)
 @link(('ACTION', '!roll'), ('ACTION', '!r'), action=True)
 def h_roll(bot, id, target, args, full_msg, action):
-    if target is not None:
-        defs = AutoDefs(global_defs.get(target.lower()))
-    else:
-        defs = AutoDefs(PrivateDefs(id))
-    def reply(rmsg=None, from_name=None, **kwds):
+    def reply(rmsg):
+        message.reply(bot, id, target, rmsg, prefix=False)
+        bot.drive('runtime.later', sign('PROXY_MSG', bot, id, target, rmsg))
+    return roll(bot, id, target, args, action, reply)
+
+def roll(bot, id, target, args, action=False, reply=None, error_reply=None):
+    reply = reply or (lambda rmsg: rmsg)
+    error_reply = error_reply or reply
+    def reply_(rmsg=None, from_name=None, prefix=True):
         if rmsg is None: rmsg = from_name(id.nick)
-        message.reply(bot, id, target, rmsg, **kwds)
-    return h_roll_defs(bot, id, target, args, defs, action, reply)
+        if prefix and target is not None: rmsg = '%s: %s' % (id.nick, rmsg)
+        return reply(rmsg)
+    def error_reply_(rmsg=None, from_name=None, prefix=True):
+        if rmsg is None: rmsg = from_name(id.nick)
+        if prefix and target is not None: rmsg = '%s: %s' % (id.nick, rmsg)
+        return error_reply(rmsg)
+    defs = PrivateDefs(id) if target is None else global_defs.get(target.lower())
+    defs = AutoDefs(defs)
+    return h_roll_defs(bot, id, target, args, defs, action, reply_, error_reply_)
 
 @link(('BRIDGE','!roll'), ('BRIDGE','!r'), action=False)
 @link(('BRIDGE','ACTION','!roll'), ('BRIDGE','ACTION','!r'), action=True)
 def h_simple_roll(bot, name, target, args, reply, action):
     id = util.ID(name, '*', '*')
-    defs = None
-    return h_roll_defs(bot, id, target, args, defs, action, reply)
+    return h_roll_defs(bot, id, target, args, None, action, reply, reply)
 
-def h_roll_defs(bot, id, target, args, defs, action, reply):
+def h_roll_defs(bot, id, target, args, defs, action, reply, error_reply):
     try:
         msg, rolls = eval_string(
             parse_string(args), defs=defs, user_id=id, irc=True,
@@ -129,16 +146,17 @@ def h_roll_defs(bot, id, target, args, defs, action, reply):
             max_stack_depth    = MAX_STACK_DEPTH)
 
         if target and target.startswith('#'):
-            yield sign('DICE_ROLLS', bot, id, target, rolls, msg)
+            bot.drive('DICE_ROLLS', bot, id, target, rolls, msg)
 
         if action:
-            reply(from_name=lambda name: '* %s %s' % (name, msg), prefix=False)
+            from_name = lambda name: '* %s %s' % (name, msg)
+            return reply(from_name=from_name, prefix=False)
         else:
-            reply(msg)
+            return reply(msg)
     except UserError as e:
-        reply('Error: %s' % e.message)
+        return error_reply('Error: %s' % e.message)
     except Exception as e:
-        reply('Error: %r' % e)
+        error_reply('Error: %r' % e)
         raise
 
 #===============================================================================
@@ -201,15 +219,13 @@ def eval_string_parts(
 #-------------------------------------------------------------------------------
 # Evaluation of AST nodes below the top level or after preprocessing.
 def e_string(string, context):
-    return chain(*(e_part(part, context) for part in string.parts))
-
-def e_part(part, context):
-    if   isinstance(part, (Text, Escape)): return e_text(part, context)
-    elif isinstance(part, Expr):           return e_expr(part, context)
-    elif isinstance(part, NameApp):        return e_name_app(part, context)
-    elif isinstance(part, StringApp):      return e_string_app(part, context)
-    elif isinstance(part, Branch):         return e_branch(part, context)
-    else:                                  assert False
+    return chain(*(
+        e_text(part, context)       if isinstance(part, (Text, Escape)) else
+        e_expr(part, context)       if isinstance(part, Expr)           else
+        e_name_app(part, context)   if isinstance(part, NameApp)        else
+        e_string_app(part, context) if isinstance(part, StringApp)      else
+        e_branch(part, context)     if isinstance(part, Branch)         else
+    None for part in string.parts))
 
 def e_text(text, context):
     yield text.text
@@ -256,14 +272,11 @@ def e_string_app(string_app, context):
     return e_func_app(string_app.suffixes, parts, string_app, context)
 
 def e_func_app(func_names, value_parts, node, context):
-    try:
-        for func_name in func_names:
-            func = rd_functions.get(func_name.name)
-            if func is None: raise RollNameError(str(func_name.source))
-            value_parts = func(context, value_parts)
-        return value_parts
-    except RollNameError:
-        return (str(node.source),)
+    for func_name in func_names:
+        func = rd_functions.get(func_name.name)
+        if func is None: return (str(node.source),)
+        value_parts = func(context, value_parts)
+    return value_parts
 
 def e_name_(name, context):
     if name.namespace is not None:
@@ -277,9 +290,12 @@ def e_name_(name, context):
         context = context._replace(defs=AutoDefs(global_defs.get(chan_lower)))
     if context.defs is None or name.name not in context.defs:
         raise RollNameError(name.name)
-    with expanding_name(context):
-        defn = context.defs[name.name]
-        return defn.postprocess(e_string(defn.body_ast, context), context)
+    def e_name_gen():
+        with expanding_name(context):
+            defn = context.defs[name.name]
+            for s in defn.postprocess(e_string(defn.body_ast, context), context):
+                yield s
+    return e_name_gen()
 
 @contextmanager
 def expanding_name(context):
