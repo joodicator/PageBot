@@ -161,7 +161,7 @@ class Report(Core):
     def load_soup(self, soup):
         rows = soup.find_all(name='tr')
         if len(rows) < 1: raise UnreadableSoup(
-            'No <tr> elements found in document.')
+            'No <tr> elements found in document:\n%s' % soup)
         title = rows[0].text.strip()
         match = re.match(r'(?P<name>.*), turn (?P<turn>\d+)', title)
         if match is None: raise UnreadableSoup(
@@ -172,7 +172,9 @@ class Report(Core):
             self.players.add(Player(index=index, soup=rows[index]))
 
     def show_irc(self, format=True):
-        show_players = [p for p in self.players if not AI.match(p.status)]
+        show_players = [
+            p for p in self.players if not (
+            AI.match(p.status) or ELIMINATED.match(p.status))]
         show_players = sorted(show_players, key=lambda p: p.index)
         return '%s, turn %s [%s]' % (
             ('\2%s\2' if format else '%s') % self.name,
@@ -237,7 +239,6 @@ class Player(object):
             self.name.split(',', 1)[0],
             'played' if PLAYED.match(self.status) else
             'unfinished' if UNFINISHED.match(self.status) else
-            'eliminated' if ELIMINATED.match(self.status) else
             self.status)
 
     def id(self):
