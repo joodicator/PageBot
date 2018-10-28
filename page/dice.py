@@ -1100,10 +1100,11 @@ def h_help_roll_def(bot, reply, args):
     reply(None, 'See: \2!help rd+\2, \2!help rd-\2, and \2!help rd?\2.')
 
 @link('!roll-def', cmd='!roll-def')
-@link('!rd',       cmd='!rd')
-def h_roll_def(bot, id, target, args, full_msg, cmd):
+@link('!rd',       cmd='!rd', pre='\2!r\2, ')
+def h_roll_def(bot, id, target, args, full_msg, cmd, pre=''):
     message.reply(bot, id, target, 'This is not a valid command. Perhaps you'
-    ' meant: \2%(cmd)s+\2, \2%(cmd)s-\2, or \2%(cmd)s?\2.' % {'cmd': cmd})
+    ' meant: %(pre)s\2%(cmd)s+\2, \2%(cmd)s-\2, or \2%(cmd)s?\2.'
+    % {'cmd': cmd, 'pre': pre})
 
 @link('!r+', cor='!rd+')
 @link('!r-', cor='!rd-')
