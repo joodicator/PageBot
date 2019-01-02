@@ -262,7 +262,8 @@ def e_branch(branch, context):
 
 def e_name_app(name_app, context):
     try:
-        parts = e_name_(name_app.name, context)
+        parts = e_name_(name_app.name.name, name_app.name.namespace,
+                        name_app.name, context)
         return e_func_app(name_app.suffixes, parts, name_app, context)
     except RollNameError:
         return (str(name_app.source),)
@@ -278,21 +279,21 @@ def e_func_app(func_names, value_parts, node, context):
         value_parts = func(context, value_parts)
     return value_parts
 
-def e_name_(name, context):
-    if name.namespace is not None:
+def e_name_(name, namespace, ast_node, context):
+    if namespace is not None:
         if context.user_id is None:
-            raise RollNameError(str(name.source))
-        chan_lower = name.namespace.lower()
+            raise RollNameError(str(ast_node.source))
+        chan_lower = namespace.lower()
         if context.user_id.nick.lower() not in \
         map(str.lower, channel.track_channels[chan_lower]):
             raise UserError('To use "%s", you and this bot must both be in %s.'
-            % (abbrev_middle(str(name.source)), abbrev_right(name.namespace)))
+            % (abbrev_middle(str(ast_node.source)), abbrev_right(namespace)))
         context = context._replace(defs=AutoDefs(global_defs.get(chan_lower)))
-    if context.defs is None or name.name not in context.defs:
-        raise RollNameError(name.name)
+    if context.defs is None or name not in context.defs:
+        raise RollNameError(name)
     def e_name_gen():
         with expanding_name(context):
-            defn = context.defs[name.name]
+            defn = context.defs[name]
             for s in defn.postprocess(e_string(defn.body_ast, context), context):
                 yield s
     return e_name_gen()
@@ -520,7 +521,7 @@ def roll_dice_def(dice, name, term, context, reduce=False):
 
 def roll_dice_def_(name, term, context):
     o_str, o_len = StringIO(), 0
-    for s in e_name_(name, context):
+    for s in e_name_(name, None, term, context):
         o_str.write(s)
         o_len += len(s)
         if o_len > MAX_DICE_DEF_LEN: raise UserError('Expanding the custom die'
