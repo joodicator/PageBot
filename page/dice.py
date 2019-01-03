@@ -533,7 +533,7 @@ def roll_dice_def_(name, term, context):
     o_str = o_str.getvalue()
     try: o_int = int(o_str)
     except ValueError: raise UserError('Expanding the custom die definition for'
-        '"%s" produced a string which was not recognised as an integer: "%s".'
+        ' "%s" produced a string which was not recognised as an integer: "%s".'
         % (abbrev_middle(str(term.source)), o_str))
     return o_int
 
