@@ -13,7 +13,7 @@ import datetime
 import time
 import re
 
-from untwisted.magic import sign
+from untwisted.magic import sign, hold
 
 from message import reply
 from runtime import later
@@ -24,6 +24,7 @@ import runtime
 import channel
 import util
 import auth
+import identity
 
 
 #==============================================================================#
@@ -588,6 +589,16 @@ def h_tell_undo(bot, id, target, args, full_msg):
         reply(bot, id, target, 'Done.')
 
 #==============================================================================#
+@link('SELF_JOIN')
+def h_self_join(bot, chan):
+    while True:
+        _event, (_bot, _chan, _nicks, _mnicks) = yield hold(bot, 'NAMES_SYNC')
+        if _chan.lower() == chan.lower(): break
+    nicks = sorted(n for n in _nicks if n.lower() != bot.nick.lower())
+    ids = yield identity.get_ids(bot, nicks)
+    for id in ids:
+        if id is not None: notify_msgs(bot, id, chan)
+
 @link('OTHER_JOIN')
 def h_other_join(bot, id, chan):
     notify_msgs(bot, id, chan)

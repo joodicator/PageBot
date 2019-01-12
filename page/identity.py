@@ -185,7 +185,7 @@ get_id_cache = {}
 # yield get_ids(bot, [nick1, ...]) -> [ID(nick1,user1,host1) or None, ...]
 # This is more efficient than multiple separate invocations of get_id.
 @util.mfun(link, 'identity.get_ids')
-def get_ids(bot, nicks, ret, timeout_const_s=15, timeout_linear_s=2):
+def get_ids(bot, nicks, ret, timeout_const_s=30, timeout_linear_s=5):
     for nick, (id, ctime) in get_id_cache.items():
         now = time.time()
         if id is not None and ctime < now-10 or ctime < now-300:
