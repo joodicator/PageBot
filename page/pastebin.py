@@ -3,6 +3,7 @@
 
 import urllib
 
+import util
 
 P_PUBLIC     = 0
 P_UNLISTED   = 1
@@ -39,6 +40,6 @@ def post(
     if paste_format: data['api_paste_format'] = paste_form
     if paste_expire: data['api_paste_expire_date'] = paste_expire
 
-    return urllib.urlopen(
+    return util.ext_urlopen(
         'http://pastebin.com/api/api_post.php',
         urllib.urlencode(data)).read()

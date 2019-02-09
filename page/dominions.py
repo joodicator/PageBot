@@ -144,7 +144,7 @@ class Report(Core):
 
     def load_url(self, url):
         try:
-            stream = urllib2.urlopen(url)
+            stream = util.ext_urlopen(url)
             encoding = stream.info().getparam('charset')
             soup = BeautifulSoup(stream, BS4_PARSER, from_encoding=encoding)
             self.load_soup(soup)

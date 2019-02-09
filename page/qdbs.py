@@ -165,7 +165,7 @@ class Private(Configuration):
         return quotes
     
     def soup(self):
-        stream = urllib2.urlopen(urllib2.Request(self.admin_url, headers={
+        stream = util.ext_urlopen(urllib2.Request(self.admin_url, headers={
             'Cookie': 'qdb_username=%s; qdb_password=%s' % (
                 self.qdb_username, self.qdb_password)}))
         encoding = stream.info().getparam('charset')
@@ -236,7 +236,7 @@ class Public(Configuration):
         return quotes, qdb_title
     
     def soup(self):
-        stream = urllib2.urlopen(self.index_url)
+        stream = util.ext_urlopen(self.index_url)
         encoding = stream.info().getparam('charset')
         return BeautifulSoup(stream, BS4_PARSER, from_encoding=encoding)
 

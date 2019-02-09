@@ -303,6 +303,6 @@ def meta_topics_iter(category):
 def url_soup(url):
     request = urllib2.Request(url)
     request.add_header('User-Agent', USER_AGENT)
-    stream = urllib2.urlopen(request)
+    stream = util.ext_urlopen(request)
     charset = stream.info().getparam('charset')
     return BeautifulSoup(stream, BS4_PARSER, from_encoding=charset)

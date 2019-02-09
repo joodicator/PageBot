@@ -8,6 +8,8 @@ import urllib2
 import json
 import ssl
 
+import util
+
 CLIENT_ID_FILE = 'conf/imgur_client_id.txt'
 API_URL = 'https://api.imgur.com/3'
 
@@ -31,7 +33,7 @@ def api_request(rel_url, **req_kwds):
 
 def api_result(rel_url, opener=None, **req_kwds):
     req = api_request(rel_url, **req_kwds)
-    open = urllib2.urlopen if opener is None else opener.open
+    open = util.ext_urlopen if opener is None else opener.open
     res = json.load(open(req, context=ssl_context))
     if not res['success']:
         raise ImgurError(res['data'])

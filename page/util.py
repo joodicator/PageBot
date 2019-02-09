@@ -10,6 +10,8 @@ import sys
 import re
 import urllib2
 
+EXT_URL_DEFAULT_TIMEOUT = 12
+
 ID = namedtuple('ID', ('nick', 'user', 'host'))
 ID.__getstate__ = lambda *a, **k: None
 
@@ -532,9 +534,12 @@ def same_user(id1, id2):
             id1.user.startswith('~') or id2.user.startswith('~'))
 
 #===============================================================================
-# Extensions to urllib2's URL openers and handlers.
+# Extensions to urllib2's classes and methods.
 
-def ext_url_opener(bind_host=None, ssl_context=None, handlers=()):
+def ext_url_opener(
+    bind_host=None, ssl_context=None, handlers=(),
+    default_timeout=EXT_URL_DEFAULT_TIMEOUT,
+):
     if bind_host is not None:
         saddr = (bind_host, 0)
         h_handler = ExtHTTPHandler(source_address=saddr)
@@ -542,8 +547,14 @@ def ext_url_opener(bind_host=None, ssl_context=None, handlers=()):
     else:
         h_handler = urllib2.HTTPHandler()
         s_handler = urllib2.HTTPSHandler(context=ssl_context)
-    return urllib2.build_opener(
-        h_handler, s_handler, *handlers)
+    opener = urllib2.build_opener(h_handler, s_handler, *handlers)
+    def ext_open(url, data=None, timeout=default_timeout, *args, **kwds):
+        return base_open(url, data, timeout, *args, **kwds)
+    opener.open, base_open = ext_open, opener.open
+    return opener
+
+default_ext_url_opener = ext_url_opener()
+ext_urlopen = default_ext_url_opener.open
 
 class AbstractExtHTTPHandler:
     def __init__(self, *args, **kwds):
