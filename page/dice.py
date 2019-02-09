@@ -597,7 +597,7 @@ def p_choice_string(input):
     return p_string(input, group=True)
 
 def p_expr(start, top=True, head=True):
-    match, input = p_match(r'((?P<op>[+-])\s*)' + ('?' if head else ''), start)
+    match, input = p_match(r'((?P<op>[+-])' + (')?' if head else '\s*)'), start)
     op = match.group('op') or '+'
     term, input = p_any(p_term_dice, p_term_keep, p_term_cnst, input)
     try:
@@ -606,16 +606,8 @@ def p_expr(start, top=True, head=True):
         tail = None
     expr = Expr(op=op, term=term, expr=tail, source=input-start)
 
-    def any_dice(expr):
-        while expr is not None:
-            if isinstance(expr.term, (TermDice, TermDiceC, TermDiceD)):
-                return True
-            if isinstance(expr.term, TermKeep) and any_dice(expr.term.expr):
-                return True
-            expr = expr.expr
-        return False
-
-    return (expr, input) if not top or any_dice(expr) else \
+    any_dice = any(traverse_ast(expr, TermDice, TermDiceC, TermDiceD))
+    return (expr, input) if not top or any_dice else \
            (Text(text=str(expr.source), source=expr.source), input)
 
 def p_term_dice(start):
