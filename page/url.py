@@ -318,7 +318,8 @@ def get_title_html(url, type, stream=None, **kwds):
 #-------------------------------------------------------------------------------
 def get_title_image(url, type, **kwds):
     title = google_image_best_guess(url, **kwds)
-    title = 'Best guess: %s' % (format_title(title) if title else '(none)')
+    title = 'Possibly related: %s' % (
+        format_title(title) if title else '(no result)')
     return { 'title': title }
 
 #-------------------------------------------------------------------------------
@@ -504,7 +505,7 @@ def google_image_best_guess(url, use_cache=False, **kwds):
     if use_cache and url in gibg_cache:
         return gibg_cache[url]
 
-    PHRASE = 'Best guess for this image:'
+    PHRASE = 'Possible related search:'
     soup = google_image_title_soup(url, **kwds)
     node = soup.find(text=re.compile(re.escape(PHRASE)))
 
@@ -517,8 +518,9 @@ def google_image_best_guess(url, use_cache=False, **kwds):
 
 def google_image_title_soup(url, bind_host=None, **kwds):
     request = urllib2.Request('https://www.google.com/searchbyimage?'
-        + urllib.urlencode({'image_url':url, 'safe':'off'}))
-    request.add_header('Referer', 'https://www.google.com/imghp?hl=en&tab=wi')
+        + urllib.urlencode({'image_url':url, 'btnG':'Search+by+image',
+        'encoded_image':'', 'image_content':'', 'filename':'', 'hl':'en-US'}))
+    request.add_header('Referer', 'https://www.google.com/')
     request.add_header('User-Agent', USER_AGENT)
 
     opener = get_opener(bind_host=bind_host)

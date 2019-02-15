@@ -553,8 +553,8 @@ def ext_url_opener(
     opener.open, base_open = ext_open, opener.open
     return opener
 
-default_ext_url_opener = ext_url_opener()
-ext_urlopen = default_ext_url_opener.open
+def ext_urlopen(url, data=None, timeout=EXT_URL_DEFAULT_TIMEOUT, *args, **kwds):
+    return urllib2.urlopen(url, data, timeout, *args, **kwds)
 
 class AbstractExtHTTPHandler:
     def __init__(self, *args, **kwds):
