@@ -36,23 +36,10 @@ MSG_MIN  = (1, 1440) # At least 1 message in the last 1440*30s (12 hours).
 MSG_MAX  = (30, 5)   # At most 30 messages in the last 5*30s (2.5 min).
 
 #===============================================================================
-class MetaTopic(object):
-    __slots__ = 'name', '_topics'
-    def __init__(self, name):
-        self.name = name
-    def __repr__(self):
-        return 'MetaTopic(%r)' % self.name
-    @property
-    def topics(self):
-        if not hasattr(self, '_topics'):
-            self._topics = meta_topics(self.name)
-        return self._topics
-
-#===============================================================================
 link = util.LinkSet()
 
 def load_conf():
-    table = util.table('conf/quora.py', globals={'meta': MetaTopic})
+    table = util.table('conf/quora.py')
     return { r.channel.lower(): r for r in table if r.daily_frequency > 0 }
 
 conf = load_conf()
@@ -60,8 +47,12 @@ conf = load_conf()
 def load_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE) as file:
-            return json.load(file)
-    return {'used_ids': []}
+            state = json.load(file)
+    else:
+        state = {}
+    if 'used_ids' not in state: state['used_ids'] = []
+    if 'cookies' not in state: state['cookies'] = {}
+    return state
 
 def save_state(state):
     if state:
@@ -74,6 +65,8 @@ state = load_state()
 
 # msg_count[chan.lower()] = [msgs0, msgs1, ...]
 msg_count = {c: [0] * max(MSG_MIN[1], MSG_MAX[1]) for c in conf}
+
+quora_login_cookies = {}
 
 #===============================================================================
 def install(bot):
@@ -123,7 +116,8 @@ def h_quora_post(bot, chan):
     question = random_question(
         exclude_ids    = state['used_ids'],
         exclude_topics = exclude_topics,
-        source_topics  = source_topics)
+        source_topics  = source_topics,
+        credentials    = (conf[chan].email, conf[chan].password))
     bot.send_msg(chan, question.text)
 
     state['used_ids'].append(question.id)
@@ -201,67 +195,66 @@ class Question(object):
         return re.sub(
             r'\[(?P<tag>\w+)[\w\s]*\](?P<body>.*?)\[/(?P=tag)\]', sub, text)
 
-def random_question(exclude_ids=(), exclude_topics=(), source_topics=()):
+def random_question(
+    source_topics, credentials, exclude_ids=(), exclude_topics=()
+):
     while isinstance(source_topics, tuple):
         topics = []
         for topic in source_topics:
-            if isinstance(topic, MetaTopic):
-                topics.extend(topic.topics)
-            else:
-                topics.append(topic)
+            topics.append(topic)
         source_topics = random.choice(topics)
 
-    if not source_topics:
-        return random_question_all(exclude_ids, exclude_topics)
-
     exclude_topics = map(str.lower, exclude_topics)
-    for q, n in izip(topic_questions(source_topics), count()):
+    questions = topic_questions(source_topics, credentials)
+    for q, n in izip(questions, count()):
         if n < TOPIC_Q_MAX and random.random() > 1.0/TOPIC_Q_MEAN: continue
         if q.id in exclude_ids: continue
         if any(t.lower() in exclude_topics for t in q.topics): continue
         return q
 
-def random_question_all(exclude_ids=(), exclude_topics=()):
-    exclude_topics = map(str.lower, exclude_topics)
-    page = min(1 + int(random.expovariate(1.0/ALL_PAGE_MEAN)), ALL_PAGE_MAX)
-    soup = url_soup('https://www.quora.com/sitemap/recent?page_id=%d' % page)
-    qs = soup.find(class_='ContentWrapper') \
-             .find('div', recursive=False) \
-             .find('div', recursive=False).find_all('a')
-    while qs:
-        index = random.randrange(len(qs))
-        q = qs.pop(index)
-        q = Question(url=q['href'], text=q.text.strip())
-        if q.id in exclude_ids: continue
-        if any(t.lower() in exclude_topics for t in q.topics): continue
-        return q
-
-# Returns an interator of Question instances taken from the "all questions" feed
+# Returns an interator of Question instances taken from the "Answer" feed
 # of the given topic.
-TOPIC_QUESTIONS_URL = 'https://www.quora.com/topic/%s/all_questions' 
-def topic_questions(topic):
+HOME_URL = 'https://www.quora.com/?prevent_redirect=1'
+TOPIC_QUESTIONS_URL = 'https://www.quora.com/topic/%s/top_questions' 
+def topic_questions(topic, (email, password)):
     with phantomjs.pool.get_driver() as driver:
+        # Log in, if necessary, using configured credentials.
+        for cookie in state['cookies'].get(email, ()):
+            driver.add_cookie(cookie)
+        driver.get(HOME_URL)
+        driver.implicitly_wait(10)
+        element = driver.find_element_by_xpath(
+            "//div[contains(@class, 'LoggedOutHomeLogin')] |"
+            "//div[contains(@class, 'LoggedInSiteHeader')]")
+        if 'LoggedOutHomeLogin' in element.get_attribute('class'):
+            login = element.find_element_by_tag_name('form')
+            login.find_element_by_name('email').send_keys(email)
+            login.find_element_by_name('password').send_keys(password)
+            login.find_element_by_class_name('submit_button').click()
+            assert driver.find_elements_by_class_name('LoggedInSiteHeader')
+        state['cookies'][email] = list(driver.get_cookies())
+
+        # Load the "Top Questions" list for this topic.
         driver.get(TOPIC_QUESTIONS_URL % re.sub(r'\W+', '-', topic))
-
-        # If this topic has been "merged into" another topic, redirect to it.
-        divs = driver.find_elements_by_class_name('TopicUnmergeSentence')
-        if divs:
-            a = divs[0].find_element_by_class_name('TopicNameLink')
-            topic = re.search(r'/topic/([^/]+)/', a.get_attribute('href')).group(1)
-            driver.get(TOPIC_QUESTIONS_URL % topic)
-
         seen_ids = set()
+        q_count = 0
         while True:
+            # Wait for more questions to load.
+            try:
+                WebDriverWait(driver, timeout=10, poll_frequency=0.2).until(
+                    lambda d: len(driver.find_elements_by_class_name(
+                        'question_link')) > q_count)
+            except TimeoutException:
+                break
+
             # Yield all currently loaded questions that have not yet been seen.
-            qlist = driver.find_element_by_class_name('TopicAllQuestionsList')
-            qs = qlist.find_elements_by_class_name('pagedlist_item')
+            qs = driver.find_elements_by_class_name('question_link')
             any_new = False
             for q in qs:
                 if q.get_attribute('id') in seen_ids: continue
                 seen_ids.add(q.get_attribute('id'))
-                a = q.find_element_by_class_name('question_link')
-                q_id = re.sub(r'^.*/', '', a.get_attribute('href'))
-                q_text = a.get_property('innerText').strip()
+                q_id = re.sub(r'^.*/', '', q.get_attribute('href'))
+                q_text = q.get_property('innerText').strip()
                 yield Question(id=q_id, text=q_text)
                 any_new = True
 
@@ -269,35 +262,9 @@ def topic_questions(topic):
             # or there is some error; in any case, stop yielding questions.
             if not any_new: break
 
-            # Click the "More" button to load more questions and wait for the
-            # loading indicator to appear and then (after up to 10s) disappear.
-            m_div = qlist.find_element_by_class_name('PagedListMoreButton')
-            m_id = m_div.get_attribute('id')
-            m_id = re.sub(r'_paged_list_more_button$', '', m_id)
-            m_load = m_div.find_element_by_id(m_id + '_loading')
-
-            driver.execute_script(
-                'document.getElementById("%s_more").click();' % m_id)
-            try:
-                WebDriverWait(driver, timeout=0.5, poll_frequency=0.005).until(
-                    lambda d: m_load.value_of_css_property('display') != 'none')
-            except TimeoutException:
-                pass
-            else:
-                WebDriverWait(driver, timeout=20, poll_frequency=0.1).until(
-                    lambda d: m_load.value_of_css_property('display') == 'none')
-
-# Returns a tuple of topics in the given category, as listed in Quora's sitemap.
-def meta_topics(category):
-    return tuple(meta_topics_iter(category))
-
-def meta_topics_iter(category):
-    soup = url_soup('https://www.quora.com/sitemap')
-    dt = soup.find('dt', string=category)
-    if dt is None: raise ValueError('Topic category "%s" not found.' % category)
-    for dd in dt.find_parent('dl').find_all('dd'):
-        link = dd.find(class_='TopicNameLink')
-        yield re.search(r'/topic/([^/]+)', link['href']).group(1).strip()
+            # Scroll to the bottom of the page and wait for more questions to load.
+            q_count = len(driver.find_elements_by_class_name('question_link'))
+            driver.execute_script('window.scrollTo(0, document.body.scrollHeight);')
 
 #===============================================================================
 def url_soup(url):

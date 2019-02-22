@@ -94,6 +94,8 @@ class DriverPool(object):
             if self.debug: driver.log('returned')
             self.removed_drivers.remove(driver.__weakref__)
             self.drivers.append(driver)
+            driver.get('about:blank')
+            driver.delete_all_cookies()
             threading.Thread(
                 name='DriverPool.destroy_driver(%r)' % driver,
                 target=self.destroy_driver,
