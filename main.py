@@ -1,7 +1,8 @@
 #!/usr/bin/env python2.7
 
 import sys, os, os.path
-os.chdir(os.path.dirname(__file__))
+if os.path.dirname(__file__):
+    os.chdir(os.path.dirname(__file__))
 sys.path[0:0] = ['.', 'ameliabot', 'page', 'lib']
 
 assert sys.version_info[:2] == (2, 7), 'Python 2.7 is required.'
