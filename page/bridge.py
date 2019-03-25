@@ -60,8 +60,7 @@ def h_help_date_short(bot, reply, args):
 def h_date_time(bot, name, target, args, reply):
     reply(
         datetime.utcnow().strftime('%H:%M:%S %a %d/%b/%Y UTC'),
-        prefix = False,
-        no_bridge = True)
+        prefix = False)
 
 
 @link('HELP', ('BRIDGE', 'HELP'))
