@@ -171,12 +171,13 @@ def get_title_proxy(url):
     url = utf8_url_to_ascii(url)
 
     request = urllib2.Request(url)
-    for header in default_headers:
-        request.add_header(*header)
 
-    host = request.get_host()
+    host = request.get_host().split(':', 1)[0]
     if not is_global_address(host): raise PageURLError(
         'Access to this host is denied: %s.' % host)
+
+    for header in default_headers:
+        request.add_header(*header)
 
     exceptions = []
     for bind_host in conf.get('bind_hosts', [None]):
