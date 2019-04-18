@@ -1149,7 +1149,7 @@ def h_roll_def_p(bot, id, target, args, full_msg):
             else '!(~.*|%s)@%s$' % (re.escape(id.user), re.escape(id.host)))
         udefs = sum(len(d) for (c,d) in global_defs.iteritems() if u.search(c))
     else:
-        if len(defs) > DEF_MAX_PER_CHAN: return message.reply(bot, id, target,
+        if len(defs) >= DEF_MAX_PER_CHAN: return message.reply(bot, id, target,
             'Error: this channel has too many definitions - no more than %d are'
             ' permitted. See \2!help roll-def-\2 to delete existing definitions.'
             % DEF_MAX_PER_CHAN)
