@@ -10,6 +10,7 @@ import os.path
 from bs4 import BeautifulSoup
 
 from untwisted.magic import sign
+from util import recursive_encode
 import channel
 import runtime
 import message
@@ -60,13 +61,12 @@ class State(object):
                     jdict = json.load(file)
             except:
                 traceback.print_exc()
-        jdict = util.recursive_encode(jdict, 'utf-8')
+        jdict = recursive_encode(jdict, 'utf-8')
         self.load_jdict(jdict)
 
     def save_path(self, path):
-        data = json.dumps(self.save_jdict(), indent=4, ensure_ascii=False)
         with open(path, 'w') as file:
-            file.write(data)
+            json.dump(self.save_jdict(), file, indent=4)
 
     def load_jdict(self, jdict):
         all_urls = set()
@@ -166,7 +166,7 @@ class Report(Core):
         match = re.match(r'(?P<name>.*), turn (?P<turn>\d+)', title)
         if match is None: raise UnreadableSoup(
             'Cannot parse title: %r' % title)
-        self.name = match.group('name')
+        self.name = recursive_encode(match.group('name'), 'utf8')
         self.turn = int(match.group('turn'))
         for index in range(1, len(rows)):
             self.players.add(Player(index=index, soup=rows[index]))
@@ -223,9 +223,9 @@ class Player(object):
         cells = soup.select('td')
         if len(cells) < 2: raise UnreadableSoup(
             'Cannot parse body row: %s' % row)
-        self.name = cells[0].text
-        self.status = cells[1].text
-        self.css = ' '.join(sorted(cells[0].get('class')))
+        self.name = recursive_encode(cells[0].text, 'utf8')
+        self.status = recursive_encode(cells[1].text, 'utf8')
+        self.css = recursive_encode(' '.join(sorted(cells[0].get('class'))), 'utf8')
     def load_jdict(self, jdict):
         self.index = jdict.get('index', self.index)
         self.name = jdict.get('name', self.name)
@@ -320,6 +320,7 @@ def update_topic(bot, chan, ret, explicit=False, **kwds):
         topic = yield channel.topic(bot, chan)
         topic = '' if topic is None else topic
 
+        print('*** %r %r' % (new_dyn, topic))
         if new_dyn in topic:
             yield ret()
             return
