@@ -18,6 +18,7 @@ import sys
 
 from untwisted.magic import sign
 
+from util import UserError
 import util
 import message
 import modal
@@ -105,9 +106,6 @@ def h_help_roll(bot, reply, args, bridge):
             ' \2!help url\2 for more information.')
 
 #-------------------------------------------------------------------------------
-class UserError(Exception):
-    pass
-
 @link('!roll', '!r', action=False)
 @link(('ACTION', '!roll'), ('ACTION', '!r'), action=True)
 def h_roll(bot, id, target, args, full_msg, action):

@@ -39,7 +39,8 @@ def h_post_reload(bot):
     if prev_track_id is not None:
         for nick in all_nicks:
             track_id[nick] = Record()
-            if nick in prev_track_id and hasattr(prev_track_id[nick], 'id'):
+            if nick in prev_track_id and hasattr(prev_track_id[nick], 'id') \
+            and isinstance(prev_track_id[nick], tuple):
                 track_id[nick].id = util.ID(*prev_track_id[nick].id)
         prev_track_id = None
     yield refresh(bot, list(all_nicks))

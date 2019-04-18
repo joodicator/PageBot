@@ -9,6 +9,9 @@ import random
 import sys
 import re
 import urllib2
+import array
+import operator
+import socket
 
 EXT_URL_DEFAULT_TIMEOUT = 12
 
@@ -192,6 +195,9 @@ def mcall(event, *args, **kwds):
         raise StopIteration
     return act
 
+class UserError(Exception):
+    pass
+
 #===============================================================================
 #   @mfun(link, event_name)
 #   def func(*args, **kwds):
@@ -229,6 +235,17 @@ def msub(link, event_name):
         link(event_name)(fun)
         return lambda *args, **kwds: sub(fun(*args, **kwds))
     return msub_dec
+
+#===============================================================================
+# As msub, but assumes that the Mode instance in which to run the handler is
+# given as the first argument of the function, and therefore can be used from a
+# different Mode.
+def mmsub(link, event_name):
+    def mmsub_dec(fun):
+        link(event_name)(fun)
+        return lambda mode, *args, **kwds: \
+            msign(mode, event_name, mode, *args, **kwds)
+    return mmsub_dec
 
 #===============================================================================
 # When yielded from an untwisted event handler, runs the handler invocation from
@@ -377,15 +394,15 @@ def multi(*cmds, **kwds): # limit=None, prefix=True
 def further(func):
     from untwisted.magic import sign
     def further_fun(bot, id, target, args, full_msg):
-        match = re.search(r'(?P<cmd>!\S+)\s*(?P<args>.*)', args)
+        match = re.search(r'(^|(?<=\s))(?P<cmd>!\S+)\s*(?P<args>.*)', args)
         if match:
-            scmd = match.group('cmd')
-            sargs = match.group('args')
-            args = args[:match.start()]
-            cont = sign('COMMAND', bot, id, target, scmd, sargs, full_msg)
-            return func(bot, id, target, args, full_msg, cont)
-        else:
-            return func(bot, id, target, args, full_msg, lambda *args: None)
+            scmd = match.group('cmd').lower()
+            if scmd in bot._base or ('SIMPLE', scmd) in bot._base:
+                sargs = match.group('args')
+                args = args[:match.start()]
+                cont = sign('COMMAND', bot, id, target, scmd, sargs, full_msg)
+                return func(bot, id, target, args, full_msg, cont)
+        return func(bot, id, target, args, full_msg, lambda *args: None)
     return further_fun
 
 #===============================================================================
@@ -571,3 +588,104 @@ class ExtHTTPHandler(AbstractExtHTTPHandler, urllib2.HTTPHandler):
 
 class ExtHTTPSHandler(AbstractExtHTTPHandler, urllib2.HTTPSHandler):
     http_handler_class = urllib2.HTTPSHandler
+
+#===============================================================================
+# Numerical arrays, of fixed size, with multidimensional indices.
+# `dimensions' is a tuple `(d1, d2, ..., dn)' where `di' is the size of the
+# `i'th dimension of the array, i.e. the `i'th index must be in `range(di)`.
+
+class md_array(object):
+    __slots__ = 'dimensions', 'array'
+    def __init__(self, typecode, dimensions, initialiser=None):
+        self.dimensions = dimensions
+        total_size = reduce(operator.mul, dimensions)
+        if initialiser is None:
+            value = {'c':'\0', 'u':u'\0'}.get(typecode, 0)
+            initialiser = (value for i in xrange(total_size))
+        self.array = array.array(typecode, initialiser)
+    def __index(self, indices):
+        if type(indices) is not tuple: return indices
+        assert len(indices) == len(self.dimensions)
+        index = 0
+        for i, d in izip(indices, self.dimensions):
+            index = index*d + i
+        return index
+    def __getitem__(self, indices):
+        return self.array[self.__index(indices)]
+    def __setitem__(self, indices, value):
+        self.array[self.__index(indices)] = value
+    def __delitem__(self, indices):
+        del self.array[self.__index(indices)]
+    def __eq__(self, other):
+        if not isinstance(other, md_array): return False
+        return self.dimensions == other.dimensions and self.array == other.array
+    def __ne__(self, other):
+        if not isinstance(other, md_array): return True
+        return self.dimensions != other.dimensions or self.array != other.array
+    def __iter__(self):
+        return iter(self.array)
+    def __repr__(self):
+        return 'md_array(%r, %r, %r)' % (
+            self.array.typecode, self.dimensions, list(self.array))
+
+#==============================================================================#
+# True if the given hostname or IPV4 or IPV6 address string is not in any
+# address range reserved for private or local use, or otherwise False.
+def is_global_address(host):
+    # See: http://en.wikipedia.org/wiki/Reserved_IP_addresses
+    family, _, _, _, address = socket.getaddrinfo(host, None)[0]
+    return is_global_address_raw(family, address)
+
+def is_global_address_raw(family, address):
+    if family == socket.AF_INET:
+        host, _ = address
+        addr = inet4_int(host)
+        for range in ('0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8',
+        '169.254.0.0/16', '172.16.0.0/12', '192.0.0.0/24', '192.0.2.0/24',
+        '192.88.99.0/24', '192.168.0.0/16', '198.18.0.0/15', '198.51.100.0/24',
+        '203.0.113.0/24', '224.0.0.0/4', '240.0.0.0/4', '255.255.255.255/32'):
+            prefix, size = range.split('/')
+            prefix, size = inet4_int(prefix), int(size)
+            if addr>>(32-size) == prefix>>(32-size): return False
+        return True
+    elif family == socket.AF_INET6:
+        host, _, _, _ = address
+        addr = inet6_int(host)
+        for range in ('::/128', '::1/128', '::ffff:0:0/96', '64:ff9b::/96',
+        '2001::/32', '2001:10::/28', '2001:db8::/32', '2002::/16', 'fc00::/7',
+        'fe80::/10', 'ff00::/8'):
+            prefix, size = range.split('/')
+            prefix, size = inet6_int(prefix), int(size)
+            if addr>>(128-size) == prefix>>(128-size): return False
+        return True
+    else:
+        raise Exception(
+            'Unsupported address family for "%s": %s.' % (host, family))    
+
+#==============================================================================#
+# IPV4 address string to integer.
+def inet4_int(addr):
+    addr = inet4_tuple(addr)
+    return sum(addr[-i-1]<<(8*i) for i in xrange(4))
+
+# IPV6 address string to integer.
+def inet6_int(addr):
+    addr = inet6_tuple(addr)
+    return sum(addr[-i-1]<<(16*i) for i in xrange(8))
+
+# IPV4 address string to 4-tuple of integers.
+def inet4_tuple(addr):
+    return tuple(int(part) for part in addr.split('.'))
+
+# IPV6 address string to 8-tuple of integers, allowing :: notation.
+def inet6_tuple(addr):
+    addr = addr.split('::', 1)
+    if len(addr) > 1:
+        addr0, addr1 = inet6_tuple_base(addr[0]), inet6_tuple_base(addr[1])
+        return addr0 + (0,)*(8 - len(addr0) - len(addr1)) + addr1
+    else:
+        return inet6_tuple_base(addr[0])
+
+# As inet6_tuple(), but does not allow :: notation.
+def inet6_tuple_base(addr):
+    return tuple(int(part, 16) for part in addr.split(':')) if addr else ()

@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 from importlib import import_module
 import traceback
 import sys
@@ -137,26 +139,25 @@ def h_reload(bot, id, target, hard):
 
     # Uninstall all local modules (see util.module_is_local for definition).
     for module in reversed(local):
-        if hasattr(module, 'uninstall'):
-            try:
-                if not hard and hasattr(module, 'reload_uninstall'):
-                    module.reload_uninstall(bot)
-                elif hard and hasattr(module, 'hard_reload_uninstall'):
-                    module.hard_reload_uninstall(bot)
-                else:
-                    try:
-                        module.uninstall(bot)
-                    except NotInstalled:
-                        names.remove(module.__name__)
-                old_modules[module.__name__] = module
-            except Exception as e:
-                expns[module.__name__] = e
-                traceback.print_exc()
+        try:
+            if not hard and hasattr(module, 'reload_uninstall'):
+                module.reload_uninstall(bot)
+            elif hard and hasattr(module, 'hard_reload_uninstall'):
+                module.hard_reload_uninstall(bot)
+            elif hasattr(module, 'uninstall'):
+                module.uninstall(bot)
+        except NotInstalled:
+            names.remove(module.__name__)
+        except Exception as e:
+            expns[module.__name__] = e
+            traceback.print_exc()
+        else:
+            old_modules[module.__name__] = module
         del sys.modules[module.__name__]
     if expns:
         echo(bot, id, target, 'Errors during uninstall: ' + repr(expns))
         expns.clear()
-    
+
     # Reinstall all uninstalled modules.
     for name in names:
         try:
@@ -175,6 +176,11 @@ def h_reload(bot, id, target, hard):
             expns[name] = e
             traceback.print_exc()
     if expns:
+        for name in expns:
+            if name in old_modules and hasattr(old_modules[name], 'uninstall'):
+                try: old_modules[name].uninstall(bot)
+                except NotInstalled: pass
+                except: traceback.print_exc()
         echo(bot, id, target, 'Errors during reinstall: ' + repr(expns))
 
     yield sign('POST_RELOAD', bot)

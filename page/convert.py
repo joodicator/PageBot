@@ -3,6 +3,7 @@
 import re
 
 from message import reply
+from util import UserError
 import util
 
 link, install, uninstall = util.LinkSet().triple()
@@ -89,10 +90,6 @@ def parse_unit(str):
         u = U.parse_unit(str)
         if u: us.append(u)
     return sorted(us, key=lambda (u,s): len(s))
-
-#===============================================================================
-class UserError(Exception):
-    pass
 
 #===============================================================================
 class Unit(object):
