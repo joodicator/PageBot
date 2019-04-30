@@ -320,7 +320,6 @@ def update_topic(bot, chan, ret, explicit=False, **kwds):
         topic = yield channel.topic(bot, chan)
         topic = '' if topic is None else topic
 
-        print('*** %r %r' % (new_dyn, topic))
         if new_dyn in topic:
             yield ret()
             return
