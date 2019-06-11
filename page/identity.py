@@ -284,7 +284,7 @@ def refresh(bot, nicks):
                     if id is None or id.nick.lower() in granted_nicks: continue
                     if access_name.lower() not in prev_hosts: continue
                     userhost = '%s@%s' % (id.user, id.host)
-                    if userhost in prev_hosts[access_name][-cred[1]]:
+                    if userhost in prev_hosts[access_name][-cred[1]:]:
                         yield grant_access(bot, id, access_name)
                         granted_nicks.add(id.nick.lower())
 
