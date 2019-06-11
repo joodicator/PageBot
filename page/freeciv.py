@@ -38,8 +38,8 @@ DEFAULT_PORT = 5556
 FC_LOOP_INTERVAL_S = 15
 MIN_RECONNECT_DELAY_S = 15
 MAX_RECONNECT_DELAY_S = 3600
-TURN_NOTIFY_INTERVAL_S = 12 * 3600
-INDIVIDUAL_TURN_NOTIFY_INTERVAL_S = 0
+TURN_NOTIFY_INTERVAL_S = 8 * 3600
+INDIVIDUAL_TURN_NOTIFY_INTERVAL_S = 3600
 
 Version = namedtuple('Version', ('major_version', 'minor_version', 'patch_version'))
 DEFAULT_VERSION = Version(2, 6, 0)
@@ -467,7 +467,7 @@ def update_phase(state):
         save_conf()
 
 @fc_link('FC_LOOP')
-def h_fc_tick():
+def h_fc_loop():
     while ab_link.installed_modes:
         bot, = ab_link.installed_modes
         now = time.time()
@@ -482,7 +482,7 @@ def h_fc_tick():
                     for chan, cconf in conf['channels'].iteritems():
                         for csname, csconf in cconf.iteritems():
                             if csconf['address'] != addr: continue
-                            nicks = channel.track_channels[chan]
+                            nicks = list(channel.track_channels[chan])
                             yield notify_users(
                                 bot, chan, nicks, addr, csname, individual=False)
 
