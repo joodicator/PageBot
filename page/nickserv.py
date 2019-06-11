@@ -73,7 +73,8 @@ def notice(bot, id, target, msg):
 @link('NICKSERV_NOTICE')
 def nickserv_notice(bot, id, msg):
     if conf('prompt') and conf('password') and msg.startswith(conf('prompt')):
-        bot.send_msg(id.nick, 'IDENTIFY %s' % conf('password'))
+        bot.send_msg(id.nick, 'IDENTIFY %s %s' % (
+            bot.conf['nick'], conf('password')))
         return
     final = conf('final')
     if final and msg.startswith(final):
