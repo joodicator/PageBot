@@ -708,7 +708,7 @@ class ParseInput(object):
         return self.position < len(self.string)
     def __sub__(self, other):
         if isinstance(other, ParseInput):
-            assert self.string is other.string
+            if self.string is not other.string: raise ValueError
             return ParseSource(self.string, other.position, self.position)
         else:
             return NotImplemented
@@ -725,7 +725,8 @@ class ParseSource(object):
         return self.string[self.start:self.end]
     def __add__(self, other):
         if isinstance(other, ParseSource):
-            assert self.string is other.string and self.end == other.start
+            if self.string is not other.string or self.end != other.start:
+                raise ValueError
             return ParseSource(self.string, self.start, other.end)
         else:
             return NotImplemented

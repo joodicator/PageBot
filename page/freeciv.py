@@ -38,7 +38,7 @@ DEFAULT_PORT = 5556
 FC_LOOP_INTERVAL_S = 15
 MIN_RECONNECT_DELAY_S = 15
 MAX_RECONNECT_DELAY_S = 3600
-TURN_NOTIFY_INTERVAL_S = 8 * 3600
+TURN_NOTIFY_INTERVAL_S = 12 * 3600
 INDIVIDUAL_TURN_NOTIFY_INTERVAL_S = 3600
 
 Version = namedtuple('Version', ('major_version', 'minor_version', 'patch_version'))
@@ -177,7 +177,8 @@ def uninstall(bot, reload=False):
             connections.clear()
 
 def connect(bot, address, server_conf):
-    assert address not in connections
+    if address in connections:
+        raise Exception('%r is already connected.' % address)
     host, port = re.match(r'(.*):(\d+)$', address).groups()
     username, password = server_conf['username'], server_conf['password']
     if username is None: username = bot.conf['nick']
@@ -192,14 +193,15 @@ def connect_raw(host, port, username, password, allow_local=False, debug=False):
     try:
         fam, typ, pro, cnm, adr = \
             socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)[0]
-        assert allow_local or util.is_global_address_raw(fam, adr), \
-            'Access denied: %s is not a public internet address.' % state.name
+        if not allow_local and not util.is_global_address_raw(fam, adr):
+            raise UserError('Access denied: %s is not a public internet'
+                            ' address.' % state.name)
         work = untwisted.network.Work(fc_mode, socket.socket(fam, typ, pro))
         work.setblocking(0)
         work.freeciv_state = state
         connections[state.name] = work
         work.connect_ex(adr)
-    except (socket.error, AssertionError) as e:
+    except (socket.error, UserError) as e:
         traceback.print_exc()
         fc_mode.drive('FC_CONN_ERR', state, e)
     else:
@@ -234,8 +236,8 @@ def load_conf():
             traceback.print_exc()
     if conf['conf_version'] < CONF_VERSION:
         conf = upgrade_conf(conf)
-    else:
-        assert conf['conf_version'] == CONF_VERSION, conf['conf_version']
+    elif conf['conf_version'] > CONF_VERSION:
+        raise ValueError('conf_version=%r is unknown' % conf['conf_version'])
     conf_loaded = True
 
 def save_conf():
@@ -295,7 +297,8 @@ def h_fc_p(bot, id, target, args, full_msg, cont):
             r'(?P<name>\S+)\s+(?P<host>\S+?)(:(?P<port>\d+))?\s*'
             r'(\s+(?P<uname>\S*|".*?")(\s+(?P<pword>\S*|".*?"))?)?\s*'
             r'(?P<debug>debug)?\s*$', args)
-        assert match, 'Error: invalid syntax. See \2!help fc+\2 for correct usage.'
+        if not match: raise UserError(
+            'Error: invalid syntax. See \2!help fc+\2 for correct usage.')
         name = match.group('name')
         host = match.group('host')
         port = int(match.group('port')) if match.group('port') else DEFAULT_PORT
@@ -310,30 +313,33 @@ def h_fc_p(bot, id, target, args, full_msg, cont):
         address = '%s:%d' % (host.lower(), port)
         sconf = conf['servers'].get(address, {})
 
-        assert re.match(r'[^\W_][^:\.]*$', name.decode('utf8'), flags=re.U), \
-            'The server name must start with a letter or digit and contain' \
-            ' no colons or dots.'
-        assert all(name.lower() != oname.lower() for oname in cconf.iterkeys()), \
-            'A server named "%s" already exists in %s.' % (name, cchan)
-        assert all(csconf['address'] != address for csconf in cconf.itervalues()), \
-            'The server at %s is already linked to %s as "%s".' % (cchan, address,
-            next(k for k in cconf.iterkeys() if cconf[k]['address'] == address))
-        assert not sconf \
-        or (sconf['username'], sconf['password']) == (uname, pword), \
-            'The server at %s is already configured in another channel with a' \
-            ' different username or password. You must use the same credentials,' \
-            ' or contact a bot administrator for further assistance.' % address
-        assert is_admin or url.is_global_address(host), \
-            '"%s" does not refer to a public internet host. Only a bot' \
-            ' administrator may link servers using such addresses.'% host
-        assert uname is None or len(uname) < MAX_LEN_USERNAME, \
-            'The username must be shorter than %d bytes.' % MAX_LEN_USERNAME
-        assert pword is None or len(pword) < MAX_LEN_PASSWORD, \
-            'The password must be shorter than %d bytes.' % MAX_LEN_PASSWORD
-        assert len(cconf) < MAX_CHAN_SERVERS, \
-            'No more than %d servers may be added to a channel.' % MAX_CHAN_SERVERS
-        assert is_admin or not debug, \
-            'The "debug" flag may only be used by bot administrators.'
+        if not re.match(r'[^\W_][^:\.]*$', name.decode('utf8'), flags=re.U):
+            raise UserError('The server name must start with a letter or digit'
+                ' and contain no colons or dots.')
+        if any(name.lower() == oname.lower() for oname in cconf.iterkeys()):
+            raise UserError(
+                'A server named "%s" already exists in %s.' % (name, cchan))
+        if any(csconf['address'] == address for csconf in cconf.itervalues()):
+            raise UserError('The server at %s is already linked to %s as "%s".'
+                % (cchan, address, next(
+                k for k in cconf.iterkeys() if cconf[k]['address'] == address)))
+        if sconf and (sconf['username'], sconf['password']) == (uname, pword):
+            raise UserError('The server at %s is already configured in another'
+                ' channel with a different username or password. You must use'
+                ' the same credentials, or contact a bot administrator for'
+                ' further assistance.' % address)
+        if not is_admin and url.is_global_address(host): raise UserError(
+            '"%s" does not refer to a public internet host. Only a bot'
+            ' administrator may link servers using such addresses.'% host)
+        if uname is not None and len(uname) < MAX_LEN_USERNAME: raise UserError(
+            'The username must be shorter than %d bytes.' % MAX_LEN_USERNAME)
+        if pword is not None and len(pword) < MAX_LEN_PASSWORD: raise UserError(
+            'The password must be shorter than %d bytes.' % MAX_LEN_PASSWORD)
+        if len(cconf) >= MAX_CHAN_SERVERS: raise UserError(
+            'No more than %d servers may be added to a channel.'
+            % MAX_CHAN_SERVERS)
+        if not is_admin and debug: raise UserError(
+            'The "debug" flag may only be used by bot administrators.')
 
         cconf[name] = {'address': address}
         if is_admin: cconf[name]['flags'] = ['set_by_admin']
@@ -352,7 +358,7 @@ def h_fc_p(bot, id, target, args, full_msg, cont):
         yield cont
     except Exception as e:
         reply(bot, id, target, 'Error: %s' % e)
-        if not isinstance(e, AssertionError): raise
+        if not isinstance(e, UserError): raise
 
 @ab_link(('HELP', 'fc-'), ('HELP', 'freeciv-'))
 def h_help_fc_p(bot, reply, args):
@@ -367,7 +373,8 @@ def h_fc_m(bot, id, target, args, full_msg, cont):
     try:
         lchan, cchan, args = cmd_chan('-', bot, id, target, args, need_op=True)
         names = args.split()
-        assert names, 'Invalid syntax. See \2!help fc-\2 for correct usage.'
+        if not names: raise UserError(
+            'Invalid syntax. See \2!help fc-\2 for correct usage.')
         cconf = conf['channels'].get(lchan, {}).copy()
         daddrs = []
         for name in list(names):
@@ -375,10 +382,10 @@ def h_fc_m(bot, id, target, args, full_msg, cont):
                 if name.lower() != cname.lower(): continue
                 names.remove(name)
                 daddrs.append(cconf.pop(cname)['address'])
-        assert not names, 'The server%(srv)s not exist in %(chn)s.' % {
+        if names: raise UserError('The server%(srv)s not exist in %(chn)s.' % {
             'srv': (' "%s" does' % names[0]) if len(names) == 1 else
                    ('s "%s" and "%s" do' % ('", "'.join(names[:-1]), names[-1])),
-            'chn': cchan}
+            'chn': cchan})
         if cconf:
             conf['channels'][lchan] = cconf
         else:
@@ -401,7 +408,7 @@ def h_fc_m(bot, id, target, args, full_msg, cont):
         yield cont
     except Exception as e:
         reply(bot, id, target, 'Error: %s' % e)
-        if not isinstance(e, AssertionError): raise
+        if not isinstance(e, UserError): raise
 
 @ab_link(('HELP', 'fc?'), ('HELP', 'freeciv?'))
 def h_help_fc_p(bot, reply, args):
@@ -415,8 +422,8 @@ def h_fc_q(bot, id, target, args, full_msg):
     try:
         lchan, cchan, args = cmd_chan('?', bot, id, target, args, need_op=False)
         cconf = conf['channels'].get(lchan, {})
-        assert not args.split(), \
-            'Invalid syntax. See \2!help fc?\2 for correct usage.'
+        if args.split(): raise UserError(
+            'Invalid syntax. See \2!help fc?\2 for correct usage.')
         if not cconf: return reply(bot, id, target,
             'There are no Freeciv servers linked to %s.' % cchan, prefix=False)
         def rows():
@@ -438,21 +445,23 @@ def h_fc_q(bot, id, target, args, full_msg):
             reply(bot, id, target, line, prefix=False)
     except Exception as e:
         reply(bot, id, target, 'Error: %s' % e)
-        if not isinstance(e, AssertionError): raise
+        if not isinstance(e, UserError): raise
 
 def cmd_chan(cmd_suf, bot, id, target, args, need_op):
     match = re.match(r'(?P<chan>#\S+)\s*(?P<args>.*)$', args)
     chan, args = match.group('chan', 'args') if match else (target, args)
-    assert chan, \
-        'When using this command by PM, you must specify the channel' \
-        ' name. See \2!help fc%s\2.' % cmd_suf
+    if not chan: raise UserError(
+        'When using this command by PM, you must specify the channel'
+        ' name. See \2!help fc%s\2.' % cmd_suf)
     lchan = chan.lower()
     cchan = channel.capitalisation.get(lchan, chan)
-    assert bot.nick.lower() in map(str.lower, channel.track_channels[lchan]), \
-        'To use this command, this bot must be in %s. You may cause it' \
-        ' to join using \2/invite %s %s\2.' % (cchan, bot.nick, cchan)
-    assert not need_op or channel.has_op_in(bot, id.nick, chan), \
-        'You must be an operator in %s to use this command.' % cchan
+    if bot.nick.lower() not in map(str.lower, channel.track_channels[lchan]):
+        raise UserError('To use this command, this bot must be in %s.%s' 
+            % (cchan, '' if 'invite' not in sys.modules or bot not in
+            sys.modules['invite'].link.installed_modes else (' You may cause it'
+            ' to join using \2/invite %s %s\2.'% (bot.nick, cchan))))
+    if need_op and not channel.has_op_in(bot, id.nick, chan): raise UserError(
+        'You must be an operator in %s to use this command.' % cchan)
     return lchan, cchan, args
 
 def update_phase(state):
@@ -462,8 +471,9 @@ def update_phase(state):
         sconf['last_turn_info'] = list(turn_info)
         sconf['last_notify_time'] = None
         sconf.pop('last_individual_notify_time', None)
-        chans = [c for (c,_) in linked_channels(state.name)]
-        report_server_status([state.name], chans)
+        if not all(p['ai'] for p in players_to_move(state, turn_info)):
+            chans = [c for (c,_) in linked_channels(state.name)]
+            report_server_status([state.name], chans)
         save_conf()
 
 @fc_link('FC_LOOP')
@@ -1332,14 +1342,14 @@ fc_recv(Packet('NEW_YEAR', 127,
 @fc_link(('FC_RECV', PACKET_AUTHENTICATION_REQ))
 def h_authentication_req(work, auth_type, message):
     try:
-        assert auth_type & AUTH_TYPE.RETRY == 0, \
-            'Error: %s' % message
-        assert work.freeciv_state.password is not None, \
-            'Error: No password configured: %s' % message
+        if not auth_type & AUTH_TYPE.RETRY == 0:
+            raise UserError('Error: %s' % message)
+        if work.freeciv_state.password is None:
+            raise UserError('Error: No password configured: %s' % message)
         yield sign(('FC_SEND', PACKET_AUTHENTICATION_REPLY), work,
             password = work.freeciv_state.password)
         work.freeciv_state.password = None
-    except AssertionError as e:
+    except UserError as e:
         yield sign('FC_CONN_ERR', work.freeciv_state, e)
 
 @fc_link(('FC_RECV', PACKET_SERVER_JOIN_REPLY))
@@ -1347,14 +1357,14 @@ def h_server_join_reply(work,
     you_can_join, message, capability, challenge_file, conn_id
 ):
     try:
-        assert you_can_join, 'Error: %s' % message
+        if not you_can_join: raise UserError('Error: %s' % message)
         work.freeciv_state.stage = STAGE_ACCEPTED
         work.freeciv_state.conn_id = conn_id
         conf['servers'][work.freeciv_state.name].pop('last_error', None)
         conf['servers'][work.freeciv_state.name].pop('last_error_time', None)
         conf['servers'][work.freeciv_state.name].pop('connect_retries', None)
         yield sign(('FC_SEND', PACKET_CHAT_MSG_REQUEST), work, message='/detach')
-    except AssertionError as e:
+    except UserError as e:
         yield sign('FC_CONN_ERR', work.freeciv_state, e)
 
 @fc_link(('FC_RECV', PACKET_PROCESSING_FINISHED))
