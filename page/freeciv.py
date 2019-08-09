@@ -35,11 +35,12 @@ CONF_FILE = 'state/freeciv.json'
 CONF_VERSION = 2
 MAX_CHAN_SERVERS = 10
 DEFAULT_PORT = 5556
-FC_LOOP_INTERVAL_S = 15
-MIN_RECONNECT_DELAY_S = 15
-MAX_RECONNECT_DELAY_S = 3600
-TURN_NOTIFY_INTERVAL_S = 12 * 3600
-INDIVIDUAL_TURN_NOTIFY_INTERVAL_S = 3600
+FC_LOOP_INTERVAL_S = 15 # 15 seconds
+MIN_RECONNECT_DELAY_S = 15 # 15 seconds
+MAX_RECONNECT_DELAY_S = 3600 # 1 hour
+TURN_NOTIFY_INTERVAL_S = 12 * 3600 # 12 hours
+INDIVIDUAL_TURN_NOTIFY_INTERVAL_S = 0
+RECV_TIMEOUT_S = 3 * 60 # 3 minutes
 
 Version = namedtuple('Version', ('major_version', 'minor_version', 'patch_version'))
 DEFAULT_VERSION = Version(2, 6, 0)
@@ -105,7 +106,7 @@ connections = {}
 TurnInfo = namedtuple('TurnInfo', ('phase_mode', 'turn', 'phase'))
 
 class FreecivState(object):
-    data_version = 1
+    data_version = 2
     def __init__(self, name):
         self.name = name
         self.version = DEFAULT_VERSION
@@ -116,6 +117,7 @@ class FreecivState(object):
         self.last_send = {}
         self.chunk_rem = 0
         self.chunk_buf = ''
+        self.last_recv_time = None
 
 def install(bot):
     global fc_mode
@@ -159,6 +161,9 @@ def reload(prev):
             new_work.freeciv_state.debug = 'debug' in get_server_flags(address)
             connections[address] = new_work
         else:
+            if hasattr(work.freeciv_state, 'name'):
+                report(work.freeciv_state.name,
+                    'Disconnected from server: client software updated.')
             disconnect(work)
 
 def reload_uninstall(bot):
@@ -212,6 +217,7 @@ def connect_raw(host, port, username, password, allow_local=False, debug=False):
                              AUX_CAPABILITY, *state.version),
             version_label='',
             **state.version._asdict())
+        state.last_recv_time = time.time()
 
 def get_server_flags(address):
     return {flag for cconf in conf['channels'].itervalues()
@@ -331,9 +337,9 @@ def h_fc_p(bot, id, target, args, full_msg, cont):
         if not is_admin and url.is_global_address(host): raise UserError(
             '"%s" does not refer to a public internet host. Only a bot'
             ' administrator may link servers using such addresses.'% host)
-        if uname is not None and len(uname) < MAX_LEN_USERNAME: raise UserError(
+        if uname is not None and len(uname) >= MAX_LEN_USERNAME: raise UserError(
             'The username must be shorter than %d bytes.' % MAX_LEN_USERNAME)
-        if pword is not None and len(pword) < MAX_LEN_PASSWORD: raise UserError(
+        if pword is not None and len(pword) >= MAX_LEN_PASSWORD: raise UserError(
             'The password must be shorter than %d bytes.' % MAX_LEN_PASSWORD)
         if len(cconf) >= MAX_CHAN_SERVERS: raise UserError(
             'No more than %d servers may be added to a channel.'
@@ -481,10 +487,18 @@ def h_fc_loop():
     while ab_link.installed_modes:
         bot, = ab_link.installed_modes
         now = time.time()
+
         for addr, sconf in conf['servers'].iteritems():
             if addr in connections:
-                if connections[addr].freeciv_state.stage < STAGE_LOADED:
+                state = connections[addr].freeciv_state
+
+                # Terminate timed-out connections.
+                if state.last_recv_time is not None \
+                and state.last_recv_time + RECV_TIMEOUT_S < now:
+                    yield sign('FC_CONN_ERR', state, 'timed out.')
                     continue
+
+                if state.stage < STAGE_LOADED: continue
 
                 # Notify users of their turns in games.
                 lntime = sconf.get('last_notify_time')
@@ -1064,6 +1078,7 @@ def fc_recv(packet):
         field_values, data = packet.read(data, work.freeciv_state.last_recv,
             debug=work.freeciv_state.debug)
         assert not data, repr(data)
+        work.freeciv_state.last_recv_time = time.time()
         yield sign(('FC_RECV', packet.number), work, **field_values)
     globals()['PACKET_'+packet.name] = packet.number
     PACKETS[packet.number] = packet
@@ -1363,6 +1378,7 @@ def h_server_join_reply(work,
         conf['servers'][work.freeciv_state.name].pop('last_error', None)
         conf['servers'][work.freeciv_state.name].pop('last_error_time', None)
         conf['servers'][work.freeciv_state.name].pop('connect_retries', None)
+        report(work.freeciv_state.name, 'Connected to server.')
         yield sign(('FC_SEND', PACKET_CHAT_MSG_REQUEST), work, message='/detach')
     except UserError as e:
         yield sign('FC_CONN_ERR', work.freeciv_state, e)
