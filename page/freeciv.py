@@ -477,10 +477,13 @@ def update_phase(state):
         sconf['last_turn_info'] = list(turn_info)
         sconf['last_notify_time'] = None
         sconf.pop('last_individual_notify_time', None)
-        if not all(p['ai'] for p in players_to_move(state, turn_info)):
+        if players_to_move(state, turn_info):
             chans = [c for (c,_) in linked_channels(state.name)]
             report_server_status([state.name], chans)
         save_conf()
+
+def should_report_player(player):
+    return not player['ai'] and player['is_alive']
 
 @fc_link('FC_LOOP')
 def h_fc_loop():
@@ -651,7 +654,7 @@ def players_to_move(state, turn_info=None):
             PHASE_MODE.CONCURRENT: turn_info.phase,
             PHASE_MODE.TEAMS_ALTERNATE: p['team'],
             PHASE_MODE.PLAYERS_ALTERNATE: p['playerno'],
-        }[turn_info.phase_mode]
+        }[turn_info.phase_mode] and p['is_alive']
         and not (p['ai'] or p['unassigned_user'] or p['phase_done'])]
 
 # Returns a list of PACKET_PLAYER_INFO dicts.
