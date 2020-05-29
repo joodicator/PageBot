@@ -246,6 +246,12 @@ def present_record(record, now=None, in_channel=False):
 
     # Further discard any event occurring sufficiently soon after another event.
     def ignore_event_after((et1, er1), (et2, er2)):
+        rt1 = relative_time(er1['time'], now)[:-1]
+        rt2 = relative_time(er2['time'], now)[:-1]
+        for i in xrange(len(rt1)):
+            if rt1[i] != 0 or rt2[i] != 0:
+                if rt1[i:i+2] == rt2[i:i+2]: return True
+                break
         return max(1, min(86400, now-er2['time']))/(er1['time']-er2['time']) > 6
     events = [events[i] for i in range(len(events))
         if i+1 >= len(events) or not ignore_event_after(events[i], events[i+1])]
