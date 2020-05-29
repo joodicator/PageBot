@@ -97,9 +97,10 @@ def h_help_url(bot, reply, args):
         ' command on its result, analysing any URLs present in it. See'
         ' \2!help roll\2 for more information.')
 
-@link('!url', '!title', ('ACTION', '!url'), ('ACTION', '!title'))
+@link('!url', '!title', action=False)
+@link(('ACTION', '!url'), ('ACTION', '!title'), action=True)
 @multi('!url', '!title', limit=CMDS_PER_LINE_MAX, prefix=False)
-def h_url(bot, id, target, args, full_msg, reply):
+def h_url(bot, id, target, args, full_msg, action, reply):
     channel = (target or ('%s!%s@%s' % id)).lower()
 
     if args:
@@ -107,7 +108,8 @@ def h_url(bot, id, target, args, full_msg, reply):
         match = re.match(r'!r(oll)?\s+(?P<args>.*)', args)
         if match and dice and bot in dice.link.installed_modes:
             args = match.group('args')
-            args = dice.roll(bot, id, target, args, error_reply=reply)
+            args = dice.roll(bot, id, target, args,
+                             action=action, error_reply=reply)
             if args is None: return
             reply(args)
 
@@ -527,7 +529,7 @@ def google_image_title_soup(url, bind_host=None, **kwds):
     opener = get_opener(bind_host=bind_host)
     with closing(opener.open(request, timeout=TIMEOUT_S)) as stream:
         text = stream.read(READ_BYTES_MAX)
-        return BeautifulSoup(text, BS4_PARSER)
+        return BeautifulSoup(text, BS4_PARSER, from_encoding='utf-8')
 
 #==============================================================================#
 def utf8_url_to_ascii(url):

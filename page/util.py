@@ -371,7 +371,7 @@ def multi(*cmds, **kwds): # limit=None, prefix=True
     cre = '|'.join(re.escape(cmd) for cmd in sorted(cmds, key=len, reverse=True))
     cre = re.compile('(?:%s)(?:\s|$)'%cre, re.I)
     def multi_deco(func):
-        def multi_func(bot, id, target, args, *extra):
+        def multi_func(bot, id, target, args, *extra, **extra_kwds):
             argss = re.split(cre, args)
             def plain_reply(msg):
                 message_reply(bot, id, target, msg, prefix=prefix)
@@ -381,8 +381,9 @@ def multi(*cmds, **kwds): # limit=None, prefix=True
                     break
                 def multi_reply(msg):
                    plain_reply('[%d] %s' % (index, msg))
-                yield sub(func(bot, id, target, sub_args.strip(), *extra,
-                    reply=multi_reply if len(argss)>1 else plain_reply))
+                kwds = dict(extra_kwds)
+                kwds['reply'] = multi_reply if len(argss)>1 else plain_reply
+                yield sub(func(bot, id, target, sub_args.strip(), *extra, **kwds))
         return multi_func
     return multi_deco
 
