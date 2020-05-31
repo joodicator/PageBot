@@ -171,18 +171,27 @@ class Report(Core):
         for index in range(1, len(rows)):
             self.players.add(Player(index=index, soup=rows[index]))
 
-    def show_irc(self, format=True):
+    def show_text(self, formatter):
         show_players = [
             p for p in self.players if not (
             AI.match(p.status) or ELIMINATED.match(p.status))]
         show_players = sorted(show_players, key=lambda p: p.index)
         return '%s, turn %s [%s]' % (
-            ('\2%s\2' if format else '%s') % self.name,
-            ('\2%d\2' if format else '%d') % self.turn,
-            ', '.join(p.show_irc(format=format) for p in show_players))
+            formatter.bold(self.name),
+            formatter.bold(self.turn),
+            ', '.join(p.show_text(formatter)
+        for p in show_players))
+
+    def show_diff_text(self, prev, formatter):
+        return '%s %s turn %s.' % (
+            formatter.bold(self.name),
+            'has advanced to' if prev is not None
+                and prev.turn is not None and self.turn > prev.turn else
+            'has started, at',
+            formatter.bold(self.turn))
 
     def show_topic(self, format=False):
-        return self.show_irc(format=format)
+        return self.show_text(formatter=IRCFormatter if format else PlainFormatter)
 
     def core(self):
         return (self.name, self.turn)
@@ -192,22 +201,27 @@ class ErrorReport(Core):
         self.time = tstamp if tstamp is not None else time.time()
         self.url = url
         self.name = prev.name if prev is not None else None
+        self.turn = None
         if jdict is not None: self.load_jdict(jdict)
     def load_jdict(self, jdict):
         self.time = jdict.get('time', self.time)
         self.name = jdict.get('name', self.name)
+        self.turn = jdict.get('turn', self.turn)
     def save_jdict(self):
         jdict = dict(self.__dict__)
         del jdict['url']
         jdict['type'] = 'error'
         return jdict
-    def show_irc(self, format=True):
+    def show_text(self, formatter):
         return ('%s: unable to retrieve status.' % (
-            ('\2%s\2' if format else '%s') % self.name
+            formatter.bold(self.name)
             if self.name is not None else '<%s>' % self.url))
+    def show_diff_text(self, prev, formatter):
+        return self.show_text(formatter)
     def show_topic(self, format=False):
-        return '%s, turn ? [unable to retrieve status]' % (
-            self.name if self.name is not None else '?')
+        return '%s, turn %s [unable to retrieve status]' % (
+            self.name if self.name is not None else '?',
+            str(self.turn) if self.turn is not None else '?')
     def core(self):
         return ()
 
@@ -233,14 +247,12 @@ class Player(object):
         self.status = jdict.get('status', self.status)
     def save_jdict(self):
         return self.__dict__
-
-    def show_irc(self, format=True):
+    def show_text(self, formatter):
         return '%s: %s' % (
             self.name.split(',', 1)[0],
             'played' if PLAYED.match(self.status) else
             'unfinished' if UNFINISHED.match(self.status) else
             self.status)
-
     def id(self):
         return ('Player', self.name, self.status)
     def __cmp__(self, other):
@@ -257,6 +269,21 @@ class UnreadableURL(Exception):
 
 class UnreadableSoup(Exception):
     pass
+
+class TextFormatter(object):
+    @staticmethod
+    def bold(text):
+        raise NotImplementedError('This method must be overridden in a subclass.')
+
+class PlainFormatter(TextFormatter):
+    @staticmethod
+    def bold(text):
+        return text
+
+class IRCFormatter(TextFormatter):
+    @staticmethod
+    def bold(text):
+        return '\2%s\2' % text
 
 state = State(path=STATE_FILE)
 
@@ -279,17 +306,16 @@ def update_urls(bot, urls, report_to=None, log_level=None):
         for r in (PLAYED, ELIMINATED, AI)) for p in report.players):
             continue
 
-        for chan, cobj in state.channels.iteritems():
-            chan_urls = cobj.games
-            if url not in chan_urls: continue
-            if report_to is not None:
-                msgs.append((report_to, report.show_irc()))
-            elif (type(report) is Report and type(prev_report) is Report
-            and report.turn > prev_report.turn):
-                msgs.append((chan, '\2%s\2 has advanced to turn \2%d\2.'
-                % (report.name, report.turn)))
-            elif type(report) is ErrorReport and report != prev_report:
-                msgs.append((chan, report.show_irc()))
+        if report_to is not None:
+            msgs.append((report_to, report.show_text(IRCFormatter)))
+
+        if type(report) is Report \
+        and (prev_report is None or report.turn > prev_report.turn) \
+        or type(report) is ErrorReport and report != prev_report:
+            msgs.extend(
+                (chan, report.show_diff_text(prev_report, IRCFormatter))
+                for (chan, cobj) in state.channels.iteritems() if url in cobj.games)
+            yield sign('dominions.new_turn_report', bot, report, prev_report)
 
     for chan, cobj in state.channels.iteritems():
         chan_urls = cobj.games
