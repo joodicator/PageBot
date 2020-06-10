@@ -42,15 +42,17 @@ def send_msg(bot, target, msg, wrap=False, **kwds):
 def bind(func, inst):
     return instancemethod(func, inst, inst.__class__)
 
-# Executes a file of Python statements, returning the resulting dictionary of local
-# bindings, in which any top-level classes have been changed to dicts, and, if
-# present, in the context of the given dictionary of global bindings.
-def fdict(path, globals=None, locals=None):
-    if globals == None: globals = dict()
-    if locals == None: locals = dict()
+# Executes a file of Python statements, returning the resulting dictionary of
+# bindings. If `class_dict' is `True', any top-level classes are changed to dicts.
+# `globals' and `locals' give the environment in which to execute the file.
+class DefaultValue(object): pass
+def fdict(path, globals=DefaultValue, locals=DefaultValue, class_dict=True):
+    if globals is DefaultValue: globals = dict()
+    if locals is DefaultValue: locals = dict()
     execfile(path, globals, locals)
-    return { k: cdict(v) for (k, v) in locals.iteritems()
-             if not k.startswith('_') }
+    result = globals if locals is None else locals
+    return { k: (cdict(v) if class_dict else v)
+             for (k, v) in result.iteritems() if not k.startswith('_') }
 
 # If the given object is a class, returns a copy of its dictionary with any
 # __scored__ names removed, otherwise returns the same object unchanged.
@@ -197,6 +199,17 @@ def mcall(event, *args, **kwds):
 
 class UserError(Exception):
     pass
+
+class classproperty(object):
+    __slots__ = 'fget',
+    def __init__(self, fget):
+        self.fget = fget
+    def __get__(self, instance, owner):
+        return self.fget(owner)
+    def __set__(self, instance, value):
+        raise AttributeError("can't set class property")
+    def __delete__(self, instance):
+        raise AttributeError("can't delete class property")
 
 #===============================================================================
 #   @mfun(link, event_name)
