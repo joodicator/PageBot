@@ -202,7 +202,6 @@ def get_title_proxy(url):
             raise Exception('; '.join('[%s] %s'
                 % (b.split('.', 1)[0], e) for (b, e) in exceptions))
 
-    @try_bind_hosts
     def read_url(bind_host):
         with closing(get_opener(bind_host=bind_host).open(
         request, timeout=TIMEOUT_S)) as stream:
@@ -212,6 +211,9 @@ def get_title_proxy(url):
             final_url = stream.geturl()
             parts = try_bind_hosts(partial(
                 get_title_parts, final_url, ctype, stream=stream))
+            return info, ctype, size, final_url, parts
+
+    info, ctype, size, final_url, parts = try_bind_hosts(read_url)
 
     title = parts.get('title', 'Title: (none)')
     extra = parts.get('info', ctype)
