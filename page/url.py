@@ -5,6 +5,7 @@ from __future__ import print_function
 
 from contextlib import closing
 from itertools import *
+from functools import *
 from math import *
 from urllib2 import URLError, HTTPError
 from ssl import SSLError
@@ -181,30 +182,36 @@ def get_title_proxy(url):
     for header in default_headers:
         request.add_header(*header)
 
-    exceptions = []
-    for bind_host in conf.get('bind_hosts', [None]):
-        try:
-            with closing(get_opener(bind_host=bind_host).open(
-            request, timeout=TIMEOUT_S)) as stream:
-                info = stream.info()
-                ctype = info.gettype()
-                size = info['Content-Length'] if 'Content-Length' in info else None
-                final_url = stream.geturl()
-                parts = get_title_parts(
-                    final_url, ctype, stream=stream, bind_host=bind_host)
-                break
-        except (HTTPError, URLError, SSLError, socket.error) as e:
-            if isinstance(e, HTTPError):
-                if e.code not in (403, 503): raise
-            elif isinstance(e, SSLError):
-                if e.args != ('The read operation timed out',): raise
-            elif isinstance(e, URLError) and isinstance(e.reason, IOError):
-                if e.reason.errno != -2: raise
-            print('[bind_host=%s] %r, %r, errno=%r' % (bind_host, e,
-                type(e), getattr(e, 'errno', None)), file=sys.stderr)
-            exceptions.append(e)
-    else:
-        raise exceptions[0]
+    def try_bind_hosts(func):
+        exceptions = []
+        for bind_host in conf.get('bind_hosts', [None]):
+            try:
+                return func(bind_host=bind_host)
+            except (HTTPError, URLError, SSLError, socket.error) as e:
+                if isinstance(e, HTTPError):
+                    if e.code not in (403, 503, 429): raise
+                elif isinstance(e, SSLError):
+                    if e.args != ('The read operation timed out',): raise
+                elif isinstance(e, URLError) and isinstance(e.reason, IOError):
+                    if e.reason.errno != -2: raise
+                traceback.print_exc()
+                print('[bind_host=%s] %r, %r, errno=%r' % (bind_host, e,
+                    type(e), getattr(e, 'errno', None)), file=sys.stderr)
+                exceptions.append((bind_host, e))
+        else:
+            raise Exception('; '.join('[%s] %s'
+                % (b.split('.', 1)[0], e) for (b, e) in exceptions))
+
+    @try_bind_hosts
+    def read_url(bind_host):
+        with closing(get_opener(bind_host=bind_host).open(
+        request, timeout=TIMEOUT_S)) as stream:
+            info = stream.info()
+            ctype = info.gettype()
+            size = info['Content-Length'] if 'Content-Length' in info else None
+            final_url = stream.geturl()
+            parts = try_bind_hosts(partial(
+                get_title_parts, final_url, ctype, stream=stream))
 
     title = parts.get('title', 'Title: (none)')
     extra = parts.get('info', ctype)
