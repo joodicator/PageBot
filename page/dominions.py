@@ -288,19 +288,28 @@ class IRCFormatter(TextFormatter):
 state = State(path=STATE_FILE)
 
 #-------------------------------------------------------------------------------
-def get_report(url):
-    try:
-        return Report(url=url)
-    except UnreadableURL as exc:
-        traceback.print_exception(*exc.exc.exc_info)
-        return ErrorReport(url=url, prev=state.games.get(url), exc=exc)
+GET_REPORT_MAX_TRIES = 3
+GET_REPORT_INTERVAL  = 0.1
+@util.mfun(link, 'dominions.get_report')
+def get_report(url, ret):
+    for tries in xrange(GET_REPORT_MAX_TRIES):
+        try:
+            yield ret(Report(url=url))
+        except UnreadableURL as exc:
+            traceback.print_exception(*exc.exc.exc_info)
+            if tries < GET_REPORT_MAX_TRIES - 1:
+                yield runtime.sleep(GET_REPORT_INTERVAL)
+                continue
+            else:
+                yield ret(ErrorReport(url=url, prev=state.games.get(url), exc=exc))
+        return
 
 @util.msub(link, 'dominions.update_urls')
 def update_urls(bot, urls, report_to=None, log_level=None):
     msgs = []
     for url in urls:
         prev_report = state.games.get(url)
-        report = state.games[url] = get_report(url)
+        report = state.games[url] = yield get_report(url)
 
         if hasattr(report, 'players') and all(any(r.match(p.status)
         for r in (PLAYED, ELIMINATED, AI)) for p in report.players):
