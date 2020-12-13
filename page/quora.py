@@ -109,15 +109,7 @@ def h_quora_post(bot, chan):
     if sum(msg_count[chan][:MSG_MIN[1]]) < MSG_MIN[0]: return
     if sum(msg_count[chan][:MSG_MAX[1]]) > MSG_MAX[0]: return
 
-    exclude_topics = getattr(conf[chan], 'exclude_topics', ())
-    if type(exclude_topics) is not tuple: exclude_topics = (exclude_topics,)
-    source_topics = getattr(conf[chan], 'source_topics', ())
-    if type(source_topics) is not tuple: source_topics = (source_topics,)
-    question = random_question(
-        exclude_ids    = state['used_ids'],
-        exclude_topics = exclude_topics,
-        source_topics  = source_topics,
-        credentials    = (conf[chan].email, conf[chan].password))
+    question = random_question_chan(chan)
     bot.send_msg(chan, question.text)
 
     state['used_ids'].append(question.id)
@@ -194,6 +186,17 @@ class Question(object):
                 return match.group()
         return re.sub(
             r'\[(?P<tag>\w+)[\w\s]*\](?P<body>.*?)\[/(?P=tag)\]', sub, text)
+
+def random_question_chan(chan):
+    exclude_topics = getattr(conf[chan], 'exclude_topics', ())
+    if type(exclude_topics) is not tuple: exclude_topics = (exclude_topics,)
+    source_topics = getattr(conf[chan], 'source_topics', ())
+    if type(source_topics) is not tuple: source_topics = (source_topics,)
+    return random_question(
+        exclude_ids    = state['used_ids'],
+        exclude_topics = exclude_topics,
+        source_topics  = source_topics,
+        credentials    = (conf[chan].email, conf[chan].password))
 
 def random_question(
     source_topics, credentials, exclude_ids=(), exclude_topics=()
