@@ -18,7 +18,7 @@ import sys
 
 from untwisted.magic import sign
 
-from util import UserError
+from util import UserError, decorator
 import util
 import message
 import modal
@@ -138,10 +138,15 @@ def h_simple_roll(bot, name, target, args, reply, action):
 def h_roll_defs(bot, id, target, args, defs, action, reply, error_reply):
     try:
         msg, rolls = eval_string(
-            parse_string(args), defs=defs, user_id=id, irc=True,
+            parse_string(args),
+            defs               = defs,
+            user_id            = id,
+            irc                = True,
             max_len            = MAX_MESSAGE_LENGTH,
             max_names_expanded = MAX_NAMES_EXPANDED,
-            max_stack_depth    = MAX_STACK_DEPTH)
+            max_stack_depth    = MAX_STACK_DEPTH,
+            bot                = bot,
+        )
 
         if target and target.startswith('#'):
             bot.drive('DICE_ROLLS', bot, id, target, rolls, msg)
@@ -173,7 +178,15 @@ class EvalRecord():
         self.stack_depth = 0
 
 EvalContext = namedtuple('EvalContext', (
-    'defs', 'user_id', 'record', 'max_names_expanded', 'max_stack_depth'))
+    'record',
+    'user_id',
+    'namespace',
+    'defs',
+    'bot',
+    'can_execute',
+    'max_names_expanded',
+    'max_stack_depth',
+))
 
 # Returns (str, [roll_spec_1, roll_spec_2, ...])
 def eval_string(*args, **kwds):
@@ -182,12 +195,12 @@ def eval_string(*args, **kwds):
 
 # Returns (str_iterator, [roll_spec_1, roll_spec_2, ...])
 def eval_string_parts(
-    string, max_len=None, irc=False, defs=None, user_id=None,
-    max_names_expanded=None, max_stack_depth=None
+    string, max_len=None, irc=False, user_id=None, namespace=None, defs=None,
+    bot=None, can_execute=False, max_names_expanded=None, max_stack_depth=None,
 ):
     context = EvalContext(
-        defs=defs, user_id=user_id, record=EvalRecord(),
-        max_names_expanded=max_names_expanded,
+        eval_record=EvalRecord(), user_id=user_id, namespace=namespace, defs=defs,
+        bot=bot, can_execute=can_execute, max_names_expanded=max_names_expanded,
         max_stack_depth=max_stack_depth)
 
     rolls = []
@@ -258,26 +271,39 @@ def e_branch(branch, context):
 
     return e_string(chosen.string, context)
 
-def e_name_app(name_app, context):
+def e_name_app(app, context):
     try:
-        parts = e_name_(name_app.name.name, name_app.name.namespace,
-                        name_app.name, context)
-        return e_func_app(name_app.suffixes, parts, name_app, context)
+        return e_func_app(app._replace(suffixes=[]), tuple(app.suffixes), context) \
+               if app.suffixes else  \
+               e_name_args(*e_name_to_args(app.name, context))
     except RollNameError:
-        return (str(name_app.source),)
+        return (str(app.source),)
 
-def e_string_app(string_app, context):
-    parts = e_string(string_app.string, context)
-    return e_func_app(string_app.suffixes, parts, string_app, context)
+def e_string_app(app, context):
+    assert app.suffixes
+    try:
+        return e_func_app(app.string, tuple(app.suffixes), context)
+    except RollNameError:
+        return (str(app.source),)
 
-def e_func_app(func_names, value_parts, node, context):
-    for func_name in func_names:
-        func = rd_functions.get(func_name.name)
-        if func is None: return (str(node.source),)
-        value_parts = func(context, value_parts)
-    return value_parts
+def e_func_app(arg_node, func_names, context):
+    func = rd_functions.get(func_names[-1])
+    if func is None: raise RollNameError(func_names[-1])
+    with expanding_name(context):
+        return func(arg_node, func_names[:-1], context)
 
-def e_name_(name, namespace, ast_node, context):
+def e_name_to_args(node, context):
+    return node.name, node.namespace, node, context
+
+def e_name_args(name, namespace, ast_node, context):
+    defn = e_name_args_to_defn(name, namespace, ast_node, context)
+    def e_name_gen():
+        with expanding_name(context):
+            for s in defn.postprocess(e_string(defn.body_ast, context), context):
+                yield s
+    return e_name_gen()
+
+def e_name_args_to_defn(name, namespace, ast_node, context):
     if namespace is not None:
         if context.user_id is None:
             raise RollNameError(str(ast_node.source))
@@ -286,15 +312,11 @@ def e_name_(name, namespace, ast_node, context):
         map(str.lower, channel.track_channels[chan_lower]):
             raise UserError('To use "%s", you and this bot must both be in %s.'
             % (abbrev_middle(str(ast_node.source)), abbrev_right(namespace)))
-        context = context._replace(defs=AutoDefs(global_defs.get(chan_lower)))
+        context = context._replace(
+            namespace=chan_lower, defs=AutoDefs(global_defs.get(chan_lower)))
     if context.defs is None or name not in context.defs:
         raise RollNameError(name)
-    def e_name_gen():
-        with expanding_name(context):
-            defn = context.defs[name]
-            for s in defn.postprocess(e_string(defn.body_ast, context), context):
-                yield s
-    return e_name_gen()
+    return context.defs[name] 
 
 @contextmanager
 def expanding_name(context):
@@ -519,7 +541,7 @@ def roll_dice_def(dice, name, term, context, reduce=False):
 
 def roll_dice_def_(name, term, context):
     o_str, o_len = StringIO(), 0
-    for s in e_name_(name, None, term, context):
+    for s in e_name_args(name, None, term, context):
         o_str.write(s)
         o_len += len(s)
         if o_len > MAX_DICE_DEF_LEN: raise UserError('Expanding the custom die'
@@ -549,11 +571,15 @@ TermDiceD = namedtuple('TermDiceD', ('dice', 'name',       'source')) # Defined
 TermKeep  = namedtuple('TermKeep',  ('bw', 'num', 'expr',  'source'))
 TermCnst  = namedtuple('TermCnst',  ('num',                'source'))
 
-Name      = namedtuple('Name',      ('namespace', 'name',  'source'))
+Name = namedtuple('Name',      ('namespace', 'name',  'source'))
+Name.__str__ = lambda n: n.name if n.namespace is None else \
+    '/'.join(channel.capitalisation.get(n.namespace.lower(), n.namespace), n.name)
+
 NameApp   = namedtuple('NameApp',   ('name', 'suffixes',   'source'))
 StringApp = namedtuple('StringApp', ('string', 'suffixes', 'source'))
 Branch    = namedtuple('Branch',    ('choices',            'source'))
 Choice    = namedtuple('Choice',    ('weight', 'string',   'source'))
+
 
 def parse_string(input):
     string, remain = p_string(ParseInput(input))
@@ -770,45 +796,102 @@ def p_any(*args):
 #===============================================================================
 # Static global definitions.
 
+# A dictionary mapping case-sensitive roll-definition function names to pre-
+# processor functions of the kind decorated by `@rd_func_pre'. When a function
+# application is evaluated, the *outermost* function here is used, and it may
+# or may not decide to recursively evaluate any inner functions.
 rd_functions = {}
 
-def rd_func(*names, **kwds):
-    def rd_func_decorator(func):
-        if kwds.get('unicode', False):
-            func = unicode_rd_func(func)
-        for name in names:
-            assert name not in rd_functions, (name, func)
-            rd_functions[name] = func
-        return func
-    return rd_func_decorator
+# Declare a built-in roll-definition function that acts on the abstract syntax
+# tree of the expression it is applied to, before any expansion takes place.
+# The decoratee should return an iterable of strings, and takes three arguments:
+# 1. node        -- the AST node in which this application occurs.
+# 2. arg_node    -- an AST node within `node'.
+# 3. inner_funcs -- a tuple of roll-definition function names.
+# 4. name        -- the name by which this function was invoked.
+# 5. context     -- the local `EvalContext'.
+# `arg_node' and `inner_funcs' represent the single argument to the function
+# being evaluated: an AST node wrapped in zero or more inner function
+# applications.
+@decorator(func_args=False)
+def rd_func_pre(func, *names, tags=''):
+    tags = '!'.join(sorted(tags.split('!')))
+    for name in reversed(names):
+        tagged_name = name + tags
+        assert tagged_name not in rd_functions, (tagged_name, func)
+        tagged_func = rd_functions[tagged_name] = partial(func, name=tagged_name)
+    return tagged_func
 
-def unicode_rd_func(func):
-    def unicode_rd_func_(context, *args):
-        def decoded(parts):
-            for part in parts:
-                if not part: continue
-                try: yield part.decode('utf8') if type(part) is str else part
-                except UnicodeDecodeError: yield part
-        for part in func(context, *(decoded(arg) for arg in args)):
-            yield part.encode('utf8') if type(part) is unicode else part
-    return unicode_rd_func_
+# Declare a built-in roll-definition function that acts on the iterable of
+# strings produced from the full evaluation of the expression it is applied to.
+# The decoratee should return an iterable of strings, and takes two arguments:
+# 1. parts   -- an iterable of strings; the input.
+# 2. name    -- the name by which this function was invoked.
+# 3. context -- the local `EvalContext'.
+@decorator(func_args=False)
+def rd_func_post(func, *names, **kwds):
+    if kwds.pop('unicode', False):
+        func = rd_func_post_unicode(func)
+    def rd_func_decor(node, arg_node, inner_funcs, name, context):
+        inner_parts = e_func_app(node, arg_node, inner_funcs, context)
+        return func(inner_parts, name, context)
+    return rd_func_pre(*names, **kwds)(rd_func_decor)
 
-@rd_func('lowercase', 'lc', unicode=True)
-def rd_func_lowercase(context, parts):
+# May be used to transform a postprocessor function that only accepts `unicode'
+# string parts into one that accepts either `unicode' or `str' parts, satisfying
+# the protocol of `@rd_func_post' without `unicode=True'.
+@decorator(dec_args=False)
+def rd_func_post_unicode(func, parts, name, context):
+    def decoded(parts):
+        for part in parts:
+            if not part: continue
+            try: yield part.decode('utf8') if type(part) is str else part
+            except UnicodeDecodeError: yield part
+    for part in func(decoded(parts), name, context):
+        yield part.encode('utf8') if type(part) is unicode else part
+
+#-------------------------------------------------------------------------------
+# Enables execution of a function with the tag '!x', meaning that it may produce
+# side effects, identified by the function name immediately inside this one.
+@rd_func_pre('x')
+def rd_func_x(node, arg_node, inner_funcs, name, context):
+    if not inner_funcs: raise RollNameError(name)
+    assert_permission(Action.EXECUTE, context)
+    inner_funcs = inner_funcs[:-1] + (inner_funcs[-1] + '!' + name,)
+    return e_func_app(arg_node, inner_funcs, context)
+
+@rd_func_pre('pop', tags='!x')
+def rd_func_remove_x(node, arg_node, inner_funcs, name, context):
+    def illegal(reason):
+        return UserError('The usage of "!%s" in "%s" is illegal: %s'
+                % (abbrev_right(name), abbrev_middle(str(node.source)), reason))
+    if inner_funcs:
+        raise illegal('it may not be preceded by other invocations (for now).')
+    if isinstance(arg_node, String) and len(arg_node.parts) == 1:
+        arg_node = arg_node.parts[0]
+    if not isinstance(arg_node, Name):
+        raise illegal('it must be applied to a definition name reference.')
+
+    defn = e_name_args_to_defn(*e_name_to_args(arg_node, context))
+    defn.assert_permission(Action.EDIT, context)
+
+#-------------------------------------------------------------------------------
+@rd_func_post('lowercase', 'lc', unicode=True)
+def rd_func_lowercase(parts, name, context):
     return imap(string.lower, parts)
 
-@rd_func('uppercase', 'uc', unicode=True)
-def rd_func_uppercase(context, parts):
+@rd_func_post('uppercase', 'uc', unicode=True)
+def rd_func_uppercase(parts, name, context):
     return imap(string.upper, parts)
 
-@rd_func('initial-capital', 'ic', unicode=True)
-def rd_func_initial_capital(context, parts):
+@rd_func_post('initial-capital', 'ic', unicode=True)
+def rd_func_initial_capital(parts, name, context):
     parts = iter(parts)
     part = next(parts)
     return chain((part[0].upper() + part[1:],), parts)
 
-@rd_func('title-case', 'tc', unicode=True)
-def rd_func_title_case(context, parts):
+@rd_func_post('title-case', 'tc', unicode=True)
+def rd_func_title_case(parts, name, context):
     start_word = True
     for part in parts:
         if start_word: part = part[:1].upper() + part[1:]
@@ -819,12 +902,12 @@ def rd_func_title_case(context, parts):
         yield re.sub(r"([^\W_]|')+", repl, part, 0, flags)
         start_word = re.match(r'[^\W_]', part[-1:], flags) is None
 
-@rd_func('swap-case', 'sc', unicode=True)
-def rd_func_swap_case(context, parts):
+@rd_func_post('swap-case', 'sc', unicode=True)
+def rd_func_swap_case(parts, name, context):
     for part in parts: yield part.swapcase()
 
-@rd_func('alternating-case', 'ac', unicode=True)
-def rd_func_alternating_case(context, parts):
+@rd_func_post('alternating-case', 'ac', unicode=True)
+def rd_func_alternating_case(parts, name, context):
     odd = [False]
     def map_char(char):
         if char.isupper() or char.islower():
@@ -834,25 +917,25 @@ def rd_func_alternating_case(context, parts):
     for part in parts:
         yield ''.join(imap(map_char, part))
 
-@rd_func('random-case', 'rc', unicode=True)
-def rd_func_random_case(context, parts):
+@rd_func_post('random-case', 'rc', unicode=True)
+def rd_func_random_case(parts, name, context):
     for part in parts: yield ''.join(
         c.upper() if random.randrange(2) else c.lower() for c in part)
 
-@rd_func('hyphenate', 'hy', unicode=True)
-def rd_func_hyphenate(context, parts):
+@rd_func_post('hyphenate', 'hy', unicode=True)
+def rd_func_hyphenate(parts, name, context):
     for part in parts: yield re.sub(r'\s+', '-', part, flags=re.U)
 
-@rd_func('underscore', 'us', unicode=True)
-def rd_func_hyphenate(context, parts):
+@rd_func_post('underscore', 'us', unicode=True)
+def rd_func_hyphenate(parts, name, context):
     for part in parts: yield re.sub(r'\s+', '_', part, flags=re.U)
 
-@rd_func('remove-spaces', 'rs', unicode=True)
-def rd_func_remove_spaces(context, parts):
+@rd_func_post('remove-spaces', 'rs', unicode=True)
+def rd_func_remove_spaces(parts, name, context):
     for part in parts: yield re.sub(r'\s+', '', part, flags=re.U)
 
-@rd_func('remove-punctuation', 'rp', unicode=True)
-def rd_func_remove_punctuation(context, parts):
+@rd_func_post('remove-punctuation', 'rp', unicode=True)
+def rd_func_remove_punctuation(parts, name, context):
     for part in parts: yield re.sub(r'([^\w\s]|_)+', '', part, flags=re.U)
 
 #===============================================================================
@@ -863,7 +946,7 @@ def load_defs():
         return {}
     with open(DEF_FILE, 'r') as file:
         jdict = util.recursive_encode(json.load(file), 'utf8')
-        return {c: GlobalDefs(jdict=d) for (c,d) in jdict.iteritems()}
+        return {c: GlobalDefs(namespace=c, jdict=d) for (c,d) in jdict.iteritems()}
 
 def save_defs(backup=True):
     prune_defs()
@@ -925,31 +1008,31 @@ class DictStack(object, DictMixin):
                     yield key
 
 class GlobalDefs(dict):
-    __slots__ = 'decay_start'
-    def __init__(self, decay_start=None, jdict=None):
+    __slots__ = 'namespace', 'decay_start'
+
+    def __init__(self, namespace, decay_start=None, jdict=None):
         super(GlobalDefs, self).__init__()
+        self.namespace = namespace
         if jdict is None:
             self.decay_start = decay_start
         else:
             for n, d in jdict['names'].iteritems():
-                self[n] = GlobalDef(name=n, jdict=d)
+                self[n] = GlobalDef(namespace=namespace, name=n, jdict=d)
             self.decay_start = jdict.get('decay_start')
+
     def save_jdict(self):
         jdict = {
             'names': {n: d.save_jdict() for (n, d) in self.iteritems()}}
         if self.decay_start is not None:
             jdict['decay_start'] = self.decay_start
         return jdict
+
     def touch(self):
         if self.decay_start is not None:
             self.decay_start = time.time()
 
-class Def(object):
-    __slots__ = 'name', '_body_str', '_body_ast'
-    def __init__(self, name='', body_str=None, body_ast=None):
-        self.name = name
-        self._body_str = body_str
-        self._body_ast = body_ast
+class DefMixin(object):
+    __slots__ = ()
 
     @property
     def body_str(self):
@@ -967,9 +1050,28 @@ class Def(object):
         return str_iter
     postprocess.is_identity = True
 
-class GlobalDef(Def):
-    __slots__ = 'id', 'modes', 'time'
-    def __init__(self, id=None, modes=None, time=None, jdict=None, *a, **k):
+class GlobalDefMixin(DefMixin):
+    __slots__ =  ()
+    def check_permission(self, action, context):
+        return check_permission(action, context, self.namespace, self.name)
+    def have_permission(self, *args, **kwds):
+        return self.check_permission(deny_have_permission, *args, **kwds)
+    def assert_permission(self, *args, **kwds):
+        return self.check_permission(deny_assert_permission, *args, **kwds)
+
+class Def(object, DefMixin):
+    __slots__ = 'name', '_body_str', '_body_ast'
+    def __init__(self, name='', body_str=None, body_ast=None):
+        self.name = name
+        self._body_str = body_str
+        self._body_ast = body_ast
+
+class GlobalDef(Def, GlobalDefMixin):
+    __slots__ = 'namespace', 'id', 'modes', 'time'
+    def __init__(
+        self, namespace, id=None, modes=None, time=None, jdict=None, *a, **k
+    ):
+        self.namespace = namespace
         if jdict is None:
             super(GlobalDef, self).__init__(*a, **k)
             self.id, self.modes, self.time = id, modes, time
@@ -978,6 +1080,7 @@ class GlobalDef(Def):
             self.id = util.ID(*jdict['id']) if 'id' in jdict else None
             self.modes = jdict.get('modes')
             self.time = jdict.get('time')
+
     def save_jdict(self):
         jdict = {'body': self.body_str}
         if self.id is not None:
@@ -1050,39 +1153,124 @@ class CaseAutoDefs(object, DictMixin):
         base_key = min(base_keys, key=lambda b: sum(1 for c in b if c.isupper()))
         return CaseAutoDef(self._base_defs[base_key], base_key, key)
 
-# A virtual definition produced by CaseAutoDefs.
-class CaseAutoDef(Def):
-    __slots__ = '_old_key', '_new_key'
+class ProxyDef(object, GlobalDefMixin):
+    __slots__ = 'base',
 
-    def __init__(self, base, old_key, new_key):
-        self._old_key, self._new_key = old_key, new_key
-        super(CaseAutoDef, self).__init__(
-            name=new_key, body_ast=base._body_ast, body_str=base._body_str)
+    def __init__(base):
+        self.base = base
+
+    def __getattr__(self, name):
+        return getattr(self.base, name)
+
+    def __setattr__(self, name, value):
+        if any(name in cls.__slots__ for cls in self.__mro__)
+            super(ProxyDef, self).__setattr__(name, value)
+        else:
+            setattr(self.base, name, value)
+
+# A virtual definition produced by CaseAutoDefs.
+class CaseAutoDef(ProxyDef):
+    __slots__ = 'name',
+
+    def __init__(self, base, name):
+        super(CaseAutoDef, self).__init__(base)
+        self.name = name
 
     def postprocess(self, str_iter, context=None):
-        def decoded():
-            for part in str_iter:
-                if not part: continue
-                try: yield part.decode('utf8') if type(part) is str else part
-                except UnicodeDecodeError: yield part
-        for part in self.postprocess_(decoded(), context):
-            yield part.encode('utf8') if type(part) is unicode else part
-
-    def postprocess(self, str_iter, context):
-        old = ''.join(c for c in self._old_key if c.isupper() or c.islower())
-        new = ''.join(c for c in self._new_key if c.isupper() or c.islower())
+        old = ''.join(c for c in self.base.name if c.isupper() or c.islower())
+        new = ''.join(c for c in self.name if c.isupper() or c.islower())
         assert new != old
 
         if new.isupper() and not old.isupper():
-            return rd_func_uppercase(context, str_iter)
+            return rd_func_uppercase(str_iter, context)
         elif new.islower() and not old.islower():
-            return rd_func_lowercase(context, str_iter)
+            return rd_func_lowercase(str_iter, context)
         elif new[0].isupper() and old[0].islower() and new[1:] == old[1:]:
-            return rd_func_initial_capital(context, str_iter)
+            return rd_func_initial_capital(str_iter, context)
         else:
-            return rd_func_title_case(context, str_iter)
+            return rd_func_title_case(str_iter, context)
+
+    # This is necessary to allow certain operations, intended to work on an
+    # ordinary global definition, to do so when the definition is spelt with
+    # non-standard capitalisation; for example, "!rd+ drink {water,tea,coffee}"
+    # followed by "!r {{DRINK!pop!x}}" should operate on the "drink" definition
+    # as expected, with the "pop" operation having edit permission.
+    def check_permission(self, *args, **kwds):
+        return self.base.check_permission(*args, **kwds)
 
 global_defs = load_defs()
+
+#-------------------------------------------------------------------------------
+class AccessDenied(UserError):
+    pass
+
+class Action(object):
+    LIST     = 'list'     # Discover the name and metadata of a defn.
+    VIEW     = 'view'     # View the content of a defn.
+    EVALUATE = 'evaluate' # Run a definition not marked as having side effects.
+    EXECUTE  = 'execute'  # Run a definition marked as having side effects.
+    CREATE   = 'create'   # Add a new defn to a NS.
+    EDIT     = 'edit'     # Change the content, name or metadata of a defn.
+    DELETE   = 'delete'   # Permanently remove a defn from a NS.
+    CLEAR    = 'clear'    # Delete all defns in a NS that match a given filter.
+
+# Indicate whether the specified action is permitted in the given situation
+# by returning `True' if it is or calling the provided `deny' function with
+# an error string and returning its return value.
+#
+# When all of `context', `namespace' and `name' are defined, the action is
+# interpreted as being performed on a definition with the given name, within
+# the given namespace, and from the given `EvaluationContext'.
+#
+# When any of these are None, the action is denied only if it would be denied
+# regardless of the value of that parameter.
+def check_permission(deny, action, context=None, namespace=None, name=None):
+    if namespace:
+        t_chan_l = namespace.lower()
+        t_chan_c = channel.capitalisation.get(t_chan_l, namespace)
+        t_nicks_l = t_chan_l.split('!', 1)[:1] \
+                    if t_chan_l[:1] != '#' and '!' in t_chan_l else \
+                    map(str.lower, channel.track_channels[t_chn_l])
+
+    if context:
+        u_chan_l = context.namespace and context.namespace.lower()
+        u_chan_c = channel.capitalization.get(u_chan_l, context.namespace)
+
+        # Context separate from target.
+        if u_chan_l and t_chan_l and u_chan_l != t_chan_l \
+        and action in Action.CREATE, Action.EDIT, Action.DELETE, Action.CLEAR:
+            return deny('Definitions can only be modified locally: you may not {}',
+            'definitions in {} from within {}.', action, t_chan_c, u_chan_c)
+
+        # Bot and/or user not resident in target.
+        b_nick_l = context.bot and context.bot.nick.lower()
+        u_nick_l = context.user_id and context.user_id.nick.lower()
+        b_out = b_nick_l and b_nick_l not in t_nicks_l
+        u_out = u_nick_l and u_nick_l not in t_nicks_l
+        if bot_out or usr_out:
+            return deny('{} must be in {} to access its definitions.',
+            ' and '.join(p for (o,p) in ((u_out,'you'),(b_out,'this bot')) if o)
+            .capitalize())
+
+        
+
+# Return True if a certain action is permitted or otherwise return False.
+# The interface is identical to that of `check_permission' apart from this and
+# the absence of a `deny' argument.
+def have_permission(*args, **kwds):
+    return check_permission(deny_have_permission, *args, **kwds)
+
+# Return True if a certain action is permitted or otherwise raise an
+# AccessDenied exception. The interface is identical to that of
+# `check_permission' apart from this and the absence of a `deny' argument.
+def assert_permission(*args, **kwds):
+    return check_permission(deny_assert_permission, *args, **kwds)
+
+def deny_have_permission(fmt, *args, **kwds):
+    return False
+
+def deny_assert_permission(fmt, *args, **kwds):
+    raise AccessDenied(fmt.format(*args, **kwds))
 
 #-------------------------------------------------------------------------------
 @link(('HELP', 'roll-def'), ('HELP', 'rd'))
@@ -1252,7 +1440,7 @@ def h_roll_def_q(bot, id, target, args, full_msg):
     args = args.split()
     if args and args[0].startswith('#'):
         chan = args.pop(0)
-        chan_case = channel.capitalisation.get(chan, chan)
+        chan_case = channel.capitalisation.get(chan.lower(), chan)
         chan = chan.lower()
         nick = id.nick.lower()
         if not any(nick == n.lower() for n in channel.track_channels[chan]):

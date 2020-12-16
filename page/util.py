@@ -17,6 +17,7 @@ EXT_URL_DEFAULT_TIMEOUT = 12
 
 ID = namedtuple('ID', ('nick', 'user', 'host'))
 ID.__getstate__ = lambda *a, **k: None
+ID.__str__ = lambda self: '%s!%s@%s' % self
 
 from amelia import NotInstalled, AlreadyInstalled
 
@@ -63,7 +64,7 @@ def cdict(obj):
 
 # Returns a decorator causing the return value of the decorated function to be
 # passed to the given function, whose return value is finally returned.
-def after(after):
+def before(after):
     return partial(compose, after)
 
 # Replace every handler for the event `find' in the given Mode instance with
@@ -145,6 +146,38 @@ def align_table(lines, **kwds):
 # As join_rows, but takes a sequence of columns rather than of rows.
 def join_cols(*cols, **kwds):
     return join_rows(*izip_longest(*cols, fillvalue=''), **kwds)
+
+# A meta-decorator allowing simple functions to act as a decorators without the
+# need for any nested functions.
+# - In all cases, the meta-decoratand takes the actual decoratand as its first
+#   argument.
+# - If `dec_args' is True, then the actual decorator must be called with zero or
+#   more arguments above the actual decoratand, and the actual decorator's
+#   arguments are passed to the meta-decoratand after the actual decoratand.
+# - If `func_args' is True, the meta-decoratand takes the arguments intended for
+#   the actual decoratee, after any arguments given to the actual decorator, and
+#   its return value is used as the return value of the actual decoratee.
+# - However, if `dec_args', `func_args' and `swap_args' are all `True', then
+#   the arguments to the actual decoratee precede the arguments to the actual
+#   decorator.
+# - If `func_args' is False, then the meta-decoratand takes no additional
+#   arguments and its return value is used as the actual decoratee, unless it is
+#   `None' and `func_res' is `False', in which case the actual decoratand is used.
+def decorator(dec_args=True, func_args=True, func_res=False, swap_args=False):
+    def meta_decor(meta_decand):
+        def actual_decor_maker(*dargs, **dkwds):
+            def actual_decor(actual_decand):
+                if not func_args:
+                    res = meta_decand(actual_decand, *dargs, **dkwds)
+                    return res if func_res or res is not None else actual_decand
+                def dec_func(*fargs, **fkwds):
+                    args = fargs + dargs if swap_args 
+                    fkwds.update(dkwds)
+                    return meta_decand(actual_decand, *(dargs + fargs), **fkwds)
+                return dec_func
+            return actual_decor
+        return actual_decor_maker if dec_args else actual_decor_maker()
+    return meta_decor
 
 # Returns an object which may be yielded in an untwisted event handler to obtain
 # just the given argument, with no other effects.
