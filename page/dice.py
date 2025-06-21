@@ -856,7 +856,7 @@ def rd_func_post_unicode(func, parts, name, context):
 @rd_func_pre('x')
 def rd_func_x(node, arg_node, inner_funcs, name, context):
     if not inner_funcs: raise RollNameError(name)
-    assert_permission(Action.EXECUTE, context)
+    assert_is_permitted(Action.EXECUTE, context)
     inner_funcs = inner_funcs[:-1] + (inner_funcs[-1] + '!' + name,)
     return e_func_app(arg_node, inner_funcs, context)
 
@@ -873,7 +873,7 @@ def rd_func_remove_x(node, arg_node, inner_funcs, name, context):
         raise illegal('it must be applied to a definition name reference.')
 
     defn = e_name_args_to_defn(*e_name_to_args(arg_node, context))
-    defn.assert_permission(Action.EDIT, context)
+    defn.assert_is_permitted(EDIT, context)
 
 #-------------------------------------------------------------------------------
 @rd_func_post('lowercase', 'lc', unicode=True)
@@ -1054,10 +1054,10 @@ class GlobalDefMixin(DefMixin):
     __slots__ =  ()
     def check_permission(self, action, context):
         return check_permission(action, context, self.namespace, self.name)
-    def have_permission(self, *args, **kwds):
-        return self.check_permission(deny_have_permission, *args, **kwds)
-    def assert_permission(self, *args, **kwds):
-        return self.check_permission(deny_assert_permission, *args, **kwds)
+    def is_permitted(self, *args, **kwds):
+        return self.check_permission(deny_is_permitted, *args, **kwds)
+    def assert_is_permitted(self, *args, **kwds):
+        return self.check_permission(deny_assert_is_permitted, *args, **kwds)
 
 class Def(object, DefMixin):
     __slots__ = 'name', '_body_str', '_body_ast'
@@ -1204,19 +1204,34 @@ global_defs = load_defs()
 class AccessDenied(UserError):
     pass
 
-class Action(object):
-    LIST     = 'list'     # Discover the name and metadata of a defn.
-    VIEW     = 'view'     # View the content of a defn.
-    EVALUATE = 'evaluate' # Run a definition not marked as having side effects.
-    EXECUTE  = 'execute'  # Run a definition marked as having side effects.
-    CREATE   = 'create'   # Add a new defn to a NS.
-    EDIT     = 'edit'     # Change the content, name or metadata of a defn.
-    DELETE   = 'delete'   # Permanently remove a defn from a NS.
-    CLEAR    = 'clear'    # Delete all defns in a NS that match a given filter.
+class DefinitionAction(object):
+    def __init__(self, eval_context, target_channel):
+        self.eval_context = eval_context
+        self.target_channel = target_channel
 
-# Indicate whether the specified action is permitted in the given situation
-# by returning `True' if it is or calling the provided `deny' function with
-# an error string and returning its return value.
+    def check_permission(self, deny_func):
+        # All actions require both the user and the bot to be present in the
+        # target channel:
+        try:
+            if self.user_nick_lower not in 
+        except ParameterNotSpecified:
+            pass
+
+
+LIST     = 'list'     # Discover the name and metadata of a defn.
+VIEW     = 'view'     # View the content of a defn.
+EVALUATE = 'evaluate' # Run a definition not marked as having side effects.
+EXECUTE  = 'execute'  # Run a definition marked as having side effects.
+CREATE   = 'create'   # Add a new defn to a NS.
+EDIT     = 'edit'     # Change the content, name or metadata of a defn.
+DELETE   = 'delete'   # Permanently remove a defn from a NS.
+CLEAR    = 'clear'    # Delete all defns in a NS that match a given filter.
+
+# Indicate whether the specified action is permitted in the given situaion.
+# If the action is permitted, this function returns `True'. If the action is
+# not permitted, this function calls the function given as the first argument,
+# `deny', with an error string possibly containing new-style format placeholders
+# corresponding to subsequent arguments, and returns the return value of `deny'.
 #
 # When all of `context', `namespace' and `name' are defined, the action is
 # interpreted as being performed on a definition with the given name, within
@@ -1228,48 +1243,82 @@ def check_permission(deny, action, context=None, namespace=None, name=None):
     if namespace:
         t_chan_l = namespace.lower()
         t_chan_c = channel.capitalisation.get(t_chan_l, namespace)
-        t_nicks_l = t_chan_l.split('!', 1)[:1] \
-                    if t_chan_l[:1] != '#' and '!' in t_chan_l else \
-                    map(str.lower, channel.track_channels[t_chn_l])
+        t_priv = t_chan_l[:1] != '#' and '!' in t_chan_l and '@' in t_chan_l
+        t_nicks_l = t_chan_l.split('!', 1)[:1] if t_priv else \
+                    map(str.lower, channel.track_channels[t_chan_l])
 
     if context:
+        # Context separate from target:
         u_chan_l = context.namespace and context.namespace.lower()
         u_chan_c = channel.capitalization.get(u_chan_l, context.namespace)
+        u_priv = u_chan_l[:1] != '#' and '!' in u_chan_l and '@' in u_chan_l
+        if u_chan_l and t_chan_l and u_chan_l != t_chan_l and \
+        not (action in (EVALUATE, EXECUTE) or action in (LIST, VIEW) and u_priv):
+            return deny('You may not {} definitions in {} from here.',
+                        action, abbrev_right(t_chan_c))
 
-        # Context separate from target.
-        if u_chan_l and t_chan_l and u_chan_l != t_chan_l \
-        and action in Action.CREATE, Action.EDIT, Action.DELETE, Action.CLEAR:
-            return deny('Definitions can only be modified locally: you may not {}',
-            'definitions in {} from within {}.', action, t_chan_c, u_chan_c)
-
-        # Bot and/or user not resident in target.
+        # Bot and/or user not resident in target:
         b_nick_l = context.bot and context.bot.nick.lower()
         u_nick_l = context.user_id and context.user_id.nick.lower()
-        b_out = b_nick_l and b_nick_l not in t_nicks_l
+        b_out = b_nick_l and b_nick_l not in t_nicks_l and not t_priv
         u_out = u_nick_l and u_nick_l not in t_nicks_l
         if bot_out or usr_out:
             return deny('{} must be in {} to access its definitions.',
-            ' and '.join(p for (o,p) in ((u_out,'you'),(b_out,'this bot')) if o)
-            .capitalize())
+                        ' and '.join(p for (o,p) in ((u_out,'you'),
+                        (b_out,'this bot')) if o).capitalize(),
+                        abbrev_right(t_chan_c))
 
-        
+    if name:
+        # Malformed name:
+        if (not re.match(r'(?!\d)[\w-]+$', name) or len(name) > DEF_MAX_NAME_LEN) \
+        and action == CREATE:
+            return deny('The name "{}" is illegal: definition names must consist'
+                        ' only of letters, digits, dashes (-) and underscores (_),'
+                        ' may not start with a digit, and be no longer than {}'
+                        ' characters.', abbrev_right(name), DEF_MAX_NAME_LEN)
+
+        # Reserved name:
+        if name in RESERVED_NAMES and action == CREATE:
+            return deny('The name "{}" is reserved for special use and may not'
+                        ' be defined.', name)
+
+    if namespace and name:
+        in_target = 'here' if u_chan_l == t_chan_l else \
+                    ('in ' + abbrev_right(t_chan_c))
+
+        # Name does not exist in target:
+        if action != CREATE and name not in global_defs.get(t_chan_l, {}):
+            return deny('The definition "{}" does not exist {}.',
+                        abbrev_right(name), in_target)
+
+        # Name exists in target:
+        if action == CREATE and name in global_defs.get(t_chan_l, {}):
+            return deny('The definition "{}" already exists {}.',
+                        abbrev_right(name), in_target)
+
+    # Too many definitions:
+    if action == CREATE \
+    and sum(len(d) for d in global_defs.itervalues()) >= DEF_MAX_TOTAL:
+        return deny('There are too many definitions stored.'
+                    ' Please notify the bot administrator of this message.')
+
+    if namespace:
+        pass
 
 # Return True if a certain action is permitted or otherwise return False.
 # The interface is identical to that of `check_permission' apart from this and
 # the absence of a `deny' argument.
-def have_permission(*args, **kwds):
-    return check_permission(deny_have_permission, *args, **kwds)
+def is_permitted(*args, **kwds):
+    return check_permission(deny_is_permitted, *args, **kwds)
+def deny_is_permitted(fmt, *args, **kwds):
+    return False
 
 # Return True if a certain action is permitted or otherwise raise an
 # AccessDenied exception. The interface is identical to that of
 # `check_permission' apart from this and the absence of a `deny' argument.
-def assert_permission(*args, **kwds):
-    return check_permission(deny_assert_permission, *args, **kwds)
-
-def deny_have_permission(fmt, *args, **kwds):
-    return False
-
-def deny_assert_permission(fmt, *args, **kwds):
+def assert_is_permitted(*args, **kwds):
+    return check_permission(deny_assert_is_permitted, *args, **kwds)
+def deny_assert_is_permitted(fmt, *args, **kwds):
     raise AccessDenied(fmt.format(*args, **kwds))
 
 #-------------------------------------------------------------------------------
@@ -1351,6 +1400,7 @@ def h_roll_def_p(bot, id, target, args, full_msg):
         udefs = None if is_op else \
                 sum(1 for d in defs.itervalues() if util.same_user(d.id, id))
         modes = channel.umode_channels[chan].get(id.nick.lower(), '')
+
 
     if name not in defs and udefs is not None and udefs >= DEF_MAX_PER_USER:
         return message.reply(bot, id, target, 'Error: you have made too many'
