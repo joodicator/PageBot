@@ -140,6 +140,9 @@ def h_bridge_names_req(bot, target, source, name_query):
 def mc_found(work, line):
     line = re.sub(r'§.', '', line)
 
+    if line == 'Sleeping through this night': return
+    if re.match(r'\d+/\d+ players sleeping$', line): return
+
     match = re.match('!query (\S+) (\S+) (.*)', line)
     if match:
         type, key, body = match.groups()
