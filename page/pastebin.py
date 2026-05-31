@@ -41,5 +41,5 @@ def post(
     if paste_expire: data['api_paste_expire_date'] = paste_expire
 
     return util.ext_urlopen(
-        'http://pastebin.com/api/api_post.php',
+        'https://pastebin.com/api/api_post.php',
         urllib.urlencode(data)).read()
