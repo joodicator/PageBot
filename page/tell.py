@@ -59,7 +59,7 @@ MAX_SENT = 12
 
 # The maximum number of messages that may be sent from any given user
 # to a single recipient (given by a wildcard expression).
-MAX_SENT_WC = 3
+MAX_SENT_WC = 4
 
 # The maximum number of messages that may be sent from any given user
 # where the recipient is given as a regular expression.
